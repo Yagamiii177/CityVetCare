@@ -6,7 +6,7 @@ import axios from 'axios';
  */
 
 // Base API URL - update this based on your backend location
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost/CityVetCare/Backend/routes';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -68,11 +68,16 @@ api.interceptors.response.use(
 export const apiService = {
   // Incidents
   incidents: {
-    getAll: (filters = {}) => api.get('/incidents', { params: filters }),
-    getById: (id) => api.get(`/incidents?id=${id}`),
-    create: (data) => api.post('/incidents', data),
-    update: (id, data) => api.put('/incidents', { id, ...data }),
-    delete: (id) => api.delete('/incidents', { data: { id } }),
+    getAll: (filters = {}) => api.get('/incidents.php', { 
+      params: { 
+        ...filters,
+        _t: Date.now() // Cache busting parameter
+      } 
+    }),
+    getById: (id) => api.get(`/incidents.php?id=${id}&_t=${Date.now()}`),
+    create: (data) => api.post('/incidents.php', data),
+    update: (id, data) => api.put('/incidents.php', { id, ...data }),
+    delete: (id) => api.delete('/incidents.php', { data: { id } }),
   },
 
   // Catcher Teams

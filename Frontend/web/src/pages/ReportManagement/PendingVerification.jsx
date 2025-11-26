@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
+import { apiService } from "../../utils/api";
 import {
   EyeIcon,
   XMarkIcon,
@@ -26,103 +27,70 @@ const PendingVerification = () => {
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
-  // Enhanced sample data
-  const sampleReports = [
-    {
-      id: 1,
-      reporter: "John Doe",
-      reporterContact: "09123456789",
-      reporterAddress: "Purok 4, Barangay San Juan",
-      type: "Bite Incident",
-      address: "Purok 4, Barangay San Juan",
-      date: "2025-11-15",
-      time: "14:30",
-      status: "Pending",
-      priority: "High",
-      description: "Resident reported a bite incident involving a stray dog near the market.",
-      animalType: "Stray Dog",
-      animalCount: 1,
-      injuries: "Minor bite on left leg",
-      submittedBy: "Walk-in",
-      submissionDate: "2025-11-15 14:25",
-      verificationNotes: "",
-    },
-    {
-      id: 2,
-      reporter: "Maria Santos",
-      reporterContact: "09198765432",
-      reporterAddress: "Purok 2, Barangay San Jose",
-      type: "Stray Animal",
-      address: "Purok 2, Barangay San Jose",
-      date: "2025-11-16",
-      time: "09:15",
-      status: "Pending",
-      priority: "Medium",
-      description: "Multiple stray cats reported roaming near the school premises.",
-      animalType: "Cat",
-      animalCount: 5,
-      injuries: "None",
-      submittedBy: "Online Portal",
-      submissionDate: "2025-11-16 09:10",
-      verificationNotes: "",
-    },
-    {
-      id: 3,
-      reporter: "Carlos Mendoza",
-      reporterContact: "09151234567",
-      reporterAddress: "Barangay Del Rosario",
-      type: "Rabies Suspected",
-      address: "Barangay Del Rosario",
-      date: "2025-11-18",
-      time: "16:45",
-      status: "Pending",
-      priority: "Critical",
-      description: "Resident suspected rabies after attack by unknown stray dog.",
-      animalType: "Dog",
-      animalCount: 1,
-      injuries: "Multiple bites on arms",
-      submittedBy: "Walk-in",
-      submissionDate: "2025-11-18 16:40",
-      verificationNotes: "",
-    },
-    {
-      id: 4,
-      reporter: "Anna Lopez",
-      reporterContact: "09159876543",
-      reporterAddress: "Purok 3, Barangay San Isidro",
-      type: "Animal Nuisance",
-      address: "Purok 3, Barangay San Isidro",
-      date: "2025-11-17",
-      time: "11:20",
-      status: "Pending",
-      priority: "Low",
-      description: "Stray dogs creating noise and garbage disturbance.",
-      animalType: "Dog",
-      animalCount: 3,
-      injuries: "None",
-      submittedBy: "Mobile App",
-      submissionDate: "2025-11-17 11:15",
-      verificationNotes: "",
-    },
-  ];
-
-  // Simulate API call
+  // Fetch pending reports from backend
   useEffect(() => {
-    const fetchPendingReports = async () => {
-      try {
-        setLoading(true);
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setReports(sampleReports);
-      } catch (error) {
-        console.error("Error fetching reports:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchPendingReports();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchPendingReports = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.incidents.getAll({ status: 'pending' });
+      
+      // Transform backend data to frontend format
+      const transformedReports = response.data.records.map(incident => ({
+        id: incident.id,
+        reporter: incident.reporter_name,
+        reporterContact: incident.reporter_contact,
+        reporterAddress: incident.location,
+        type: incident.title,
+        address: incident.location,
+        date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
+        time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
+        status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
+        priority: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
+        description: incident.description,
+        animalType: extractAnimalType(incident.description),
+        animalCount: extractAnimalCount(incident.description),
+        injuries: extractInjuries(incident.description),
+        submittedBy: "System",
+        submissionDate: incident.created_at,
+        verificationNotes: "",
+      }));
+
+      setReports(transformedReports);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching pending reports:", error);
+      setReports([]);
+      setLoading(false);
+    }
+  };
+
+  // Helper functions to extract data from description
+  const extractAnimalType = (description) => {
+    if (!description) return "Unknown";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('dog')) return 'Dog';
+    if (lowerDesc.includes('cat')) return 'Cat';
+    return 'Unknown';
+  };
+
+  const extractAnimalCount = (description) => {
+    if (!description) return 1;
+    const match = description.match(/(\d+)\s*(animal|dog|cat)/i);
+    return match ? parseInt(match[1]) : 1;
+  };
+
+  const extractInjuries = (description) => {
+    if (!description) return "None";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('bite') || lowerDesc.includes('injury') || lowerDesc.includes('wound')) {
+      return description;
+    }
+    return "None";
+  };
 
   // Filter pending reports
   const pendingReports = reports.filter((r) => r.status === "Pending");
@@ -140,17 +108,27 @@ const PendingVerification = () => {
     return matchesSearch && matchesType;
   });
 
-  // Handle Verify
+  // Handle Verify - Update status to 'verified' in backend
   const handleVerify = async (id) => {
+    if (!window.confirm(`Are you sure you want to verify report #${id}?`)) {
+      return;
+    }
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const report = reports.find(r => r.id === id);
+      if (!report) return;
+
+      // Update status in backend
+      await apiService.incidents.update(id, {
+        status: 'verified',
+        priority: report.priority.toLowerCase(),
+        title: report.type,
+        description: report.description,
+        location: report.address,
+      });
       
-      setReports(reports.map(report => 
-        report.id === id 
-          ? { ...report, status: "Verified", verificationNotes: "Report verified by staff" }
-          : report
-      ));
+      // Refresh the list
+      await fetchPendingReports();
       
       if (selectedReport?.id === id) {
         setSelectedReport(null);
@@ -158,32 +136,40 @@ const PendingVerification = () => {
       
       alert(`Report #${id} has been verified successfully!`);
     } catch (error) {
-      alert(`Error verifying report: ${error.message}`);
+      console.error("Error verifying report:", error);
+      alert(`Error verifying report: ${error.response?.data?.message || error.message}`);
     }
   };
 
-  // Handle Reject
+  // Handle Reject - Update status to 'rejected' in backend
   const handleReject = async (id) => {
     const reason = prompt("Please enter rejection reason:");
-    if (reason) {
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        setReports(reports.map(report => 
-          report.id === id 
-            ? { ...report, status: "Rejected", verificationNotes: `Rejected: ${reason}` }
-            : report
-        ));
-        
-        if (selectedReport?.id === id) {
-          setSelectedReport(null);
-        }
-        
-        alert(`Report #${id} has been rejected.`);
-      } catch (error) {
-        alert(`Error rejecting report: ${error.message}`);
+    if (!reason) return;
+
+    try {
+      const report = reports.find(r => r.id === id);
+      if (!report) return;
+
+      // Update status in backend with rejection note
+      await apiService.incidents.update(id, {
+        status: 'rejected',
+        priority: report.priority.toLowerCase(),
+        title: report.type,
+        description: `${report.description}\n\n[REJECTED: ${reason}]`,
+        location: report.address,
+      });
+      
+      // Refresh the list
+      await fetchPendingReports();
+      
+      if (selectedReport?.id === id) {
+        setSelectedReport(null);
       }
+      
+      alert(`Report #${id} has been rejected.`);
+    } catch (error) {
+      console.error("Error rejecting report:", error);
+      alert(`Error rejecting report: ${error.response?.data?.message || error.message}`);
     }
   };
 

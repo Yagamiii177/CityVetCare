@@ -28,11 +28,7 @@ export const Drawer = ({ isOpen, onItemClick, setIsDrawerOpen }) => {
       icon: <ClipboardDocumentListIcon className="h-5 w-5 mr-3" />,
       path: "/all-incident-report",
     },
-    {
-      name: "Submit Report",
-      icon: <PlusCircleIcon className="h-5 w-5 mr-3" />,
-      path: "/submit-report",
-    },
+
     {
       name: "Pending Verification",
       icon: <ClockIcon className="h-5 w-5 mr-3" />,

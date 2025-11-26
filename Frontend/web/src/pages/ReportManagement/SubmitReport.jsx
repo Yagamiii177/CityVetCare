@@ -18,27 +18,8 @@ const SubmitIncidentReportPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("form"); // "form" or "reports"
 
-  // Reports data
-  const [reports, setReports] = useState([
-    {
-      id: "RPT-001",
-      type: "Animal Bite",
-      location: "Purok 4, Barangay San Juan",
-      date: "2025-11-20",
-      time: "14:30",
-      reporterName: "Juan Dela Cruz",
-      reporterContact: "09123456789",
-      reporterAddress: "Purok 4, Barangay San Juan",
-      details: "Dog bite incident near the market. Victim sustained minor injuries on left leg.",
-      animalType: "Stray Dog",
-      animalCount: 1,
-      injuries: "Minor bite wounds on left leg",
-      severity: "Low",
-      status: "Pending",
-      assignedTo: "",
-      followUpRequired: true,
-    },
-  ]);
+  // Reports data - will be populated from database
+  const [reports, setReports] = useState([]);
 
   // Form data
   const [formData, setFormData] = useState({

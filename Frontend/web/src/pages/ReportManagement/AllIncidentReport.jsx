@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
+import NewReportModal from "../../components/ReportManagement/NewReportModal";
+import { apiService } from "../../utils/api";
 import {
   EyeIcon,
   XMarkIcon,
@@ -22,86 +24,176 @@ import {
 const IncidentReportingManagement = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
+  const [isNewReportModalOpen, setIsNewReportModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
   const [showFilters, setShowFilters] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
-  // Enhanced sample data
-  const reports = [
-    {
-      id: 1,
-      reporter: "John Doe",
-      reporterContact: "09123456789",
-      type: "Bite Incident",
-      address: "Purok 4, Barangay San Juan",
-      date: "2025-11-15",
-      time: "14:30",
-      status: "Pending",
-      priority: "High",
-      description: "Resident reported a bite incident involving a stray dog near the market.",
-      animalType: "Dog",
-      animalCount: 1,
-      injuries: "Minor bite on leg",
-      assignedTeam: null,
-      followUpRequired: true,
-    },
-    {
-      id: 2,
-      reporter: "Maria Santos",
-      reporterContact: "09198765432",
-      type: "Stray Animal",
-      address: "Purok 2, Barangay San Jose",
-      date: "2025-11-16",
-      time: "09:15",
-      status: "Verified",
-      priority: "Medium",
-      description: "Multiple stray cats reported roaming near the school premises.",
-      animalType: "Cat",
-      animalCount: 5,
-      injuries: "None",
-      assignedTeam: "Team Alpha",
-      followUpRequired: true,
-    },
-    {
-      id: 3,
-      reporter: "Carlos Mendoza",
-      reporterContact: "09151234567",
-      type: "Rabies Suspected",
-      address: "Barangay Del Rosario",
-      date: "2025-11-18",
-      time: "16:45",
-      status: "Resolved",
-      priority: "High",
-      description: "Resident suspected rabies after attack by unknown stray dog.",
-      animalType: "Dog",
-      animalCount: 1,
-      injuries: "Multiple bites on arms",
-      assignedTeam: "Team Bravo",
-      followUpRequired: false,
-    },
-    {
-      id: 4,
-      reporter: "Anna Lopez",
-      reporterContact: "09159876543",
-      type: "Animal Nuisance",
-      address: "Purok 3, Barangay San Isidro",
-      date: "2025-11-17",
-      time: "11:20",
-      status: "In Progress",
-      priority: "Low",
-      description: "Stray dogs creating noise and garbage disturbance.",
-      animalType: "Dog",
-      animalCount: 3,
-      injuries: "None",
-      assignedTeam: "Team Charlie",
-      followUpRequired: true,
-    },
-  ];
+  // Reports state
+  const [reports, setReports] = useState([]);
+
+  // Fetch reports from API
+  useEffect(() => {
+    fetchReports();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiService.incidents.getAll();
+      
+      // Filter out completed reports (resolved, rejected, cancelled) - they belong in Report History
+      const activeReports = response.data.records.filter(incident => {
+        const status = incident.status.toLowerCase();
+        return status !== 'resolved' && status !== 'rejected' && status !== 'cancelled';
+      });
+      
+      // Transform backend data to frontend format
+      const transformedReports = activeReports.map(incident => ({
+        id: incident.id,
+        reporter: incident.reporter_name,
+        reporterContact: incident.reporter_contact,
+        type: incident.title,
+        address: incident.location,
+        date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
+        time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
+        status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
+        priority: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
+        description: incident.description,
+        animalType: extractAnimalType(incident.description),
+        animalCount: extractAnimalCount(incident.description),
+        injuries: extractInjuries(incident.description),
+        assignedTeam: incident.catcher_team_name || null,
+        followUpRequired: true,
+      }));
+
+      setReports(transformedReports);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error fetching reports:", err);
+      setError("Failed to load reports. Please check your connection.");
+      setReports([]);
+      setLoading(false);
+    }
+  };
+
+  // Helper functions to extract data from description
+  const extractAnimalType = (description) => {
+    if (!description) return "Unknown";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('dog')) return 'Dog';
+    if (lowerDesc.includes('cat')) return 'Cat';
+    return 'Unknown';
+  };
+
+  const extractAnimalCount = (description) => {
+    if (!description) return 1;
+    const match = description.match(/(\d+)\s*(animal|dog|cat)/i);
+    return match ? parseInt(match[1]) : 1;
+  };
+
+  const handleStatusUpdate = async (newStatus) => {
+    if (!selectedReport) return;
+    
+    try {
+      setIsUpdatingStatus(true);
+      
+      // Prepare update data with all required fields
+      const updateData = {
+        id: selectedReport.id,
+        title: selectedReport.type,
+        description: selectedReport.description,
+        location: selectedReport.address,
+        latitude: null,
+        longitude: null,
+        status: newStatus.toLowerCase().replace(' ', '_'),
+        priority: selectedReport.priority.toLowerCase(),
+        assigned_catcher_id: null
+      };
+      
+      await apiService.incidents.update(selectedReport.id, updateData);
+      
+      // Check if status is completed (resolved, rejected, cancelled)
+      const completedStatuses = ['resolved', 'rejected', 'cancelled'];
+      const isCompleted = completedStatuses.includes(newStatus.toLowerCase());
+      
+      if (isCompleted) {
+        // Remove from current list as it now belongs in Report History
+        setReports(reports.filter(report => report.id !== selectedReport.id));
+        setSelectedReport(null);
+        setIsStatusModalOpen(false);
+        setIsUpdatingStatus(false);
+        alert(`Status updated to ${newStatus}! This report has been moved to Report History.`);
+      } else {
+        // Update local state for active statuses
+        setReports(reports.map(report => 
+          report.id === selectedReport.id 
+            ? { ...report, status: newStatus }
+            : report
+        ));
+        
+        setSelectedReport({ ...selectedReport, status: newStatus });
+        setIsStatusModalOpen(false);
+        setIsUpdatingStatus(false);
+        alert(`Status updated to ${newStatus} successfully!`);
+      }
+    } catch (err) {
+      console.error("Error updating status:", err);
+      const errorMsg = err.response?.data?.message || "Failed to update status. Please try again.";
+      alert(errorMsg);
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const extractInjuries = (description) => {
+    if (!description) return "None";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('bite') || lowerDesc.includes('injury') || lowerDesc.includes('wound')) {
+      return description;
+    }
+    return "None";
+  };
+
+  // Handle new report submission
+  const handleNewReportSubmit = async (newReportData) => {
+    try {
+      // Prepare data for backend API
+      const incidentData = {
+        title: newReportData.type,
+        description: `${newReportData.details}\n\nAnimal: ${newReportData.animalType} (${newReportData.animalCount})\nInjuries: ${newReportData.injuries || 'None'}`,
+        location: newReportData.location,
+        status: 'pending',
+        priority: newReportData.severity.toLowerCase(),
+        reporter_name: newReportData.reporterName,
+        reporter_contact: newReportData.reporterContact,
+        incident_date: `${newReportData.date} ${newReportData.time}`,
+      };
+
+      // Send to backend
+      const response = await apiService.incidents.create(incidentData);
+      
+      if (response.data.message === "Incident created successfully") {
+        alert("Incident report submitted successfully!");
+        // Refresh the reports list
+        fetchReports();
+      }
+    } catch (err) {
+      console.error("Error creating incident:", err);
+      const errorMsg = err.response?.data?.message || "Failed to submit report. Please try again.";
+      alert(errorMsg);
+    }
+  };
 
   // Filter and sort logic
   const filteredReports = reports
@@ -146,25 +238,24 @@ const IncidentReportingManagement = () => {
       return aValue > bValue ? 1 : -1;
     });
 
-  // Status counts for quick overview
+  // Status counts for quick overview (only active reports)
   const statusCounts = {
     all: reports.length,
     Pending: reports.filter(r => r.status === "Pending").length,
-    "In Progress": reports.filter(r => r.status === "In Progress").length,
     Verified: reports.filter(r => r.status === "Verified").length,
-    Resolved: reports.filter(r => r.status === "Resolved").length,
+    "In Progress": reports.filter(r => r.status === "In Progress").length,
   };
 
   const getStatusIcon = (status) => {
     switch (status) {
       case "Pending":
         return <ClockIcon className="h-4 w-4 text-yellow-500" />;
-      case "In Progress":
-        return <ExclamationTriangleIcon className="h-4 w-4 text-blue-500" />;
       case "Verified":
-        return <ClipboardDocumentListIcon className="h-4 w-4 text-orange-500" />;
+        return <CheckCircleIcon className="h-4 w-4 text-blue-500" />;
+      case "In Progress":
+        return <ExclamationTriangleIcon className="h-4 w-4 text-purple-500" />;
       case "Resolved":
-        return <CheckCircleIcon className="h-4 w-4 text-green-500" />;
+        return <ClipboardDocumentListIcon className="h-4 w-4 text-green-500" />;
       default:
         return <ClockIcon className="h-4 w-4 text-gray-500" />;
     }
@@ -186,9 +277,11 @@ const IncidentReportingManagement = () => {
   const getStatusBadge = (status) => {
     const styles = {
       Pending: "bg-yellow-100 text-yellow-800",
-      "In Progress": "bg-blue-100 text-blue-800",
-      Verified: "bg-orange-100 text-orange-800",
+      Verified: "bg-blue-100 text-blue-800",
+      "In Progress": "bg-purple-100 text-purple-800",
       Resolved: "bg-green-100 text-green-800",
+      Rejected: "bg-red-100 text-red-800",
+      Cancelled: "bg-gray-100 text-gray-800",
     };
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status]}`}>
@@ -224,372 +317,343 @@ const IncidentReportingManagement = () => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Incident Reports Management</h1>
-              <p className="text-gray-600">Manage and track all animal incident reports</p>
+              <p className="text-gray-600">Manage active incident reports (Completed reports are in Report History)</p>
+              {error && (
+                <p className="text-sm text-orange-600 mt-1">⚠️ {error}</p>
+              )}
             </div>
-            <button className="bg-[#FA8630] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#E87928] transition-colors">
+            <button className="bg-[#FA8630] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#E87928] transition-colors"
+              onClick={() => setIsNewReportModalOpen(true)}
+            >
               <PlusIcon className="h-5 w-5" />
               New Report
             </button>
           </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {Object.entries(statusCounts).map(([status, count]) => (
-              <div key={status} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 capitalize">{status}</p>
-                    <p className="text-2xl font-bold text-gray-800">{count}</p>
-                  </div>
-                  {status !== "all" && getStatusIcon(status)}
-                </div>
-              </div>
-            ))}
-          </div>
+          {/* Loading State */}
+          {loading && (
+            <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FA8630] mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading reports...</p>
+            </div>
+          )}
 
-          {/* Search and Filters */}
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <div className="flex flex-col lg:flex-row gap-4">
-              {/* Search */}
-              <div className="flex-1 relative">
-                <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search reports by type, reporter, location, or animal type..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border w-full rounded-lg focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                />
-                {searchTerm && (
-                  <button 
-                    onClick={() => setSearchTerm("")}
-                    className="absolute right-3 top-3"
+          {!loading && (
+            <>
+              {/* Quick Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Object.entries(statusCounts).map(([status, count]) => (
+                  <div key={status} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600 capitalize">{status}</p>
+                        <p className="text-2xl font-bold text-gray-800">{count}</p>
+                      </div>
+                      {status !== "all" && getStatusIcon(status)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Search and Filters */}
+              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex flex-col lg:flex-row gap-4">
+                  {/* Search */}
+                  <div className="flex-1 relative">
+                    <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search reports by type, reporter, location, or animal type..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 pr-4 py-2 border w-full rounded-lg focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                    />
+                    {searchTerm && (
+                      <button 
+                        onClick={() => setSearchTerm("")}
+                        className="absolute right-3 top-3"
+                      >
+                        <XMarkIcon className="h-5 w-5 text-gray-500 hover:text-gray-700" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter Toggle */}
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
-                    <XMarkIcon className="h-5 w-5 text-gray-500 hover:text-gray-700" />
+                    <FunnelIcon className="h-5 w-5" />
+                    Filters
+                    {showFilters ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
                   </button>
+                </div>
+
+                {/* Expanded Filters */}
+                {showFilters && (
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                    {/* Status Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                      >
+                        <option value="all">All Status</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Verified">Verified</option>
+                        <option value="In Progress">In Progress</option>
+                      </select>
+                    </div>
+
+                    {/* Type Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Incident Type</label>
+                      <select
+                        value={typeFilter}
+                        onChange={(e) => setTypeFilter(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                      >
+                        <option value="all">All Types</option>
+                        <option value="Bite Incident">Bite Incident</option>
+                        <option value="Stray Animal">Stray Animal</option>
+                        <option value="Rabies Suspected">Rabies Suspected</option>
+                        <option value="Animal Nuisance">Animal Nuisance</option>
+                      </select>
+                    </div>
+
+                    {/* Sort */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value)}
+                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                        >
+                          <option value="date">Date</option>
+                          <option value="priority">Priority</option>
+                          <option value="status">Status</option>
+                          <option value="type">Type</option>
+                        </select>
+                        <button
+                          onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                          className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                        >
+                          {sortOrder === "asc" ? "A-Z" : "Z-A"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {/* Filter Toggle */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                <FunnelIcon className="h-5 w-5" />
-                Filters
-                {showFilters ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
-              </button>
-            </div>
-
-            {/* Expanded Filters */}
-            {showFilters && (
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
-                {/* Status Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="Pending">Pending</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Verified">Verified</option>
-                    <option value="Resolved">Resolved</option>
-                  </select>
+              {/* Reports Table */}
+              <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-800">Incident Reports ({filteredReports.length})</h2>
+                  <button className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800"><DocumentArrowDownIcon className="h-4 w-4" />Export</button>
                 </div>
 
-                {/* Type Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Incident Type</label>
-                  <select
-                    value={typeFilter}
-                    onChange={(e) => setTypeFilter(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="Bite Incident">Bite Incident</option>
-                    <option value="Stray Animal">Stray Animal</option>
-                    <option value="Rabies Suspected">Rabies Suspected</option>
-                    <option value="Animal Nuisance">Animal Nuisance</option>
-                  </select>
-                </div>
-
-                {/* Sort */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
-                  <div className="flex gap-2">
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                    >
-                      <option value="date">Date</option>
-                      <option value="priority">Priority</option>
-                      <option value="status">Status</option>
-                      <option value="type">Type</option>
-                    </select>
-                    <button
-                      onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                      className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                    >
-                      {sortOrder === "asc" ? "A-Z" : "Z-A"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Reports Table */}
-          <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-800">
-                Incident Reports ({filteredReports.length})
-              </h2>
-              <button className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800">
-                <DocumentArrowDownIcon className="h-4 w-4" />
-                Export
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-[#FA8630]/10">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Reporter
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Type & Animal
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Location
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Date/Time
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Priority
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-gray-200">
-                  {filteredReports.length ? (
-                    filteredReports.map((report) => (
-                      <tr key={report.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-medium text-gray-900">#{report.id}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{report.reporter}</p>
-                            <p className="text-xs text-gray-500">{report.reporterContact}</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{report.type}</p>
-                            <p className="text-xs text-gray-500">{report.animalType} • {report.animalCount} animal(s)</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="text-sm text-gray-900 max-w-xs truncate">{report.address}</p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="text-sm text-gray-900">{report.date}</p>
-                            <p className="text-xs text-gray-500">{report.time}</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {getPriorityBadge(report.priority)}
-                        </td>
-                        <td className="px-6 py-4">
-                          {getStatusBadge(report.status)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setSelectedReport(report)}
-                              className="text-[#FA8630] hover:text-[#E87928] p-1 rounded hover:bg-[#FA8630]/10 transition-colors"
-                              title="View Details"
-                            >
-                              <EyeIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 transition-colors"
-                              title="Assign Team"
-                            >
-                              <UserIcon className="h-5 w-5" />
-                            </button>
-                          </div>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-[#FA8630]/10">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">ID</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Reporter</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Type & Animal</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Location</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Date/Time</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Priority</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Actions</th>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={8} className="px-6 py-8 text-center">
-                        <div className="text-gray-500">
-                          <ClipboardDocumentListIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                          <p>No reports found matching your criteria</p>
-                          <button 
-                            onClick={() => {
-                              setSearchTerm("");
-                              setStatusFilter("all");
-                              setTypeFilter("all");
-                            }}
-                            className="text-[#FA8630] hover:text-[#E87928] mt-2"
-                          >
-                            Clear all filters
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </thead>
 
-          {/* Report Details Modal */}
-          {selectedReport && (
-            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-              <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
-                <button
-                  className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-                  onClick={() => setSelectedReport(null)}
-                >
-                  <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
-                </button>
-
-                <div className="p-6">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 rounded-full bg-[#FA8630]/10">
-                      <ClipboardDocumentListIcon className="h-6 w-6 text-[#FA8630]" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-800">
-                        Incident Report #{selectedReport.id}
-                      </h2>
-                      <p className="text-gray-600">{selectedReport.type}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Basic Information */}
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
-                      
-                      <div className="flex items-center gap-3">
-                        <UserIcon className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{selectedReport.reporter}</p>
-                          <p className="text-xs text-gray-500">{selectedReport.reporterContact}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{selectedReport.date}</p>
-                          <p className="text-xs text-gray-500">{selectedReport.time}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <MapPinIcon className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{selectedReport.address}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Incident Details */}
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-gray-800 border-b pb-2">Incident Details</h3>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs text-gray-500">Status</p>
-                          <div className="mt-1">{getStatusBadge(selectedReport.status)}</div>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500">Priority</p>
-                          <div className="mt-1">{getPriorityBadge(selectedReport.priority)}</div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-gray-500">Animal Information</p>
-                        <p className="text-sm font-medium text-gray-900 mt-1">
-                          {selectedReport.animalType} • {selectedReport.animalCount} animal(s)
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-gray-500">Assigned Team</p>
-                        <p className="text-sm font-medium text-gray-900 mt-1">
-                          {selectedReport.assignedTeam || "Not assigned"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-gray-500">Follow-up Required</p>
-                        <p className="text-sm font-medium text-gray-900 mt-1">
-                          {selectedReport.followUpRequired ? "Yes" : "No"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <div className="mt-6">
-                    <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Description</h3>
-                    <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">
-                      {selectedReport.description}
-                    </p>
-                  </div>
-
-                  {/* Injuries */}
-                  {selectedReport.injuries && selectedReport.injuries !== "None" && (
-                    <div className="mt-4">
-                      <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Injuries Reported</h3>
-                      <p className="text-gray-700 bg-red-50 p-4 rounded-lg border border-red-100">
-                        {selectedReport.injuries}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 mt-6 pt-6 border-t border-gray-200">
-                    <button className="flex-1 bg-[#FA8630] text-white py-2 px-4 rounded-lg hover:bg-[#E87928] transition-colors">
-                      Update Status
-                    </button>
-                    <button className="flex-1 bg-white text-gray-700 py-2 px-4 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
-                      Assign Team
-                    </button>
-                    <button className="flex-1 bg-white text-gray-700 py-2 px-4 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
-                      Add Note
-                    </button>
-                  </div>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredReports.length ? (
+                        filteredReports.map((report) => (
+                          <tr key={report.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4"><span className="text-sm font-medium text-gray-900">#{report.id}</span></td>
+                            <td className="px-6 py-4"><div><p className="text-sm font-medium text-gray-900">{report.reporter}</p><p className="text-xs text-gray-500">{report.reporterContact}</p></div></td>
+                            <td className="px-6 py-4"><div><p className="text-sm font-medium text-gray-900">{report.type}</p><p className="text-xs text-gray-500">{report.animalType} • {report.animalCount} animal(s)</p></div></td>
+                            <td className="px-6 py-4"><p className="text-sm text-gray-900 max-w-xs truncate">{report.address}</p></td>
+                            <td className="px-6 py-4"><div><p className="text-sm text-gray-900">{report.date}</p><p className="text-xs text-gray-500">{report.time}</p></div></td>
+                            <td className="px-6 py-4">{getPriorityBadge(report.priority)}</td>
+                            <td className="px-6 py-4">{getStatusBadge(report.status)}</td>
+                            <td className="px-6 py-4"><div className="flex items-center gap-2"><button onClick={() => setSelectedReport(report)} className="text-[#FA8630] hover:text-[#E87928] p-1 rounded hover:bg-[#FA8630]/10 transition-colors" title="View Details"><EyeIcon className="h-5 w-5" /></button><button className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 transition-colors" title="Assign Team"><UserIcon className="h-5 w-5" /></button></div></td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={8} className="px-6 py-8 text-center">
+                            <div className="text-gray-500">
+                              <ClipboardDocumentListIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                              <p>No reports found matching your criteria</p>
+                              <button onClick={() => { setSearchTerm(""); setStatusFilter("all"); setTypeFilter("all"); }} className="text-[#FA8630] hover:text-[#E87928] mt-2">Clear all filters</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            </div>
+
+              {/* Report Details Modal */}
+              {selectedReport && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
+                    <button className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors" onClick={() => setSelectedReport(null)}>
+                      <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
+                    </button>
+
+                    <div className="p-6">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 rounded-full bg-[#FA8630]/10"><ClipboardDocumentListIcon className="h-6 w-6 text-[#FA8630]" /></div>
+                        <div>
+                          <h2 className="text-xl font-bold text-gray-800">Incident Report #{selectedReport.id}</h2>
+                          <p className="text-gray-600">{selectedReport.type}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <h3 className="font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
+                          <div className="flex items-center gap-3">
+                            <UserIcon className="h-5 w-5 text-gray-400" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{selectedReport.reporter}</p>
+                              <p className="text-xs text-gray-500">{selectedReport.reporterContact}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{selectedReport.date}</p>
+                              <p className="text-xs text-gray-500">{selectedReport.time}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <MapPinIcon className="h-5 w-5 text-gray-400" />
+                            <div><p className="text-sm font-medium text-gray-900">{selectedReport.address}</p></div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <h3 className="font-semibold text-gray-800 border-b pb-2">Incident Details</h3>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div><p className="text-xs text-gray-500">Status</p><div className="mt-1">{getStatusBadge(selectedReport.status)}</div></div>
+                            <div><p className="text-xs text-gray-500">Priority</p><div className="mt-1">{getPriorityBadge(selectedReport.priority)}</div></div>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Animal Information</p>
+                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalType} • {selectedReport.animalCount} animal(s)</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Assigned Team</p>
+                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.assignedTeam || "Not assigned"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Follow-up Required</p>
+                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.followUpRequired ? "Yes" : "No"}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-6">
+                        <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Description</h3>
+                        <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">{selectedReport.description}</p>
+                      </div>
+
+                      {selectedReport.injuries && selectedReport.injuries !== "None" && (
+                        <div className="mt-4">
+                          <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Injuries Reported</h3>
+                          <p className="text-gray-700 bg-red-50 p-4 rounded-lg border border-red-100">{selectedReport.injuries}</p>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3 mt-6 pt-6 border-t border-gray-200">
+                        <button 
+                          onClick={() => setIsStatusModalOpen(true)}
+                          className="flex-1 bg-[#FA8630] text-white py-2 px-4 rounded-lg hover:bg-[#E87928] transition-colors"
+                        >
+                          Update Status
+                        </button>
+                        <button className="flex-1 bg-white text-gray-700 py-2 px-4 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">Assign Team</button>
+                        <button className="flex-1 bg-white text-gray-700 py-2 px-4 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">Add Note</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
+
+      {/* Status Update Modal */}
+      {isStatusModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Update Report Status</h3>
+                <button
+                  onClick={() => setIsStatusModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                Select the new status for Report #{selectedReport?.id}
+              </p>
+              
+              <div className="space-y-2">
+                {['Pending', 'Verified', 'In Progress', 'Resolved', 'Rejected', 'Cancelled'].map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => handleStatusUpdate(status)}
+                    disabled={selectedReport?.status === status || isUpdatingStatus}
+                    className={`w-full px-4 py-3 rounded-lg border-2 transition-all text-left ${
+                      selectedReport?.status === status
+                        ? 'border-gray-300 bg-gray-50 cursor-not-allowed opacity-60'
+                        : 'border-gray-200 hover:border-[#FA8630] hover:bg-[#FA8630]/5 cursor-pointer'
+                    } ${isUpdatingStatus ? 'opacity-50 cursor-wait' : ''}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-700">{status}</span>
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(status)}
+                        {selectedReport?.status === status && (
+                          <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              
+              {isUpdatingStatus && (
+                <div className="mt-4 flex items-center justify-center gap-2 text-[#FA8630]">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#FA8630]"></div>
+                  <span className="text-sm">Updating status...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Report Modal */}
+      <NewReportModal
+        isOpen={isNewReportModalOpen}
+        onClose={() => setIsNewReportModalOpen(false)}
+        onSubmit={handleNewReportSubmit}
+      />
     </div>
   );
 };

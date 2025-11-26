@@ -4,6 +4,9 @@
  * API endpoints for dashboard statistics
  */
 
+// Include CORS middleware
+require_once __DIR__ . '/../middleware/cors.php';
+
 header("Content-Type: application/json; charset=UTF-8");
 
 require_once '../config/database.php';

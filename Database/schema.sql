@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS incidents (
     location VARCHAR(255) NOT NULL,
     latitude DECIMAL(10, 8),
     longitude DECIMAL(11, 8),
-    status ENUM('pending', 'in_progress', 'resolved', 'cancelled') DEFAULT 'pending',
+    status ENUM('pending', 'verified', 'in_progress', 'resolved', 'rejected', 'cancelled') DEFAULT 'pending',
     priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
     reporter_name VARCHAR(100),
     reporter_contact VARCHAR(20),

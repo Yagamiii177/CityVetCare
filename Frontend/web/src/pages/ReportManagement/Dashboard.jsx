@@ -17,34 +17,15 @@ const IncidentDashboard = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
-  // Sample API-like values
+  // Initialize with empty data - will be fetched from API
   const dashboardData = {
-    totalReports: 256,
-    resolvedReports: 132,
-    pendingReports: 67,
-    reportsThisWeek: 21,
+    totalReports: 0,
+    resolvedReports: 0,
+    pendingReports: 0,
+    reportsThisWeek: 0,
   };
 
-  const recentIncidents = [
-    {
-      id: 1,
-      action: "New bite incident reported",
-      time: "1 hour ago",
-      icon: <PlusIcon className="h-4 w-4 text-[#FA8630]" />,
-    },
-    {
-      id: 2,
-      action: "Report verified by City Vet",
-      time: "3 hours ago",
-      icon: <CheckBadgeIcon className="h-4 w-4 text-green-500" />,
-    },
-    {
-      id: 3,
-      action: "Patrol dispatched",
-      time: "8 hours ago",
-      icon: <MapPinIcon className="h-4 w-4 text-blue-500" />,
-    },
-  ];
+  const recentIncidents = [];
 
   return (
     <div className="min-h-screen bg-[#E8E8E8]">

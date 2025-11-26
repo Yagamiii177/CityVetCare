@@ -65,82 +65,43 @@ const IncidentMonitoring = () => {
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
-  // Sample data - replace with your actual API call
-  const sampleReports = [
-    {
-      id: 1,
-      type: "Bite Incident",
-      reporter: "John Doe",
-      date: "2025-11-15",
-      time: "14:30",
-      address: "Purok 4, Barangay San Juan",
-      description: "Dog bite incident near the market area",
-      latitude: 14.5995,
-      longitude: 120.9842,
-      status: "Pending",
-      priority: "High",
-      animalType: "Stray Dog",
-    },
-    {
-      id: 2,
-      type: "Stray Animal",
-      reporter: "Maria Santos",
-      date: "2025-11-16",
-      time: "09:15",
-      address: "Purok 2, Barangay San Jose",
-      description: "Multiple stray dogs roaming near school",
-      latitude: 14.6010,
-      longitude: 120.9900,
-      status: "Verified",
-      priority: "Medium",
-      animalType: "Dog",
-    },
-    {
-      id: 3,
-      type: "Rabies Suspected",
-      reporter: "Carlos Mendoza",
-      date: "2025-11-17",
-      time: "16:45",
-      address: "Barangay Del Rosario",
-      description: "Suspected rabies case in stray dog",
-      latitude: 14.5980,
-      longitude: 120.9780,
-      status: "In Progress",
-      priority: "Critical",
-      animalType: "Dog",
-    },
-    {
-      id: 4,
-      type: "Bite Incident",
-      reporter: "Anna Lopez",
-      date: "2025-11-18",
-      time: "11:20",
-      address: "Purok 3, Barangay San Isidro",
-      description: "Cat bite incident in residential area",
-      latitude: 14.6030,
-      longitude: 120.9950,
-      status: "Resolved",
-      priority: "Medium",
-      animalType: "Cat",
-    },
-  ];
-
   // Fetch reports from API
   useEffect(() => {
     const fetchReports = async () => {
       try {
         setLoading(true);
-        // Simulate API call - replace with your actual API
-        // const response = await axios.get("/api/reports");
-        // setReports(response.data);
+        // Fetch active reports (exclude completed ones)
+        const response = await axios.get('http://localhost:8000/routes/incidents.php');
         
-        // Using sample data for demonstration
-        setTimeout(() => {
-          setReports(sampleReports);
-          setLoading(false);
-        }, 1000);
+        if (response.data && response.data.records) {
+          // Filter only active reports (not resolved, rejected, or cancelled)
+          const activeReports = response.data.records.filter(incident => {
+            const status = incident.status.toLowerCase();
+            return status !== 'resolved' && status !== 'rejected' && status !== 'cancelled';
+          });
+          
+          // Transform to frontend format
+          const transformedReports = activeReports.map(incident => ({
+            id: incident.id,
+            type: incident.title,
+            location: incident.location,
+            lat: incident.latitude || 13.9094,
+            lng: incident.longitude || 121.7740,
+            status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
+            priority: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
+            date: incident.incident_date || incident.created_at,
+            description: incident.description,
+            reporter: incident.reporter_name,
+            contact: incident.reporter_contact
+          }));
+          
+          setReports(transformedReports);
+        }
+        setLoading(false);
       } catch (err) {
+        console.error('Error fetching monitoring reports:', err);
         setError(err.message || "Failed to fetch reports");
+        setReports([]);
         setLoading(false);
       }
     };
@@ -412,10 +373,7 @@ const IncidentMonitoring = () => {
                         </p>
                         
                         <button
-                          onClick={() => {
-                            // Handle view details
-                            console.log("View details for:", report.id);
-                          }}
+                          onClick={() => setSelectedReport(report)}
                           className="w-full bg-[#FA8630] text-white py-1 px-3 rounded text-sm hover:bg-[#E87928] transition-colors"
                         >
                           View Full Details
