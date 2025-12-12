@@ -8,6 +8,7 @@ import {
   XMarkIcon,
   MapPinIcon,
   CalendarDaysIcon,
+  CalendarIcon,
   UserIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
@@ -35,29 +36,59 @@ const IncidentReportingManagement = () => {
   const [error, setError] = useState(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [reports, setReports] = useState([]);
+  const [reportSchedules, setReportSchedules] = useState([]); // Store schedules for selected report
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [statusCounts, setStatusCounts] = useState({
+    all: 0,
+    Pending: 0,
+    "In Progress": 0,
+    Verified: 0,
+    Resolved: 0
+  });
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
-  // Reports state
-  const [reports, setReports] = useState([]);
-
-  // Fetch reports from API
+  // Fetch reports from API with server-side search and pagination
   useEffect(() => {
     fetchReports();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentPage, searchTerm, statusFilter]);
 
   const fetchReports = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiService.incidents.getAll();
       
-      // Filter out completed reports (resolved, rejected, cancelled) - they belong in Report History
-      const activeReports = response.data.records.filter(incident => {
-        const status = incident.status.toLowerCase();
-        return status !== 'resolved' && status !== 'rejected' && status !== 'cancelled';
-      });
+      console.log("📥 Fetching incidents - Page:", currentPage, "Search:", searchTerm, "Status:", statusFilter);
+      
+      // Build query parameters for server-side filtering
+      const params = {
+        page: currentPage,
+        search: searchTerm || undefined,
+        status: statusFilter !== "all" ? statusFilter.toLowerCase().replace(' ', '_') : undefined
+      };
+      
+      const response = await apiService.incidents.getAll(params);
+      console.log("✅ Received incidents:", response.data);
+      
+      // Update pagination state from server response
+      if (response.data.pagination) {
+        setTotalPages(response.data.pagination.totalPages);
+        setTotalRecords(response.data.pagination.total);
+        setCurrentPage(response.data.pagination.page);
+      }
+      
+      // Get status counts from separate API call (or from backend if available)
+      await fetchStatusCounts();
+      
+      const activeReports = response.data.records;
+      
+      console.log("📊 All incidents (including all statuses):", activeReports.length);
       
       // Transform backend data to frontend format
       const transformedReports = activeReports.map(incident => ({
@@ -78,13 +109,61 @@ const IncidentReportingManagement = () => {
         followUpRequired: true,
       }));
 
+      console.log("✅ Reports transformed and ready:", transformedReports.length);
       setReports(transformedReports);
       setLoading(false);
     } catch (err) {
-      console.error("Error fetching reports:", err);
+      console.error("❌ Error fetching reports:", err);
+      console.error("Error details:", err.response?.data);
       setError("Failed to load reports. Please check your connection.");
       setReports([]);
       setLoading(false);
+    }
+  };
+
+  // Fetch status counts separately
+  const fetchStatusCounts = async () => {
+    try {
+      const response = await apiService.incidents.getStatusCounts();
+      if (response.data.success) {
+        const counts = {
+          all: 0,
+          Pending: 0,
+          "In Progress": 0,
+          Verified: 0,
+          Resolved: 0
+        };
+        
+        response.data.data.forEach(item => {
+          const status = item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ');
+          counts[status] = item.count;
+          counts.all += item.count;
+        });
+        
+        setStatusCounts(counts);
+      }
+    } catch (err) {
+      console.error("Failed to fetch status counts:", err);
+    }
+  };
+
+  // Handle search with debouncing
+  const handleSearch = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1); // Reset to first page on new search
+  };
+
+  // Handle status filter change
+  const handleStatusFilter = (status) => {
+    setStatusFilter(status);
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
+  // Handle page navigation
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -109,6 +188,8 @@ const IncidentReportingManagement = () => {
     try {
       setIsUpdatingStatus(true);
       
+      console.log("📤 Updating status for ID:", selectedReport.id, "to:", newStatus);
+      
       // Prepare update data with all required fields
       const updateData = {
         id: selectedReport.id,
@@ -122,36 +203,42 @@ const IncidentReportingManagement = () => {
         assigned_catcher_id: null
       };
       
-      await apiService.incidents.update(selectedReport.id, updateData);
+      console.log("📦 Update data:", updateData);
+      
+      // Update in backend
+      const response = await apiService.incidents.update(selectedReport.id, updateData);
+      console.log("✅ Backend updated:", response.data);
+      
+      // Wait a moment for database to commit
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Refresh data from database to ensure consistency
+      console.log("🔄 Refreshing reports from database...");
+      await fetchReports();
       
       // Check if status is completed (resolved, rejected, cancelled)
       const completedStatuses = ['resolved', 'rejected', 'cancelled'];
       const isCompleted = completedStatuses.includes(newStatus.toLowerCase());
       
+      setIsStatusModalOpen(false);
+      setIsUpdatingStatus(false);
+      
       if (isCompleted) {
-        // Remove from current list as it now belongs in Report History
-        setReports(reports.filter(report => report.id !== selectedReport.id));
         setSelectedReport(null);
-        setIsStatusModalOpen(false);
-        setIsUpdatingStatus(false);
-        alert(`Status updated to ${newStatus}! This report has been moved to Report History.`);
+        alert(`✅ Status updated to ${newStatus}!\n\nThis report has been moved to Report History.`);
       } else {
-        // Update local state for active statuses
-        setReports(reports.map(report => 
-          report.id === selectedReport.id 
-            ? { ...report, status: newStatus }
-            : report
-        ));
-        
-        setSelectedReport({ ...selectedReport, status: newStatus });
-        setIsStatusModalOpen(false);
-        setIsUpdatingStatus(false);
-        alert(`Status updated to ${newStatus} successfully!`);
+        // Find and update selected report with fresh data
+        const updatedReport = reports.find(r => r.id === selectedReport.id);
+        if (updatedReport) {
+          setSelectedReport(updatedReport);
+        }
+        alert(`✅ Status updated to ${newStatus} successfully!\n\nThe table has been refreshed with the latest data.`);
       }
     } catch (err) {
-      console.error("Error updating status:", err);
+      console.error("❌ Error updating status:", err);
+      console.error("Error details:", err.response?.data);
       const errorMsg = err.response?.data?.message || "Failed to update status. Please try again.";
-      alert(errorMsg);
+      alert(`❌ Failed to update status\n\n${errorMsg}`);
       setIsUpdatingStatus(false);
     }
   };
@@ -165,13 +252,29 @@ const IncidentReportingManagement = () => {
     return "None";
   };
 
-  // Handle new report submission
+  // Fetch schedules for a specific incident
+  const fetchReportSchedules = async (incidentId) => {
+    try {
+      const response = await apiService.patrolSchedules.getAll();
+      const incidentSchedules = response.data.records.filter(
+        schedule => schedule.incident_id === incidentId
+      );
+      setReportSchedules(incidentSchedules);
+    } catch (err) {
+      console.error("Error fetching schedules:", err);
+      setReportSchedules([]);
+    }
+  };
+
+  // Handle new report submission from modal
   const handleNewReportSubmit = async (newReportData) => {
     try {
+      console.log("📤 Creating new incident from New Report modal...");
+      
       // Prepare data for backend API
       const incidentData = {
         title: newReportData.type,
-        description: `${newReportData.details}\n\nAnimal: ${newReportData.animalType} (${newReportData.animalCount})\nInjuries: ${newReportData.injuries || 'None'}`,
+        description: `${newReportData.details}${newReportData.animalType ? '\n\nAnimal: ' + newReportData.animalType : ''}${newReportData.animalCount > 1 ? ' (' + newReportData.animalCount + ')' : ''}${newReportData.injuries ? '\nInjuries: ' + newReportData.injuries : ''}`,
         location: newReportData.location,
         status: 'pending',
         priority: newReportData.severity.toLowerCase(),
@@ -180,71 +283,32 @@ const IncidentReportingManagement = () => {
         incident_date: `${newReportData.date} ${newReportData.time}`,
       };
 
+      console.log("📦 Incident data:", incidentData);
+
       // Send to backend
       const response = await apiService.incidents.create(incidentData);
       
-      if (response.data.message === "Incident created successfully") {
-        alert("Incident report submitted successfully!");
-        // Refresh the reports list
-        fetchReports();
-      }
+      console.log("✅ SUCCESS! Incident created with ID:", response.data.id);
+
+      // Show success message
+      alert(`✅ Incident report submitted successfully!\n\nReport ID: ${response.data.id}\n\nThe report will now appear in the table.`);
+      
+      // Refresh the reports list to show new incident
+      console.log("🔄 Refreshing reports list...");
+      await fetchReports();
+      console.log("✅ Reports list refreshed!");
+      
     } catch (err) {
-      console.error("Error creating incident:", err);
-      const errorMsg = err.response?.data?.message || "Failed to submit report. Please try again.";
-      alert(errorMsg);
+      console.error("❌ Error creating incident:", err);
+      console.error("Error response:", err.response?.data);
+      const errorMsg = err.response?.data?.message || err.message || "Failed to submit report. Please try again.";
+      alert(`❌ Failed to submit report\n\n${errorMsg}\n\nCheck console (F12) for details.`);
     }
   };
 
-  // Filter and sort logic
-  const filteredReports = reports
-    .filter((report) => {
-      const matchesSearch = 
-        report.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.reporter.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.animalType.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesStatus = statusFilter === "all" || report.status === statusFilter;
-      const matchesType = typeFilter === "all" || report.type === typeFilter;
-
-      return matchesSearch && matchesStatus && matchesType;
-    })
-    .sort((a, b) => {
-      let aValue, bValue;
-      
-      switch (sortBy) {
-        case "date":
-          aValue = new Date(a.date);
-          bValue = new Date(b.date);
-          break;
-        case "priority":
-          { const priorityOrder = { "High": 3, "Medium": 2, "Low": 1 };
-          aValue = priorityOrder[a.priority];
-          bValue = priorityOrder[b.priority];
-          break; }
-        case "status":
-          { const statusOrder = { "Pending": 1, "In Progress": 2, "Verified": 3, "Resolved": 4 };
-          aValue = statusOrder[a.status];
-          bValue = statusOrder[b.status];
-          break; }
-        default:
-          aValue = a[sortBy];
-          bValue = b[sortBy];
-      }
-
-      if (sortOrder === "desc") {
-        return aValue < bValue ? 1 : -1;
-      }
-      return aValue > bValue ? 1 : -1;
-    });
-
-  // Status counts for quick overview (only active reports)
-  const statusCounts = {
-    all: reports.length,
-    Pending: reports.filter(r => r.status === "Pending").length,
-    Verified: reports.filter(r => r.status === "Verified").length,
-    "In Progress": reports.filter(r => r.status === "In Progress").length,
-  };
+  // Note: Filtering and sorting now handled by backend API
+  // Reports are already filtered and paginated by the server
+  const displayReports = reports;
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -316,8 +380,8 @@ const IncidentReportingManagement = () => {
           {/* Header Section */}
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">Incident Reports Management</h1>
-              <p className="text-gray-600">Manage active incident reports (Completed reports are in Report History)</p>
+              <h1 className="text-2xl font-bold text-gray-800">All Incident Reports</h1>
+              <p className="text-gray-600">View all incident reports with any status</p>
               {error && (
                 <p className="text-sm text-orange-600 mt-1">⚠️ {error}</p>
               )}
@@ -363,14 +427,14 @@ const IncidentReportingManagement = () => {
                     <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
                     <input
                       type="text"
-                      placeholder="Search reports by type, reporter, location, or animal type..."
+                      placeholder="Search reports (searches database: type, reporter, location, animal, team)..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={(e) => handleSearch(e.target.value)}
                       className="pl-10 pr-4 py-2 border w-full rounded-lg focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
                     />
                     {searchTerm && (
                       <button 
-                        onClick={() => setSearchTerm("")}
+                        onClick={() => handleSearch("")}
                         className="absolute right-3 top-3"
                       >
                         <XMarkIcon className="h-5 w-5 text-gray-500 hover:text-gray-700" />
@@ -397,7 +461,7 @@ const IncidentReportingManagement = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                       <select
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
+                        onChange={(e) => handleStatusFilter(e.target.value)}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
                       >
                         <option value="all">All Status</option>
@@ -452,7 +516,7 @@ const IncidentReportingManagement = () => {
               {/* Reports Table */}
               <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
                 <div className="flex justify-between items-center p-4 border-b border-gray-200">
-                  <h2 className="text-lg font-semibold text-gray-800">Incident Reports ({filteredReports.length})</h2>
+                  <h2 className="text-lg font-semibold text-gray-800">Incident Reports ({totalRecords})</h2>
                   <button className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800"><DocumentArrowDownIcon className="h-4 w-4" />Export</button>
                 </div>
 
@@ -472,8 +536,8 @@ const IncidentReportingManagement = () => {
                     </thead>
 
                     <tbody className="divide-y divide-gray-200">
-                      {filteredReports.length ? (
-                        filteredReports.map((report) => (
+                      {displayReports.length ? (
+                        displayReports.map((report) => (
                           <tr key={report.id} className="hover:bg-gray-50 transition-colors">
                             <td className="px-6 py-4"><span className="text-sm font-medium text-gray-900">#{report.id}</span></td>
                             <td className="px-6 py-4"><div><p className="text-sm font-medium text-gray-900">{report.reporter}</p><p className="text-xs text-gray-500">{report.reporterContact}</p></div></td>
@@ -482,7 +546,7 @@ const IncidentReportingManagement = () => {
                             <td className="px-6 py-4"><div><p className="text-sm text-gray-900">{report.date}</p><p className="text-xs text-gray-500">{report.time}</p></div></td>
                             <td className="px-6 py-4">{getPriorityBadge(report.priority)}</td>
                             <td className="px-6 py-4">{getStatusBadge(report.status)}</td>
-                            <td className="px-6 py-4"><div className="flex items-center gap-2"><button onClick={() => setSelectedReport(report)} className="text-[#FA8630] hover:text-[#E87928] p-1 rounded hover:bg-[#FA8630]/10 transition-colors" title="View Details"><EyeIcon className="h-5 w-5" /></button><button className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 transition-colors" title="Assign Team"><UserIcon className="h-5 w-5" /></button></div></td>
+                            <td className="px-6 py-4"><div className="flex items-center gap-2"><button onClick={() => { setSelectedReport(report); fetchReportSchedules(report.id); }} className="text-[#FA8630] hover:text-[#E87928] p-1 rounded hover:bg-[#FA8630]/10 transition-colors" title="View Details"><EyeIcon className="h-5 w-5" /></button><button className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 transition-colors" title="Assign Team"><UserIcon className="h-5 w-5" /></button></div></td>
                           </tr>
                         ))
                       ) : (
@@ -491,7 +555,7 @@ const IncidentReportingManagement = () => {
                             <div className="text-gray-500">
                               <ClipboardDocumentListIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                               <p>No reports found matching your criteria</p>
-                              <button onClick={() => { setSearchTerm(""); setStatusFilter("all"); setTypeFilter("all"); }} className="text-[#FA8630] hover:text-[#E87928] mt-2">Clear all filters</button>
+                              <button onClick={() => { handleSearch(""); handleStatusFilter("all"); setTypeFilter("all"); }} className="text-[#FA8630] hover:text-[#E87928] mt-2">Clear all filters</button>
                             </div>
                           </td>
                         </tr>
@@ -499,6 +563,90 @@ const IncidentReportingManagement = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <span>
+                        Showing page <span className="font-semibold">{currentPage}</span> of{' '}
+                        <span className="font-semibold">{totalPages}</span>
+                      </span>
+                      <span className="text-gray-400">•</span>
+                      <span>
+                        <span className="font-semibold">{totalRecords}</span> total records
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Previous Button */}
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
+                          currentPage === 1
+                            ? 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        Previous
+                      </button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-1">
+                        {[...Array(totalPages)].map((_, index) => {
+                          const pageNum = index + 1;
+                          // Show first page, last page, current page, and pages around current
+                          const showPage = 
+                            pageNum === 1 ||
+                            pageNum === totalPages ||
+                            (pageNum >= currentPage - 1 && pageNum <= currentPage + 1);
+
+                          const showEllipsis = 
+                            (pageNum === 2 && currentPage > 3) ||
+                            (pageNum === totalPages - 1 && currentPage < totalPages - 2);
+
+                          if (showEllipsis) {
+                            return (
+                              <span key={pageNum} className="px-2 py-1 text-gray-400">
+                                ...
+                              </span>
+                            );
+                          }
+
+                          if (!showPage) return null;
+
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => handlePageChange(pageNum)}
+                              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                currentPage === pageNum
+                                  ? 'bg-[#FA8630] text-white'
+                                  : 'text-gray-700 hover:bg-gray-100 border border-gray-300'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Next Button */}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
+                          currentPage === totalPages
+                            ? 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Report Details Modal */}
@@ -573,6 +721,65 @@ const IncidentReportingManagement = () => {
                           <p className="text-gray-700 bg-red-50 p-4 rounded-lg border border-red-100">{selectedReport.injuries}</p>
                         </div>
                       )}
+
+                      {/* Patrol Schedule Table */}
+                      <div className="mt-6">
+                        <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Patrol Schedule History</h3>
+                        {reportSchedules.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Assigned Staff</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Schedule Date</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Status</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Created</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200">
+                                {reportSchedules.map((schedule) => (
+                                  <tr key={schedule.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3">
+                                      <div className="text-sm text-gray-900">
+                                        {schedule.assigned_staff_names || "No staff assigned"}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="text-sm text-gray-900">
+                                        {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleString() : "N/A"}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        schedule.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                        schedule.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                        'bg-blue-100 text-blue-800'
+                                      }`}>
+                                        {schedule.status.replace('_', ' ')}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-700">
+                                      {new Date(schedule.created_at).toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-6 bg-gray-50 rounded-lg">
+                            <CalendarIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                            <p className="text-sm text-gray-600">No patrol schedules yet</p>
+                            <p className="text-xs text-gray-500 mt-1">Schedules will appear here when created</p>
+                          </div>
+                        )}
+                      </div>
 
                       <div className="flex gap-3 mt-6 pt-6 border-t border-gray-200">
                         <button 

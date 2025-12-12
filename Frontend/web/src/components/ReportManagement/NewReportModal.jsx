@@ -31,9 +31,17 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
     });
   };
 
-  // Submit handler
+  // Submit handler with validation and better error handling
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.type || !formData.location || !formData.reporterName || !formData.reporterContact || !formData.details) {
+      alert("⚠️ Please fill in all required fields marked with *");
+      return;
+    }
+    
+    console.log("📝 New Report Modal - Preparing data...");
 
     const newReport = {
       type: formData.type,
@@ -49,14 +57,17 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       reporterAddress: formData.reporterAddress,
       details: formData.details,
       animalType: formData.animalType,
-      animalCount: parseInt(formData.animalCount),
+      animalCount: parseInt(formData.animalCount) || 1,
       injuries: formData.injuries,
       severity: formData.severity,
       status: "Pending",
       assignedTo: "",
       followUpRequired: formData.followUpRequired,
     };
+    
+    console.log("📦 Submitting report:", newReport);
 
+    // Call parent submit handler
     onSubmit(newReport);
 
     // Reset form
@@ -74,6 +85,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       followUpRequired: true,
     });
 
+    // Close modal
     onClose();
   };
 

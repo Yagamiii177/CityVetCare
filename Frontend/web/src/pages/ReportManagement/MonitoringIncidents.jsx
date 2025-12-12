@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
+import { apiService } from "../../utils/api";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -70,14 +71,13 @@ const IncidentMonitoring = () => {
     const fetchReports = async () => {
       try {
         setLoading(true);
-        // Fetch active reports (exclude completed ones)
-        const response = await axios.get('http://localhost:8000/routes/incidents.php');
+        const response = await apiService.incidents.getAll();
         
         if (response.data && response.data.records) {
-          // Filter only active reports (not resolved, rejected, or cancelled)
+          // Filter only verified and in_progress incidents for monitoring
           const activeReports = response.data.records.filter(incident => {
             const status = incident.status.toLowerCase();
-            return status !== 'resolved' && status !== 'rejected' && status !== 'cancelled';
+            return status === 'verified' || status === 'in_progress';
           });
           
           // Transform to frontend format
@@ -200,7 +200,7 @@ const IncidentMonitoring = () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Incident Monitoring</h1>
-              <p className="text-gray-600">Real-time tracking of reported incidents</p>
+              <p className="text-gray-600">Real-time map of approved, scheduled, and in-progress incidents</p>
             </div>
             
             {/* Filters */}
@@ -387,6 +387,142 @@ const IncidentMonitoring = () => {
           </div>
         </div>
       </main>
+
+      {/* Simple Detail Modal */}
+      {selectedReport && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
+            <button
+              className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+              onClick={() => setSelectedReport(null)}
+            >
+              <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
+            </button>
+
+            <div className="p-6 space-y-6">
+              {/* Header */}
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">{selectedReport.type}</h2>
+                <p className="text-gray-600">Incident Report Details</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Reporter Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
+                    Reporter Information
+                  </h3>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Reporter Name
+                    </label>
+                    <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                      <UserIcon className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-800">{selectedReport.reporter}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Contact Number
+                    </label>
+                    <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                      <span className="text-gray-800">{selectedReport.contact}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Report Date
+                    </label>
+                    <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                      <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-800">{selectedReport.date}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Incident Details */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
+                    Incident Information
+                  </h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">
+                        Priority
+                      </label>
+                      <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                        {getPriorityBadge(selectedReport.priority)}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">
+                        Status
+                      </label>
+                      <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                        {getStatusBadge(selectedReport.status)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Animal Type
+                    </label>
+                    <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                      <span className="text-gray-800">{selectedReport.animalType || 'Not specified'}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Animal Count
+                    </label>
+                    <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                      <span className="text-gray-800">{selectedReport.animalCount || 1}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Location
+                </label>
+                <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                  <MapPinIcon className="h-5 w-5 text-gray-400" />
+                  <span className="text-gray-800">{selectedReport.location}</span>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Description
+                </label>
+                <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                  <p className="text-gray-800">{selectedReport.description}</p>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <div className="flex gap-4 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => setSelectedReport(null)}
+                  className="flex-1 bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

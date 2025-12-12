@@ -24,6 +24,7 @@ const PendingVerification = () => {
   const [filterType, setFilterType] = useState("all");
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [reportSchedules, setReportSchedules] = useState([]); // Store schedules for selected report
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
@@ -36,10 +37,17 @@ const PendingVerification = () => {
   const fetchPendingReports = async () => {
     try {
       setLoading(true);
-      const response = await apiService.incidents.getAll({ status: 'pending' });
+      // Fetch all incidents and filter for pending/pending_verification on frontend
+      const response = await apiService.incidents.getAll();
+      
+      // Filter for pending verification reports (accept both 'pending' and 'pending_verification')
+      const pendingReports = response.data.records.filter(incident => {
+        const status = incident.status.toLowerCase();
+        return status === 'pending' || status === 'pending_verification';
+      });
       
       // Transform backend data to frontend format
-      const transformedReports = response.data.records.map(incident => ({
+      const transformedReports = pendingReports.map(incident => ({
         id: incident.id,
         reporter: incident.reporter_name,
         reporterContact: incident.reporter_contact,
@@ -92,8 +100,25 @@ const PendingVerification = () => {
     return "None";
   };
 
-  // Filter pending reports
-  const pendingReports = reports.filter((r) => r.status === "Pending");
+  // Fetch schedules for a specific incident
+  const fetchReportSchedules = async (incidentId) => {
+    try {
+      const response = await apiService.patrolSchedules.getAll();
+      const incidentSchedules = response.data.records.filter(
+        schedule => schedule.incident_id === incidentId
+      );
+      setReportSchedules(incidentSchedules);
+    } catch (err) {
+      console.error("Error fetching schedules:", err);
+      setReportSchedules([]);
+    }
+  };
+
+  // Filter pending reports (already filtered from backend, but keep for consistency)
+  const pendingReports = reports.filter((r) => {
+    const status = r.status.toLowerCase().replace(' ', '_');
+    return status === 'pending' || status === 'pending_verification';
+  });
 
   // Search and type filter
   const filteredReports = pendingReports.filter((r) => {
@@ -108,9 +133,9 @@ const PendingVerification = () => {
     return matchesSearch && matchesType;
   });
 
-  // Handle Verify - Update status to 'verified' in backend
+  // Handle Verify - Update status to 'approved' in backend
   const handleVerify = async (id) => {
-    if (!window.confirm(`Are you sure you want to verify report #${id}?`)) {
+    if (!window.confirm(`Are you sure you want to approve report #${id}?`)) {
       return;
     }
 
@@ -118,13 +143,20 @@ const PendingVerification = () => {
       const report = reports.find(r => r.id === id);
       if (!report) return;
 
-      // Update status in backend
+      // First, fetch the complete incident data from backend
+      const incidentResponse = await apiService.incidents.getById(id);
+      const incident = incidentResponse.data;
+
+      // Update status in backend with all required fields
       await apiService.incidents.update(id, {
-        status: 'verified',
-        priority: report.priority.toLowerCase(),
-        title: report.type,
-        description: report.description,
-        location: report.address,
+        title: incident.title,
+        description: incident.description,
+        location: incident.location,
+        latitude: incident.latitude,
+        longitude: incident.longitude,
+        status: 'approved',
+        priority: incident.priority,
+        assigned_catcher_id: incident.assigned_catcher_id,
       });
       
       // Refresh the list
@@ -134,10 +166,10 @@ const PendingVerification = () => {
         setSelectedReport(null);
       }
       
-      alert(`Report #${id} has been verified successfully!`);
+      alert(`Report #${id} has been approved successfully! It will now appear in All Incident Reports and Incident Monitoring.`);
     } catch (error) {
-      console.error("Error verifying report:", error);
-      alert(`Error verifying report: ${error.response?.data?.message || error.message}`);
+      console.error("Error approving report:", error);
+      alert(`Error approving report: ${error.response?.data?.message || error.message}`);
     }
   };
 
@@ -150,13 +182,20 @@ const PendingVerification = () => {
       const report = reports.find(r => r.id === id);
       if (!report) return;
 
-      // Update status in backend with rejection note
+      // First, fetch the complete incident data from backend
+      const incidentResponse = await apiService.incidents.getById(id);
+      const incident = incidentResponse.data;
+
+      // Update status in backend with rejection note and all required fields
       await apiService.incidents.update(id, {
+        title: incident.title,
+        description: `${incident.description}\n\n[REJECTED: ${reason}]`,
+        location: incident.location,
+        latitude: incident.latitude,
+        longitude: incident.longitude,
         status: 'rejected',
-        priority: report.priority.toLowerCase(),
-        title: report.type,
-        description: `${report.description}\n\n[REJECTED: ${reason}]`,
-        location: report.address,
+        priority: incident.priority,
+        assigned_catcher_id: incident.assigned_catcher_id,
       });
       
       // Refresh the list
@@ -407,25 +446,28 @@ const PendingVerification = () => {
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => setSelectedReport(report)}
-                                  className="text-[#FA8630] hover:text-[#E87928] p-1 rounded hover:bg-[#FA8630]/10 transition-colors"
+                                  onClick={() => { setSelectedReport(report); fetchReportSchedules(report.id); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-[#FA8630] hover:bg-[#E87928] rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
                                   title="View Details"
                                 >
-                                  <EyeIcon className="h-5 w-5" />
+                                  <EyeIcon className="h-4 w-4" />
+                                  <span>View</span>
                                 </button>
                                 <button
                                   onClick={() => handleVerify(report.id)}
-                                  className="text-green-600 hover:text-green-700 p-1 rounded hover:bg-green-100 transition-colors"
-                                  title="Verify Report"
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                                  title="Approve Report"
                                 >
-                                  <CheckCircleIcon className="h-5 w-5" />
+                                  <CheckCircleIcon className="h-4 w-4" />
+                                  <span>Approve</span>
                                 </button>
                                 <button
                                   onClick={() => handleReject(report.id)}
-                                  className="text-red-500 hover:text-red-600 p-1 rounded hover:bg-red-100 transition-colors"
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
                                   title="Reject Report"
                                 >
-                                  <XCircleIcon className="h-5 w-5" />
+                                  <XCircleIcon className="h-4 w-4" />
+                                  <span>Reject</span>
                                 </button>
                               </div>
                             </td>
@@ -449,7 +491,7 @@ const PendingVerification = () => {
             )}
           </div>
 
-          {/* Detailed Modal */}
+          {/* Detailed Modal - Simplified */}
           {selectedReport && (
             <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
               <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
@@ -460,122 +502,199 @@ const PendingVerification = () => {
                   <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
                 </button>
 
-                <div className="p-6">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 rounded-full bg-[#FA8630]/10">
-                      <ExclamationTriangleIcon className="h-6 w-6 text-[#FA8630]" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-800">
-                        Report #{selectedReport.id} - Verification Required
-                      </h2>
-                      <p className="text-gray-600">{selectedReport.type}</p>
-                    </div>
+                <div className="p-6 space-y-6">
+                  {/* Header */}
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Report #{selectedReport.id}</h2>
+                    <p className="text-gray-600">{selectedReport.type} - Pending Verification</p>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Reporter Information */}
                     <div className="space-y-4">
-                      <h3 className="font-semibold text-gray-800 border-b pb-2">Reporter Information</h3>
+                      <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
+                        Reporter Information
+                      </h3>
                       
-                      <div className="flex items-center gap-3">
-                        <UserIcon className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{selectedReport.reporter}</p>
-                          <p className="text-xs text-gray-500">Reporter</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <PhoneIcon className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{selectedReport.reporterContact}</p>
-                          <p className="text-xs text-gray-500">Contact Number</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <MapPinIcon className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{selectedReport.reporterAddress}</p>
-                          <p className="text-xs text-gray-500">Reporter Address</p>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                          Reporter Name
+                        </label>
+                        <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <UserIcon className="h-5 w-5 text-gray-400" />
+                          <span className="text-gray-800">{selectedReport.reporter}</span>
                         </div>
                       </div>
 
                       <div>
-                        <p className="text-xs text-gray-500">Submitted Via</p>
-                        <p className="text-sm font-medium text-gray-900">{selectedReport.submittedBy}</p>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                          Contact Number
+                        </label>
+                        <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <PhoneIcon className="h-5 w-5 text-gray-400" />
+                          <span className="text-gray-800">{selectedReport.reporterContact}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                          Reporter Address
+                        </label>
+                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <span className="text-gray-800">{selectedReport.reporterAddress}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                          Submitted Via
+                        </label>
+                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <span className="text-gray-800">{selectedReport.submittedBy}</span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Incident Details */}
                     <div className="space-y-4">
-                      <h3 className="font-semibold text-gray-800 border-b pb-2">Incident Details</h3>
+                      <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
+                        Incident Information
+                      </h3>
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <p className="text-xs text-gray-500">Priority</p>
-                          <div className="mt-1">{getPriorityBadge(selectedReport.priority)}</div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">
+                            Animal Type
+                          </label>
+                          <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                            <span className="text-gray-800">{selectedReport.animalType}</span>
+                          </div>
                         </div>
+
                         <div>
-                          <p className="text-xs text-gray-500">Animal Type</p>
-                          <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalType}</p>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">
+                            Animal Count
+                          </label>
+                          <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                            <span className="text-gray-800">{selectedReport.animalCount} animal(s)</span>
+                          </div>
                         </div>
                       </div>
 
                       <div>
-                        <p className="text-xs text-gray-500">Animal Count</p>
-                        <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalCount} animal(s)</p>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                          Priority Level
+                        </label>
+                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          {getPriorityBadge(selectedReport.priority)}
+                        </div>
                       </div>
 
                       <div>
-                        <p className="text-xs text-gray-500">Injuries Reported</p>
-                        <p className="text-sm font-medium text-gray-900 mt-1">
-                          {selectedReport.injuries || "None reported"}
-                        </p>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                          Injuries Reported
+                        </label>
+                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <span className="text-gray-800">{selectedReport.injuries || "None reported"}</span>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {selectedReport.date} at {selectedReport.time}
-                          </p>
-                          <p className="text-xs text-gray-500">Incident Date & Time</p>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                          Incident Date & Time
+                        </label>
+                        <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
+                          <span className="text-gray-800">{selectedReport.date} at {selectedReport.time}</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Location and Description */}
-                  <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Incident Location</h3>
-                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">
-                        {selectedReport.address}
-                      </p>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Description</h3>
-                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">
-                        {selectedReport.description}
-                      </p>
+                  {/* Location */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Incident Location
+                    </label>
+                    <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                      <MapPinIcon className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-800">{selectedReport.address}</span>
                     </div>
                   </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Incident Description
+                    </label>
+                    <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                      <p className="text-gray-800 whitespace-pre-wrap">{selectedReport.description}</p>
+                    </div>
+                  </div>
+
+                  {/* Patrol Schedule Table */}
+                  {reportSchedules.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">
+                        Patrol Schedule History
+                      </h3>
+                      <div className="overflow-hidden rounded-lg border border-gray-300">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Assigned Staff</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Schedule Date</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Created</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200 bg-white">
+                            {reportSchedules.map((schedule) => (
+                              <tr key={schedule.id}>
+                                <td className="px-4 py-3 text-gray-800">
+                                  {schedule.assigned_staff_names || "No staff assigned"}
+                                </td>
+                                <td className="px-4 py-3 text-gray-800">
+                                  {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleString() : "N/A"}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    schedule.status === 'completed' ? 'bg-green-100 text-green-800 border border-green-200' :
+                                    schedule.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                                    'bg-blue-100 text-blue-800 border border-blue-200'
+                                  }`}>
+                                    {schedule.status.replace('_', ' ').toUpperCase()}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-gray-800">
+                                  {new Date(schedule.created_at).toLocaleString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Action Buttons */}
-                  <div className="flex gap-3 mt-6 pt-6 border-t border-gray-200">
+                  <div className="flex gap-4 pt-4 border-t border-gray-200">
                     <button
                       onClick={() => handleVerify(selectedReport.id)}
-                      className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+                      className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
                     >
                       <CheckCircleIcon className="h-5 w-5" />
-                      Verify Report
+                      Approve Report
                     </button>
                     <button
                       onClick={() => handleReject(selectedReport.id)}
-                      className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2"
+                      className="flex-1 bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 transition-colors font-medium flex items-center justify-center gap-2"
                     >
                       <XCircleIcon className="h-5 w-5" />
                       Reject Report

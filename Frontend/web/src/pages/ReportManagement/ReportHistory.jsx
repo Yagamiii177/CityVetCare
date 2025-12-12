@@ -59,10 +59,11 @@ const ReportHistory = () => {
         throw new Error('Invalid API response structure');
       }
       
-      // Filter for completed/historical reports (exclude pending status)
-      const historicalReports = response.data.records.filter(incident => 
-        incident.status.toLowerCase() !== 'pending'
-      );
+      // Filter for completed/historical reports (resolved, rejected, cancelled only)
+      const historicalReports = response.data.records.filter(incident => {
+        const status = incident.status.toLowerCase();
+        return status === 'resolved' || status === 'rejected' || status === 'cancelled';
+      });
 
       // Transform backend data to frontend format
       const transformedReports = historicalReports.map(incident => ({
@@ -155,8 +156,6 @@ const ReportHistory = () => {
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
                 >
                   <option value="all">All Status</option>
-                  <option value="verified">Verified</option>
-                  <option value="in progress">In Progress</option>
                   <option value="resolved">Resolved</option>
                   <option value="rejected">Rejected</option>
                   <option value="cancelled">Cancelled</option>
@@ -164,26 +163,14 @@ const ReportHistory = () => {
               </div>
             </div>
             <p className="text-sm text-gray-600 max-w-2xl mb-4">
-              Archived and completed incident reports. Click a row to view details. {!loading && <span className="text-[#FA8630]">● Live</span>}
+              Resolved, rejected, and cancelled incident reports. Click a row to view details. {!loading && <span className="text-[#FA8630]">● Live</span>}
             </p>
             
             {/* Stats */}
-            <div className="grid grid-cols-5 gap-4 mt-4">
+            <div className="grid grid-cols-4 gap-4 mt-4">
               <div className="bg-white p-4 rounded-lg border border-gray-200">
                 <p className="text-sm text-gray-600">Total Records</p>
                 <p className="text-2xl font-bold text-gray-800">{historyReports.length}</p>
-              </div>
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <p className="text-sm text-blue-600">Verified</p>
-                <p className="text-2xl font-bold text-blue-800">
-                  {historyReports.filter(r => r.status === 'Verified').length}
-                </p>
-              </div>
-              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                <p className="text-sm text-purple-600">In Progress</p>
-                <p className="text-2xl font-bold text-purple-800">
-                  {historyReports.filter(r => r.status === 'In Progress').length}
-                </p>
               </div>
               <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                 <p className="text-sm text-green-600">Resolved</p>
@@ -192,9 +179,15 @@ const ReportHistory = () => {
                 </p>
               </div>
               <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                <p className="text-sm text-red-600">Rejected/Cancelled</p>
+                <p className="text-sm text-red-600">Rejected</p>
                 <p className="text-2xl font-bold text-red-800">
-                  {historyReports.filter(r => r.status === 'Rejected' || r.status === 'Cancelled').length}
+                  {historyReports.filter(r => r.status === 'Rejected').length}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-600">Cancelled</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {historyReports.filter(r => r.status === 'Cancelled').length}
                 </p>
               </div>
             </div>

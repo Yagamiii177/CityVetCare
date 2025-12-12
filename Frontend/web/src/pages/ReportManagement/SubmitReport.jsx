@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
+import { apiService } from "../../utils/api";
 import {
   PlusCircleIcon,
   MagnifyingGlassIcon,
@@ -17,9 +18,8 @@ const SubmitIncidentReportPage = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("form"); // "form" or "reports"
-
-  // Reports data - will be populated from database
   const [reports, setReports] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -38,6 +38,70 @@ const SubmitIncidentReportPage = () => {
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
+  // Fetch reports from backend
+  useEffect(() => {
+    if (activeTab === "reports") {
+      fetchReports();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const fetchReports = async () => {
+    try {
+      const response = await apiService.incidents.getAll();
+      const transformedReports = response.data.records.map(incident => ({
+        id: `RPT-${incident.id.toString().padStart(3, '0')}`,
+        type: incident.title,
+        location: incident.location,
+        date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
+        time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
+        reporterName: incident.reporter_name,
+        reporterContact: incident.reporter_contact,
+        reporterAddress: incident.location,
+        details: incident.description,
+        animalType: extractAnimalType(incident.description),
+        animalCount: 1,
+        injuries: extractInjuries(incident.description),
+        severity: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
+        status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
+        assignedTo: incident.catcher_team_name || "",
+        followUpRequired: true,
+      }));
+      setReports(transformedReports);
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+    }
+  };
+
+  // Test API connection
+  const testConnection = async () => {
+    try {
+      console.log("🧪 Testing API connection...");
+      const response = await apiService.incidents.getAll();
+      alert(`✅ API Connection Test SUCCESS!\n\nTotal incidents: ${response.data?.total || 0}\n\nBackend is connected and working!`);
+    } catch (error) {
+      alert(`❌ API Connection Test FAILED\n\nError: ${error.message}\n\nCheck console (F12) for details.`);
+      console.error("Connection test failed:", error);
+    }
+  };
+
+  const extractAnimalType = (description) => {
+    if (!description) return "Unknown";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('dog')) return 'Dog';
+    if (lowerDesc.includes('cat')) return 'Cat';
+    return 'Unknown';
+  };
+
+  const extractInjuries = (description) => {
+    if (!description) return "None";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('bite') || lowerDesc.includes('injury') || lowerDesc.includes('wound')) {
+      return description;
+    }
+    return "None";
+  };
+
   // Handle form change
   const handleChange = (e) => {
     const { name, value, type } = e.target;
@@ -47,54 +111,91 @@ const SubmitIncidentReportPage = () => {
     });
   };
 
-  // Generate report ID
-  const generateReportId = () => {
-    const count = reports.length + 1;
-    return `RPT-${count.toString().padStart(3, '0')}`;
-  };
 
-  // Submit handler
-  const handleSubmit = (e) => {
+
+  // Submit handler with improved error handling
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.type || !formData.location || !formData.reporterName || !formData.reporterContact || !formData.details) {
+      alert("⚠️ Please fill in all required fields:\n- Incident Type\n- Location\n- Reporter Name\n- Contact Number\n- Incident Details");
+      return;
+    }
+    
+    try {
+      setSubmitting(true);
+      
+      // Prepare data for backend
+      const incidentData = {
+        title: formData.type,
+        description: `${formData.details}${formData.injuries ? '\n\nInjuries: ' + formData.injuries : ''}${formData.animalType ? '\nAnimal Type: ' + formData.animalType : ''}${formData.animalCount > 1 ? '\nAnimal Count: ' + formData.animalCount : ''}`,
+        location: formData.location,
+        status: 'pending',
+        priority: formData.severity.toLowerCase(),
+        reporter_name: formData.reporterName,
+        reporter_contact: formData.reporterContact,
+        incident_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      };
 
-    const newReport = {
-      id: generateReportId(),
-      type: formData.type,
-      location: formData.location,
-      date: new Date().toISOString().split("T")[0],
-      time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-      reporterName: formData.reporterName,
-      reporterContact: formData.reporterContact,
-      reporterAddress: formData.reporterAddress,
-      details: formData.details,
-      animalType: formData.animalType,
-      animalCount: parseInt(formData.animalCount),
-      injuries: formData.injuries,
-      severity: formData.severity,
-      status: "Pending",
-      assignedTo: "",
-      followUpRequired: formData.followUpRequired,
-    };
+      console.log("📤 Submitting incident report...");
+      console.log("Data:", incidentData);
 
-    setReports([newReport, ...reports]);
+      // Submit to backend
+      const response = await apiService.incidents.create(incidentData);
+      console.log("✅ SUCCESS! Response:", response.data);
 
-    // Reset form
-    setFormData({
-      type: "",
-      location: "",
-      reporterName: "",
-      reporterContact: "",
-      reporterAddress: "",
-      details: "",
-      animalType: "",
-      animalCount: 1,
-      injuries: "",
-      severity: "Low",
-      followUpRequired: true,
-    });
+      // Reset form
+      setFormData({
+        type: "",
+        location: "",
+        reporterName: "",
+        reporterContact: "",
+        reporterAddress: "",
+        details: "",
+        animalType: "",
+        animalCount: 1,
+        injuries: "",
+        severity: "Low",
+        followUpRequired: true,
+      });
 
-    // Show success message
-    alert("Incident report submitted successfully!");
+      // Show success message
+      alert(`✅ Success! Incident report submitted successfully!\n\nReport ID: ${response.data.id || 'Created'}\n\nThe report will now appear in all admin tables.`);
+      
+      // Refresh reports and switch to reports tab
+      await fetchReports();
+      setActiveTab("reports");
+      
+      setSubmitting(false);
+    } catch (error) {
+      console.error("❌ SUBMISSION FAILED:");
+      console.error("Full error:", error);
+      
+      // Detailed error message for user
+      let errorMsg = "❌ Failed to submit report\n\n";
+      
+      if (error.response) {
+        // Server responded with error
+        errorMsg += `Server Error (${error.response.status})\n`;
+        errorMsg += `Details: ${error.response.data?.message || JSON.stringify(error.response.data)}\n\n`;
+        errorMsg += `API URL: ${error.config?.url}`;
+      } else if (error.request) {
+        // Request made but no response
+        errorMsg += "No response from server.\n\n";
+        errorMsg += "Please check:\n";
+        errorMsg += "1. Backend server is running (Node.js on port 3000)\n";
+        errorMsg += "2. Check VITE_API_URL in .env file\n";
+        errorMsg += "3. Check browser console (F12) for details";
+      } else {
+        // Something else went wrong
+        errorMsg += `Error: ${error.message}\n\n`;
+        errorMsg += "Check console (F12) for more details.";
+      }
+      
+      alert(errorMsg);
+      setSubmitting(false);
+    }
   };
 
   // Filtering
@@ -156,27 +257,36 @@ const SubmitIncidentReportPage = () => {
           {/* Header with Tabs */}
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-800">Submit Walk-in Incident Report</h1>
-            <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => setActiveTab("form")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === "form"
-                    ? "bg-[#FA8630] text-white"
-                    : "text-gray-600 hover:text-gray-800"
-                }`}
+                type="button"
+                onClick={testConnection}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium transition-colors"
               >
-                New Report
+                🧪 Test API
               </button>
-              <button
-                onClick={() => setActiveTab("reports")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === "reports"
-                    ? "bg-[#FA8630] text-white"
-                    : "text-gray-600 hover:text-gray-800"
-                }`}
-              >
-                View Reports ({reports.length})
-              </button>
+              <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+                <button
+                  onClick={() => setActiveTab("form")}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === "form"
+                      ? "bg-[#FA8630] text-white"
+                      : "text-gray-600 hover:text-gray-800"
+                  }`}
+                >
+                  New Report
+                </button>
+                <button
+                  onClick={() => setActiveTab("reports")}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === "reports"
+                      ? "bg-[#FA8630] text-white"
+                      : "text-gray-600 hover:text-gray-800"
+                  }`}
+                >
+                  View Reports ({reports.length})
+                </button>
+              </div>
             </div>
           </div>
 
@@ -398,10 +508,11 @@ const SubmitIncidentReportPage = () => {
               <div className="flex gap-4 pt-4 border-t border-gray-200">
                 <button
                   type="submit"
-                  className="bg-[#FA8630] text-white px-6 py-3 rounded-lg hover:bg-[#E87928] transition-colors font-medium flex items-center gap-2"
+                  disabled={submitting}
+                  className="bg-[#FA8630] text-white px-6 py-3 rounded-lg hover:bg-[#E87928] transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <PlusCircleIcon className="h-5 w-5" />
-                  Submit Incident Report
+                  {submitting ? 'Submitting...' : 'Submit Incident Report'}
                 </button>
                 <button
                   type="button"
