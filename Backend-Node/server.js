@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { testConnection } from './config/database.js';
+import Logger from './utils/logger.js';
+import validateEnv from './utils/validateEnv.js';
 
 // Import routes
 import incidentsRouter from './routes/incidents.js';
@@ -14,8 +16,17 @@ import healthRouter from './routes/health.js';
 // Load environment variables
 dotenv.config();
 
+// Validate environment variables
+try {
+  validateEnv();
+} catch (error) {
+  console.error('Environment validation failed:', error.message);
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+const logger = new Logger('SERVER');
 
 // Middleware
 app.use(cors({
@@ -27,7 +38,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  logger.debug(`${req.method} ${req.path}`);
   next();
 });
 
@@ -67,7 +78,7 @@ app.use((req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  logger.error('Server error', err);
   res.status(err.status || 500).json({
     error: true,
     message: err.message || 'Internal server error',
@@ -83,17 +94,17 @@ const startServer = async () => {
     
     // Start listening
     app.listen(PORT, () => {
-      console.log('=================================');
-      console.log('🚀 CityVetCare API Server');
-      console.log('=================================');
-      console.log(`📡 Server running on port ${PORT}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 API URL: http://localhost:${PORT}`);
-      console.log(`📚 Docs: http://localhost:${PORT}/`);
-      console.log('=================================');
+      logger.info('=================================');
+      logger.info('🚀 CityVetCare API Server');
+      logger.info('=================================');
+      logger.info(`📡 Server running on port ${PORT}`);
+      logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`🔗 API URL: http://localhost:${PORT}`);
+      logger.info(`📚 Docs: http://localhost:${PORT}/`);
+      logger.info('=================================');
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error.message);
+    logger.error('Failed to start server', error);
     process.exit(1);
   }
 };

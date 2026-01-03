@@ -1,7 +1,9 @@
 import express from 'express';
 import CatcherTeam from '../models/CatcherTeam.js';
+import Logger from '../utils/logger.js';
 
 const router = express.Router();
+const logger = new Logger('CATCHERS');
 
 /**
  * GET /api/catchers
@@ -21,7 +23,7 @@ router.get('/', async (req, res) => {
       message: teams.length === 0 ? 'No catcher teams found' : undefined
     });
   } catch (error) {
-    console.error('Error fetching catcher teams:', error);
+    logger.error('Error fetching catcher teams', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to fetch catcher teams',
@@ -47,7 +49,7 @@ router.get('/:id', async (req, res) => {
 
     res.json(team);
   } catch (error) {
-    console.error('Error fetching catcher team:', error);
+    logger.error('Error fetching catcher team', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to fetch catcher team',
@@ -79,7 +81,7 @@ router.post('/', async (req, res) => {
       data: team
     });
   } catch (error) {
-    console.error('Error creating catcher team:', error);
+    logger.error('Error creating catcher team', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to create catcher team',
@@ -108,7 +110,7 @@ router.put('/:id', async (req, res) => {
       id: req.params.id
     });
   } catch (error) {
-    console.error('Error updating catcher team:', error);
+    logger.error('Error updating catcher team', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to update catcher team',
@@ -137,7 +139,7 @@ router.delete('/:id', async (req, res) => {
       id: req.params.id
     });
   } catch (error) {
-    console.error('Error deleting catcher team:', error);
+    logger.error('Error deleting catcher team', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to delete catcher team',

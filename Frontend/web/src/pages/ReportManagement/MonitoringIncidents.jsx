@@ -12,7 +12,7 @@ import {
   MapPinIcon,
   ExclamationTriangleIcon,
   EyeIcon,
-  FunnelIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 
 // Fix for default markers in react-leaflet
@@ -67,18 +67,17 @@ const IncidentMonitoring = () => {
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
   // Fetch reports from API
-  useEffect(() => {
-    const fetchReports = async () => {
-      try {
-        setLoading(true);
-        const response = await apiService.incidents.getAll();
-        
-        if (response.data && response.data.records) {
-          // Filter only verified and in_progress incidents for monitoring
-          const activeReports = response.data.records.filter(incident => {
-            const status = incident.status.toLowerCase();
-            return status === 'verified' || status === 'in_progress';
-          });
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.incidents.getAll();
+      
+      if (response.data && response.data.records) {
+        // Show only active incidents (exclude completed, resolved, rejected, cancelled)
+        const activeReports = response.data.records.filter(incident => {
+          const status = incident.status.toLowerCase();
+          return status !== 'rejected' && status !== 'cancelled' && status !== 'resolved' && status !== 'completed';
+        });
           
           // Transform to frontend format with new mobile fields
           const transformedReports = activeReports.map(incident => {
@@ -90,12 +89,11 @@ const IncidentMonitoring = () => {
               type: incident.title,
               location: incident.location,
               address: incident.location,
-              latitude: incident.latitude || 14.5995,
-              longitude: incident.longitude || 120.9842,
-              lat: incident.latitude || 14.5995,
-              lng: incident.longitude || 120.9842,
+              latitude: incident.latitude || 13.6218,
+              longitude: incident.longitude || 123.1948,
+              lat: incident.latitude || 13.6218,
+              lng: incident.longitude || 123.1948,
               status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
-              priority: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
               date: datePart || incidentDate.split('T')[0] || new Date().toISOString().split('T')[0],
               time: timePart || incidentDate.split('T')[1]?.split('.')[0] || new Date().toTimeString().split(' ')[0],
               description: incident.description,
@@ -122,8 +120,16 @@ const IncidentMonitoring = () => {
         setLoading(false);
       }
     };
+
+  // Initial fetch
+  useEffect(() => {
     fetchReports();
   }, []);
+
+  // Refresh function for manual updates
+  const handleRefresh = () => {
+    fetchReports();
+  };
 
   const getIconByType = (type) => {
     switch (type) {
@@ -136,20 +142,6 @@ const IncidentMonitoring = () => {
       default:
         return biteIcon;
     }
-  };
-
-  const getPriorityBadge = (priority) => {
-    const styles = {
-      Critical: "bg-red-100 text-red-800",
-      High: "bg-orange-100 text-orange-800",
-      Medium: "bg-yellow-100 text-yellow-800",
-      Low: "bg-green-100 text-green-800",
-    };
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[priority]}`}>
-        {priority}
-      </span>
-    );
   };
 
   const getStatusBadge = (status) => {
@@ -223,11 +215,20 @@ const IncidentMonitoring = () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Incident Monitoring</h1>
-              <p className="text-gray-600">Real-time map of approved, scheduled, and in-progress incidents</p>
+              <p className="text-gray-600">Real-time map of all active incidents</p>
             </div>
             
-            {/* Filters */}
-            <div className="flex flex-wrap gap-2">
+            {/* Filters and Refresh */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                title="Refresh incidents"
+              >
+                <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
               <button
                 onClick={() => setFilter("all")}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -272,7 +273,7 @@ const IncidentMonitoring = () => {
           </div>
 
           {/* Stats Overview */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
@@ -285,9 +286,9 @@ const IncidentMonitoring = () => {
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Active Now</p>
+                  <p className="text-sm font-medium text-gray-600">In Progress</p>
                   <p className="text-2xl font-bold text-gray-800">
-                    {reports.filter(r => r.status !== "Resolved").length}
+                    {reports.filter(r => r.status === "In Progress").length}
                   </p>
                 </div>
                 <EyeIcon className="h-8 w-8 text-blue-500" />
@@ -296,25 +297,14 @@ const IncidentMonitoring = () => {
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Bite Incidents</p>
+                  <p className="text-sm font-medium text-gray-600">Pending</p>
                   <p className="text-2xl font-bold text-gray-800">
-                    {reports.filter(r => r.type === "Bite Incident").length}
+                    {reports.filter(r => r.status === "Pending").length}
                   </p>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center">
                   <span className="text-white text-sm font-bold">!</span>
                 </div>
-              </div>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">High Priority</p>
-                  <p className="text-2xl font-bold text-gray-800">
-                    {reports.filter(r => r.priority === "High" || r.priority === "Critical").length}
-                  </p>
-                </div>
-                <FunnelIcon className="h-8 w-8 text-orange-500" />
               </div>
             </div>
           </div>
@@ -343,7 +333,7 @@ const IncidentMonitoring = () => {
               </div>
             ) : (
               <MapContainer
-                center={[14.5995, 120.9842]} // Default to Manila
+                center={[13.6218, 123.1948]} // Default to Naga City
                 zoom={12}
                 className="h-full w-full"
                 scrollWheelZoom={true}
@@ -369,7 +359,7 @@ const IncidentMonitoring = () => {
                       <div className="space-y-2 min-w-[250px]">
                         <div className="flex justify-between items-start">
                           <h3 className="font-bold text-gray-800">{report.type}</h3>
-                          {getPriorityBadge(report.priority)}
+                          {getStatusBadge(report.status)}
                         </div>
                         
                         <div className="space-y-1 text-sm text-gray-600">
@@ -414,7 +404,7 @@ const IncidentMonitoring = () => {
 
       {/* Simple Detail Modal */}
       {selectedReport && (
-        <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
             <button
               className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
@@ -473,13 +463,13 @@ const IncidentMonitoring = () => {
                     Incident Information
                   </h3>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">
-                        Priority
+                        Status
                       </label>
                       <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                        {getPriorityBadge(selectedReport.priority)}
+                        {getStatusBadge(selectedReport.status)}
                       </div>
                     </div>
 

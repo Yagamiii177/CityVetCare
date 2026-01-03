@@ -1,4 +1,7 @@
 import { pool } from '../config/database.js';
+import Logger from '../utils/logger.js';
+
+const logger = new Logger('PATROL-STAFF-MODEL');
 
 class PatrolStaff {
   /**
@@ -16,7 +19,7 @@ class PatrolStaff {
       );
       return rows[0];
     } catch (error) {
-      console.error('Error in PatrolStaff.getAll:', error);
+      logger.error('Error in PatrolStaff.getAll', error);
       throw error;
     }
   }
@@ -29,7 +32,7 @@ class PatrolStaff {
       const [rows] = await pool.execute('CALL sp_patrol_staff_get_by_id(?)', [id]);
       return (rows[0] && rows[0].length > 0) ? rows[0][0] : null;
     } catch (error) {
-      console.error('Error in PatrolStaff.getById:', error);
+      logger.error('Error in PatrolStaff.getById', error);
       throw error;
     }
   }
@@ -54,7 +57,7 @@ class PatrolStaff {
       const insertId = result[0][0].id;
       return { id: insertId, ...data };
     } catch (error) {
-      console.error('Error in PatrolStaff.create:', error);
+      logger.error('Error in PatrolStaff.create', error);
       throw error;
     }
   }
@@ -79,7 +82,7 @@ class PatrolStaff {
 
       return result[0][0].affected_rows > 0;
     } catch (error) {
-      console.error('Error in PatrolStaff.update:', error);
+      logger.error('Error in PatrolStaff.update', error);
       throw error;
     }
   }
@@ -92,7 +95,7 @@ class PatrolStaff {
       const [result] = await pool.execute('CALL sp_patrol_staff_delete(?)', [id]);
       return result[0][0].affected_rows > 0;
     } catch (error) {
-      console.error('Error in PatrolStaff.delete:', error);
+      logger.error('Error in PatrolStaff.delete', error);
       throw error;
     }
   }

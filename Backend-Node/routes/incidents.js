@@ -1,7 +1,9 @@
 import express from 'express';
 import Incident from '../models/Incident.js';
+import Logger from '../utils/logger.js';
 
 const router = express.Router();
+const logger = new Logger('INCIDENTS');
 
 /**
  * GET /api/incidents
@@ -24,7 +26,7 @@ router.get('/', async (req, res) => {
       offset: offset
     };
 
-    console.log('📋 Fetching incidents with filters:', filters);
+    logger.debug('Fetching incidents with filters', filters);
 
     const incidents = await Incident.getAll(filters);
     
@@ -51,7 +53,7 @@ router.get('/', async (req, res) => {
       message: incidents.length === 0 ? 'No incidents found' : undefined
     });
   } catch (error) {
-    console.error('Error fetching incidents:', error);
+    logger.error('Failed to fetch incidents', error);
     res.status(500).json({ 
       success: false,
       error: true,
@@ -74,7 +76,7 @@ router.get('/status-counts', async (req, res) => {
       data: counts
     });
   } catch (error) {
-    console.error('Error getting status counts:', error);
+    logger.error('Failed to get status counts', error);
     res.status(500).json({
       success: false,
       error: 'Failed to get status counts'
@@ -102,7 +104,7 @@ router.get('/:id', async (req, res) => {
       data: incident
     });
   } catch (error) {
-    console.error('Error fetching incident:', error);
+    logger.error('Failed to fetch incident', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to fetch incident',
@@ -117,7 +119,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    console.log('📥 Received incident creation request:', req.body);
+    logger.debug('Creating new incident', req.body);
     
     // Generate title from incident_type if not provided
     let title = req.body.title;
@@ -147,11 +149,9 @@ router.post('/', async (req, res) => {
       title: title
     };
 
-    console.log('📦 Creating incident with data:', incidentData);
-
     const incident = await Incident.create(incidentData);
     
-    console.log('✅ Incident created successfully:', incident.id);
+    logger.success('Incident created successfully', { id: incident.id });
     
     res.status(201).json({
       success: true,
@@ -160,7 +160,7 @@ router.post('/', async (req, res) => {
       data: incident
     });
   } catch (error) {
-    console.error('❌ Error creating incident:', error);
+    logger.error('Failed to create incident', error);
     res.status(500).json({ 
       error: true,
       success: false,
@@ -176,25 +176,24 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   try {
-    console.log('🔄 Updating incident:', req.params.id, 'with data:', req.body);
+    logger.debug('Updating incident', { id: req.params.id, data: req.body });
     const updated = await Incident.update(req.params.id, req.body);
     
     if (!updated) {
-      console.log('❌ Incident not found or no changes made');
       return res.status(404).json({ 
         error: true,
         message: 'Incident not found or no changes made' 
       });
     }
 
-    console.log('✅ Incident updated successfully:', req.params.id);
+    logger.success('Incident updated successfully', { id: req.params.id });
     res.json({ 
       success: true,
       message: 'Incident updated successfully',
       id: req.params.id
     });
   } catch (error) {
-    console.error('Error updating incident:', error);
+    logger.error('Failed to update incident', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to update incident',
@@ -223,7 +222,7 @@ router.delete('/:id', async (req, res) => {
       id: req.params.id
     });
   } catch (error) {
-    console.error('Error deleting incident:', error);
+    logger.error('Failed to delete incident', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to delete incident',

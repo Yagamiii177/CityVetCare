@@ -12,7 +12,12 @@ if (!import.meta.env.VITE_API_URL) {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL.trim();
 
-console.log('🔗 API Base URL:', API_BASE_URL); // Debug log
+const isDevelopment = import.meta.env.MODE === 'development';
+
+// Only log in development mode
+if (isDevelopment) {
+  console.log('🔗 API Base URL:', API_BASE_URL);
+}
 
 // Create axios instance with default config
 const api = axios.create({
@@ -27,9 +32,10 @@ const api = axios.create({
 // Request interceptor - add auth token to requests
 api.interceptors.request.use(
   (config) => {
-    console.log('📤 API Request:', config.method.toUpperCase(), config.url);
-    console.log('📍 Full URL:', config.baseURL + config.url);
-    console.log('📦 Request Data:', config.data);
+    // Only log in development mode
+    if (isDevelopment) {
+      console.log('📤 API Request:', config.method.toUpperCase(), config.url);
+    }
     const token = localStorage.getItem('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -37,7 +43,9 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('❌ Request Setup Error:', error);
+    if (isDevelopment) {
+      console.error('❌ Request Setup Error:', error);
+    }
     return Promise.reject(error);
   }
 );
@@ -45,50 +53,34 @@ api.interceptors.request.use(
 // Response interceptor - handle errors globally
 api.interceptors.response.use(
   (response) => {
-    console.log('✅ API Response:', response.config.url, response.status);
-    console.log('📦 Response Data:', response.data);
+    if (isDevelopment) {
+      console.log('✅ API Response:', response.config.url, response.status);
+    }
     return response;
   },
   (error) => {
-    console.error('❌ ========== API ERROR ==========');
-    console.error('URL:', error.config?.url);
-    console.error('Method:', error.config?.method?.toUpperCase());
-    console.error('Full URL:', error.config?.baseURL + error.config?.url);
-    console.error('Status Code:', error.response?.status);
-    console.error('Status Text:', error.response?.statusText);
-    console.error('Error Message:', error.message);
-    console.error('Response Data:', error.response?.data);
-    console.error('Request Data:', error.config?.data);
+    // Log errors only in development
+    if (isDevelopment) {
+      console.error('API Error:', {
+        url: error.config?.url,
+        status: error.response?.status,
+        message: error.message
+      });
+    }
     
     if (error.response) {
       // Server responded with error status
-      console.error('⚠️ Server Error Response');
       switch (error.response.status) {
         case 401:
-          console.error('⚠️ Unauthorized - clearing token');
           localStorage.removeItem('auth_token');
           break;
         case 403:
-          console.error('⚠️ Access forbidden');
-          break;
         case 404:
-          console.error('⚠️ Resource not found');
-          break;
         case 500:
-          console.error('⚠️ Server internal error');
+          // Handle silently or show user-friendly message
           break;
-        default:
-          console.error('⚠️ HTTP Error:', error.response.status);
       }
-    } else if (error.request) {
-      console.error('⚠️ No Response from Server');
-      console.error('Check: Is XAMPP Apache running?');
-      console.error('Check: Is backend URL correct?');
-      console.error('Request Object:', error.request);
-    } else {
-      console.error('⚠️ Request Configuration Error:', error.message);
     }
-    console.error('====================================');
     return Promise.reject(error);
   }
 );

@@ -32,7 +32,6 @@ export const Header = ({ isDrawerOpen, toggleDrawer }) => {
       setActiveManagement("vaccination");
     } else if (
       path.includes("/stray") ||
-      path.includes("/dashboard") ||
       path.includes("/captured-animals") ||
       path.includes("/redemption-requests") ||
       path.includes("/adoption-list") ||
@@ -40,7 +39,13 @@ export const Header = ({ isDrawerOpen, toggleDrawer }) => {
       path.includes("/add-stray")
     ) {
       setActiveManagement("stray");
-    } else if (path.includes("/report")) {
+    } else if (
+      path.includes("/report") ||
+      path.includes("/incident") ||
+      path.includes("/verification") ||
+      path.includes("/catcher-schedule") ||
+      path.includes("/monitoring")
+    ) {
       setActiveManagement("reports");
     } else if (path.includes("/campaign")) {
       setActiveManagement("campaigns");

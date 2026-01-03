@@ -1,11 +1,13 @@
 import express from 'express';
 import PatrolSchedule from '../models/PatrolSchedule.js';
+import Logger from '../utils/logger.js';
 
 const router = express.Router();
+const logger = new Logger('PATROL-SCHEDULES');
 
 /**
- * GET /api/patrol-PatrolSchedules
- * Get all patrol PatrolSchedules
+ * GET /api/patrol-schedules
+ * Get all patrol schedules
  */
 router.get('/', async (req, res) => {
   try {
@@ -14,106 +16,106 @@ router.get('/', async (req, res) => {
       incident_id: req.query.incident_id
     };
 
-    const PatrolSchedules = await PatrolSchedule.getAll(filters);
+    const schedules = await PatrolSchedule.getAll(filters);
     
     res.json({
-      records: PatrolSchedules,
-      total: PatrolSchedules.length,
-      message: PatrolSchedules.length === 0 ? 'No patrol PatrolSchedules found' : undefined
+      records: schedules,
+      total: schedules.length,
+      message: schedules.length === 0 ? 'No patrol schedules found' : undefined
     });
   } catch (error) {
-    console.error('Error fetching patrol PatrolSchedules:', error);
+    logger.error('Error fetching patrol schedules', error);
     res.status(500).json({ 
       error: true,
-      message: 'Failed to fetch patrol PatrolSchedules',
+      message: 'Failed to fetch patrol schedules',
       details: error.message 
     });
   }
 });
 
 /**
- * GET /api/patrol-PatrolSchedules/incident/:incidentId
- * Get PatrolSchedules by incident ID
+ * GET /api/patrol-schedules/incident/:incidentId
+ * Get schedules by incident ID
  */
 router.get('/incident/:incidentId', async (req, res) => {
   try {
-    const PatrolSchedules = await PatrolSchedule.getByIncidentId(req.params.incidentId);
+    const schedules = await PatrolSchedule.getByIncidentId(req.params.incidentId);
     
     res.json({
-      records: PatrolSchedules,
-      total: PatrolSchedules.length
+      records: schedules,
+      total: schedules.length
     });
   } catch (error) {
-    console.error('Error fetching patrol PatrolSchedules:', error);
+    logger.error('Error fetching patrol schedules', error);
     res.status(500).json({ 
       error: true,
-      message: 'Failed to fetch patrol PatrolSchedules',
+      message: 'Failed to fetch patrol schedules',
       details: error.message 
     });
   }
 });
 
 /**
- * GET /api/patrol-PatrolSchedules/:id
- * Get single patrol PatrolSchedule by ID
+ * GET /api/patrol-schedules/:id
+ * Get single patrol schedule by ID
  */
 router.get('/:id', async (req, res) => {
   try {
-    const PatrolSchedule = await PatrolSchedule.getById(req.params.id);
+    const schedule = await PatrolSchedule.getById(req.params.id);
     
-    if (!PatrolSchedule) {
+    if (!schedule) {
       return res.status(404).json({ 
         error: true,
-        message: 'Patrol PatrolSchedule not found' 
+        message: 'Patrol schedule not found' 
       });
     }
 
-    res.json(PatrolSchedule);
+    res.json(schedule);
   } catch (error) {
-    console.error('Error fetching patrol PatrolSchedule:', error);
+    logger.error('Error fetching patrol schedule', error);
     res.status(500).json({ 
       error: true,
-      message: 'Failed to fetch patrol PatrolSchedule',
+      message: 'Failed to fetch patrol schedule',
       details: error.message 
     });
   }
 });
 
 /**
- * POST /api/patrol-PatrolSchedules
- * Create new patrol PatrolSchedule
+ * POST /api/patrol-schedules
+ * Create new patrol schedule
  */
 router.post('/', async (req, res) => {
   try {
-    const { incident_id, PatrolSchedule_date } = req.body;
+    const { incident_id, scheduled_date } = req.body;
 
-    if (!incident_id || !PatrolSchedule_date) {
+    if (!incident_id || !scheduled_date) {
       return res.status(400).json({ 
         error: true,
-        message: 'Incident ID and PatrolSchedule date are required' 
+        message: 'Incident ID and schedule date are required' 
       });
     }
 
-    const PatrolSchedule = await PatrolSchedule.create(req.body);
+    const schedule = await PatrolSchedule.create(req.body);
     
     res.status(201).json({
-      message: 'Patrol PatrolSchedule created successfully',
-      id: PatrolSchedule.id,
-      data: PatrolSchedule
+      message: 'Patrol schedule created successfully',
+      id: schedule.id,
+      data: schedule
     });
   } catch (error) {
-    console.error('Error creating patrol PatrolSchedule:', error);
+    logger.error('Error creating patrol schedule', error);
     res.status(500).json({ 
       error: true,
-      message: 'Failed to create patrol PatrolSchedule',
+      message: 'Failed to create patrol schedule',
       details: error.message 
     });
   }
 });
 
 /**
- * PUT /api/patrol-PatrolSchedules/:id
- * Update patrol PatrolSchedule
+ * PUT /api/patrol-schedules/:id
+ * Update patrol schedule
  */
 router.put('/:id', async (req, res) => {
   try {
@@ -122,27 +124,27 @@ router.put('/:id', async (req, res) => {
     if (!updated) {
       return res.status(404).json({ 
         error: true,
-        message: 'Patrol PatrolSchedule not found or no changes made' 
+        message: 'Patrol schedule not found or no changes made' 
       });
     }
 
     res.json({ 
-      message: 'Patrol PatrolSchedule updated successfully',
+      message: 'Patrol schedule updated successfully',
       id: req.params.id
     });
   } catch (error) {
-    console.error('Error updating patrol PatrolSchedule:', error);
+    logger.error('Error updating patrol schedule', error);
     res.status(500).json({ 
       error: true,
-      message: 'Failed to update patrol PatrolSchedule',
+      message: 'Failed to update patrol schedule',
       details: error.message 
     });
   }
 });
 
 /**
- * DELETE /api/patrol-PatrolSchedules/:id
- * Delete patrol PatrolSchedule
+ * DELETE /api/patrol-schedules/:id
+ * Delete patrol schedule
  */
 router.delete('/:id', async (req, res) => {
   try {
@@ -151,19 +153,19 @@ router.delete('/:id', async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ 
         error: true,
-        message: 'Patrol PatrolSchedule not found' 
+        message: 'Patrol schedule not found' 
       });
     }
 
     res.json({ 
-      message: 'Patrol PatrolSchedule deleted successfully',
+      message: 'Patrol schedule deleted successfully',
       id: req.params.id
     });
   } catch (error) {
-    console.error('Error deleting patrol PatrolSchedule:', error);
+    logger.error('Error deleting patrol schedule', error);
     res.status(500).json({ 
       error: true,
-      message: 'Failed to delete patrol PatrolSchedule',
+      message: 'Failed to delete patrol schedule',
       details: error.message 
     });
   }

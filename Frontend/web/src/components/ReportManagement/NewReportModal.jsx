@@ -9,12 +9,20 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
 } from "@heroicons/react/24/outline";
+import MapLocationPicker from "./MapLocationPicker";
+import FrontendLogger from "../../utils/logger";
+
+const logger = new FrontendLogger('NEW-REPORT-MODAL');
 
 const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
   // Notification modal state
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState('error');
+  
+  // Map location picker state
+  const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+  
   const [formData, setFormData] = useState({
     // Report Information
     reportType: "",
@@ -22,6 +30,8 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
     date: new Date().toISOString().split('T')[0],
     description: "",
     location: "",
+    latitude: null,
+    longitude: null,
     // Pet Report Information
     petColor: "",
     petBreed: "",
@@ -58,6 +68,17 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
     });
   };
 
+  // Handle location selection from map
+  const handleLocationSelect = (locationData) => {
+    setFormData({
+      ...formData,
+      location: locationData.address,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+    });
+    setIsMapPickerOpen(false);
+  };
+
   // Submit handler with validation
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -70,7 +91,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       return;
     }
     
-    console.log("📝 New Report Modal - Preparing data with mobile structure...");
+    logger.debug('Preparing data with mobile structure');
 
     // Prepare data matching the mobile form structure AND backend expectations
     const newReport = {
@@ -80,6 +101,8 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       incident_date: `${formData.date} ${new Date().toTimeString().split(' ')[0]}`,
       description: formData.description || 'No description provided',
       location: formData.location || 'Location to be determined',
+      latitude: formData.latitude,
+      longitude: formData.longitude,
       pet_color: formData.petColor || null,
       pet_breed: formData.petBreed || null,
       animal_type: formData.animalType,
@@ -87,7 +110,6 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       pet_size: formData.petSize,
       images: formData.images,
       status: "pending",
-      priority: "medium",
       reporter_name: "Admin Portal",
       // Also include camelCase for frontend compatibility
       reportType: formData.reportType,
@@ -100,7 +122,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       petSize: formData.petSize,
     };
     
-    console.log("📦 Submitting report with new structure:", newReport);
+    logger.debug('Submitting report', newReport);
 
     // Call parent submit handler
     onSubmit(newReport);
@@ -112,6 +134,8 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       date: new Date().toISOString().split('T')[0],
       description: "",
       location: "",
+      latitude: null,
+      longitude: null,
       petColor: "",
       petBreed: "",
       animalType: "",
@@ -132,6 +156,8 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       date: new Date().toISOString().split('T')[0],
       description: "",
       location: "",
+      latitude: null,
+      longitude: null,
       petColor: "",
       petBreed: "",
       animalType: "",
@@ -160,7 +186,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
       <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
         <button
           className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
@@ -236,21 +262,40 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
               </div>
             </div>
 
-            {/* Location */}
+            {/* Location - Pin on Map */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Location
+                Location <span className="text-red-500">*</span>
               </label>
-              <div className="flex items-center gap-2">
-                <MapPinIcon className="h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleChange}
-                  placeholder="Enter incident location"
-                  className="flex-1 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    readOnly
+                    placeholder="Click 'Pin Location' to select on map"
+                    className="flex-1 border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-800 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsMapPickerOpen(true)}
+                    className="px-4 py-3 bg-[#FA8630] text-white rounded-lg hover:bg-[#E87928] transition-colors font-medium flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <MapPinIcon className="h-5 w-5" />
+                    Pin Location
+                  </button>
+                </div>
+                {formData.latitude && formData.longitude && (
+                  <div className="flex gap-2 text-xs text-gray-600">
+                    <span className="bg-gray-100 px-2 py-1 rounded">
+                      📍 Lat: {formData.latitude.toFixed(6)}
+                    </span>
+                    <span className="bg-gray-100 px-2 py-1 rounded">
+                      📍 Lng: {formData.longitude.toFixed(6)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -443,7 +488,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
 
       {/* Notification Modal */}
       {showNotification && (
-        <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full animate-in fade-in zoom-in duration-200">
             <div className={`p-6 border-b ${
               notificationType === 'error' ? 'border-red-100' : 'border-green-100'
@@ -483,6 +528,18 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
           </div>
         </div>
       )}
+
+      {/* Map Location Picker Modal */}
+      <MapLocationPicker
+        isOpen={isMapPickerOpen}
+        onClose={() => setIsMapPickerOpen(false)}
+        onLocationSelect={handleLocationSelect}
+        initialPosition={
+          formData.latitude && formData.longitude
+            ? { lat: formData.latitude, lng: formData.longitude }
+            : null
+        }
+      />
     </div>
   );
 };

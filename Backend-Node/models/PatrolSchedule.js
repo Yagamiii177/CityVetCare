@@ -1,4 +1,7 @@
 import { pool } from '../config/database.js';
+import Logger from '../utils/logger.js';
+
+const logger = new Logger('PATROL-SCHEDULE-MODEL');
 
 class PatrolSchedule {
   /**
@@ -23,7 +26,7 @@ class PatrolSchedule {
           (typeof row.assigned_staff_ids === 'string' ? JSON.parse(row.assigned_staff_ids) : row.assigned_staff_ids) : []
       }));
     } catch (error) {
-      console.error('Error in PatrolSchedule.getAll:', error);
+      logger.error('Error in PatrolSchedule.getAll', error);
       throw error;
     }
   }
@@ -42,7 +45,7 @@ class PatrolSchedule {
       const schedule = rows[0][0];
       return schedule;
     } catch (error) {
-      console.error('Error in PatrolSchedule.getById:', error);
+      logger.error('Error in PatrolSchedule.getById', error);
       throw error;
     }
   }
@@ -57,7 +60,7 @@ class PatrolSchedule {
       const schedules = rows[0];
       return schedules;
     } catch (error) {
-      console.error('Error in PatrolSchedule.getByIncidentId:', error);
+      logger.error('Error in PatrolSchedule.getByIncidentId', error);
       throw error;
     }
   }
@@ -83,7 +86,7 @@ class PatrolSchedule {
       const insertId = result[0][0].id;
       return { id: insertId, ...data };
     } catch (error) {
-      console.error('Error in PatrolSchedule.create:', error);
+      logger.error('Error in PatrolSchedule.create', error);
       throw error;
     }
   }
@@ -109,7 +112,7 @@ class PatrolSchedule {
 
       return result[0][0].affected_rows > 0;
     } catch (error) {
-      console.error('Error in PatrolSchedule.update:', error);
+      logger.error('Error in PatrolSchedule.update', error);
       throw error;
     }
   }
@@ -122,7 +125,7 @@ class PatrolSchedule {
       const [result] = await pool.execute('CALL sp_patrol_schedules_delete(?)', [id]);
       return result[0][0].affected_rows > 0;
     } catch (error) {
-      console.error('Error in PatrolSchedule.delete:', error);
+      logger.error('Error in PatrolSchedule.delete', error);
       throw error;
     }
   }

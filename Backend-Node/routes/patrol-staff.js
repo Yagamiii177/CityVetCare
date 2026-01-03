@@ -1,7 +1,9 @@
 import express from 'express';
 import PatrolStaff from '../models/PatrolStaff.js';
+import Logger from '../utils/logger.js';
 
 const router = express.Router();
+const logger = new Logger('PATROL-STAFF');
 
 /**
  * GET /api/patrol-staff
@@ -21,7 +23,7 @@ router.get('/', async (req, res) => {
       message: staff.length === 0 ? 'No patrol staff found' : undefined
     });
   } catch (error) {
-    console.error('Error fetching patrol staff:', error);
+    logger.error('Error fetching patrol staff', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to fetch patrol staff',
@@ -47,7 +49,7 @@ router.get('/:id', async (req, res) => {
 
     res.json(staff);
   } catch (error) {
-    console.error('Error fetching patrol staff:', error);
+    logger.error('Error fetching patrol staff', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to fetch patrol staff',
@@ -79,7 +81,7 @@ router.post('/', async (req, res) => {
       data: staff
     });
   } catch (error) {
-    console.error('Error creating patrol staff:', error);
+    logger.error('Error creating patrol staff', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to create patrol staff',
@@ -108,7 +110,7 @@ router.put('/:id', async (req, res) => {
       id: req.params.id
     });
   } catch (error) {
-    console.error('Error updating patrol staff:', error);
+    logger.error('Error updating patrol staff', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to update patrol staff',
@@ -137,7 +139,7 @@ router.delete('/:id', async (req, res) => {
       id: req.params.id
     });
   } catch (error) {
-    console.error('Error deleting patrol staff:', error);
+    logger.error('Error deleting patrol staff', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to delete patrol staff',

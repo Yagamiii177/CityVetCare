@@ -115,7 +115,7 @@ export const NotificationModal = ({ isOpen, title, message, type = 'success', on
   const colorScheme = colors[type];
 
   return (
-    <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all animate-in fade-in zoom-in duration-200">
         <div className={`p-6 border-b ${colorScheme.border}`}>
           <div className="flex items-center gap-3">
@@ -178,7 +178,7 @@ export const InputModal = ({ isOpen, title, message, placeholder, value, onChang
   const colorScheme = colors[type];
 
   return (
-    <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all animate-in fade-in zoom-in duration-200">
         <div className={`p-6 border-b ${colorScheme.border}`}>
           <div className="flex items-center gap-3">

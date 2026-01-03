@@ -1,4 +1,7 @@
 import { pool } from '../config/database.js';
+import Logger from '../utils/logger.js';
+
+const logger = new Logger('INCIDENT-MODEL');
 
 class Incident {
   /**
@@ -26,7 +29,7 @@ class Incident {
         images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : []
       }));
     } catch (error) {
-      console.error('Error in Incident.getAll:', error);
+      logger.error('Failed to get all incidents', error);
       throw error;
     }
   }
@@ -48,7 +51,7 @@ class Incident {
         images: incident.images ? (typeof incident.images === 'string' ? JSON.parse(incident.images) : incident.images) : []
       };
     } catch (error) {
-      console.error('Error in Incident.getById:', error);
+      logger.error('Failed to get incident by ID', error);
       throw error;
     }
   }
@@ -61,7 +64,7 @@ class Incident {
       const [rows] = await pool.execute('CALL sp_incidents_count_by_status()');
       return rows[0]; // Returns array of {status, count} objects
     } catch (error) {
-      console.error('Error in Incident.getCountsByStatus:', error);
+      logger.error('Failed to get counts by status', error);
       throw error;
     }
   }
@@ -82,7 +85,7 @@ class Incident {
           data.latitude || null,
           data.longitude || null,
           data.incident_date || data.date || null,
-          data.priority || 'medium',
+          data.priority || 'medium',  // Fixed: priority comes before status
           data.status || 'pending',
           data.images ? JSON.stringify(data.images) : null,
           data.assigned_catcher_id || null,
@@ -95,10 +98,10 @@ class Incident {
         ]
       );
 
-      const insertId = result[0][0].incident_id;
+      const insertId = result[0][0].id;  // Fixed: changed from incident_id to id
       return { id: insertId, ...data };
     } catch (error) {
-      console.error('Error in Incident.create:', error);
+      logger.error('Failed to create incident', error);
       throw error;
     }
   }
@@ -135,7 +138,7 @@ class Incident {
 
       return result[0][0].affected_rows > 0;
     } catch (error) {
-      console.error('Error in Incident.update:', error);
+      logger.error('Failed to update incident', error);
       throw error;
     }
   }
@@ -148,7 +151,7 @@ class Incident {
       const [result] = await pool.execute('CALL sp_incidents_delete(?)', [id]);
       return result[0][0].affected_rows > 0;
     } catch (error) {
-      console.error('Error in Incident.delete:', error);
+      logger.error('Failed to delete incident', error);
       throw error;
     }
   }
@@ -161,7 +164,7 @@ class Incident {
       const [rows] = await pool.execute('CALL sp_incidents_count_by_status()');
       return rows[0];
     } catch (error) {
-      console.error('Error in Incident.getCountByStatus:', error);
+      logger.error('Failed to get count by status', error);
       throw error;
     }
   }
@@ -182,7 +185,7 @@ class Incident {
         images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : []
       }));
     } catch (error) {
-      console.error('Error in Incident.search:', error);
+      logger.error('Failed to search incidents', error);
       throw error;
     }
   }
@@ -200,7 +203,7 @@ class Incident {
         images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : []
       }));
     } catch (error) {
-      console.error('Error in Incident.getRecent:', error);
+      logger.error('Error in Incident.getRecent', error);
       throw error;
     }
   }

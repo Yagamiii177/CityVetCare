@@ -1,7 +1,9 @@
 import express from 'express';
 import { pool } from '../config/database.js';
+import Logger from '../utils/logger.js';
 
 const router = express.Router();
+const logger = new Logger('DASHBOARD');
 
 /**
  * GET /api/dashboard
@@ -53,7 +55,7 @@ router.get('/', async (req, res) => {
 
     res.json(dashboardData);
   } catch (error) {
-    console.error('Error fetching dashboard data:', error);
+    logger.error('Error fetching dashboard data', error);
     res.status(500).json({ 
       success: false,
       error: true,

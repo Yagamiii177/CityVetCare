@@ -4,6 +4,9 @@ import { Drawer } from "../../components/ReportManagement/Drawer";
 import NewReportModal from "../../components/ReportManagement/NewReportModal";
 import { NotificationModal } from "../../components/ReportManagement/Modal";
 import { apiService } from "../../utils/api";
+import FrontendLogger from "../../utils/logger";
+
+const logger = new FrontendLogger('INCIDENT-REPORT');
 import {
   EyeIcon,
   XMarkIcon,
@@ -213,7 +216,7 @@ const IncidentReportingManagement = () => {
       setLoading(true);
       setError(null);
       
-      console.log("📥 Fetching incidents - Page:", currentPage, "Search:", debouncedSearchTerm, "Status:", statusFilter);
+      logger.debug('Fetching incidents', { currentPage, search: debouncedSearchTerm, status: statusFilter });
       
       // Build query parameters for server-side filtering
       const params = {
@@ -226,7 +229,7 @@ const IncidentReportingManagement = () => {
       
       if (!isMountedRef.current) return;
       
-      console.log("✅ Received incidents:", response.data);
+      logger.debug('Received incidents', response.data);
       
       // Update pagination state from server response
       if (response.data.pagination) {
@@ -252,8 +255,7 @@ const IncidentReportingManagement = () => {
         setLoading(false);
       }
     } catch (err) {
-      console.error("❌ Error fetching reports:", err);
-      console.error("Error details:", err.response?.data);
+      logger.error('Error fetching reports:', err.response?.data || err.message);
       
       if (isMountedRef.current) {
         setError(
@@ -298,14 +300,14 @@ const IncidentReportingManagement = () => {
   // Handle status update
   const handleStatusUpdate = useCallback(async (newStatus) => {
     if (!selectedReport || !newStatus) {
-      console.error("Missing selected report or new status");
+      logger.error('Missing selected report or new status');
       return;
     }
     
     try {
       setIsUpdatingStatus(true);
       
-      console.log("📤 Updating status for ID:", selectedReport.id, "to:", newStatus);
+      logger.debug('Updating status', { id: selectedReport.id, newStatus });
       
       // Prepare update data with all required fields
       const updateData = {
@@ -334,7 +336,7 @@ const IncidentReportingManagement = () => {
       await new Promise(resolve => setTimeout(resolve, 300));
       
       // Refresh data from database to ensure consistency
-      console.log("🔄 Refreshing reports from database...");
+      logger.debug('Refreshing reports from database');
       await fetchReports();
       
       if (!isMountedRef.current) return;
@@ -368,8 +370,7 @@ const IncidentReportingManagement = () => {
         });
       }
     } catch (err) {
-      console.error("❌ Error updating status:", err);
-      console.error("Error details:", err.response?.data);
+      logger.error('Error updating status:', err.response?.data || err.message);
       
       if (isMountedRef.current) {
         const errorMsg = err.response?.data?.message || err.message || "Failed to update status. Please try again.";
@@ -416,7 +417,7 @@ const IncidentReportingManagement = () => {
   // Handle new report submission from modal
   const handleNewReportSubmit = useCallback(async (newReportData) => {
     if (!newReportData) {
-      console.error("No report data provided");
+      logger.error('No report data provided');
       setNotificationModal({
         isOpen: true,
         title: 'Validation Error',
@@ -427,8 +428,7 @@ const IncidentReportingManagement = () => {
     }
     
     try {
-      console.log("📤 Creating new incident from New Report modal with mobile structure...");
-      console.log("📦 Form data received:", newReportData);
+      logger.debug('Creating new incident', newReportData);
       
       // The data is already in the correct format from NewReportModal
       // Just ensure we have all required backend fields
@@ -453,14 +453,14 @@ const IncidentReportingManagement = () => {
         longitude: newReportData.longitude || null,
       };
 
-      console.log("📦 Sending to backend:", incidentData);
+      logger.debug('Sending to backend', incidentData);
 
       // Send to backend
       const response = await apiService.incidents.create(incidentData);
       
       if (!isMountedRef.current) return;
       
-      console.log("✅ SUCCESS! Backend response:", response);
+      logger.debug('SUCCESS! Backend response', response);
 
       // Show success message
       setNotificationModal({
@@ -471,13 +471,11 @@ const IncidentReportingManagement = () => {
       });
       
       // Refresh the reports list to show new incident
-      console.log("🔄 Refreshing reports list...");
+      logger.debug('Refreshing reports list');
       await fetchReports();
-      console.log("✅ Reports list refreshed!");
       
     } catch (err) {
-      console.error("❌ Error creating incident:", err);
-      console.error("Error response:", err.response?.data);
+      logger.error('Error creating incident:', err.response?.data || err.message);
       
       if (isMountedRef.current) {
         const errorMsg = err.response?.data?.message || err.response?.data?.details || err.message || "Failed to submit report. Please try again.";
@@ -885,7 +883,7 @@ const IncidentReportingManagement = () => {
 
               {/* Report Details Modal */}
               {selectedReport && (
-                <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
                   <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
                     <button 
                       className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors" 

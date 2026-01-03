@@ -1,4 +1,7 @@
 import { pool } from '../config/database.js';
+import Logger from '../utils/logger.js';
+
+const logger = new Logger('CATCHER-TEAM-MODEL');
 
 class CatcherTeam {
   /**
@@ -16,7 +19,7 @@ class CatcherTeam {
       );
       return rows[0];
     } catch (error) {
-      console.error('Error in CatcherTeam.getAll:', error);
+      logger.error('Error in CatcherTeam.getAll', error);
       throw error;
     }
   }
@@ -29,7 +32,7 @@ class CatcherTeam {
       const [rows] = await pool.execute('CALL sp_catchers_get_by_id(?)', [id]);
       return (rows[0] && rows[0].length > 0) ? rows[0][0] : null;
     } catch (error) {
-      console.error('Error in CatcherTeam.getById:', error);
+      logger.error('Error in CatcherTeam.getById', error);
       throw error;
     }
   }
@@ -54,7 +57,7 @@ class CatcherTeam {
       const insertId = result[0][0].id;
       return { id: insertId, ...data };
     } catch (error) {
-      console.error('Error in CatcherTeam.create:', error);
+      logger.error('Error in CatcherTeam.create', error);
       throw error;
     }
   }
@@ -79,7 +82,7 @@ class CatcherTeam {
 
       return result[0][0].affected_rows > 0;
     } catch (error) {
-      console.error('Error in CatcherTeam.update:', error);
+      logger.error('Error in CatcherTeam.update', error);
       throw error;
     }
   }
@@ -92,7 +95,7 @@ class CatcherTeam {
       const [result] = await pool.execute('CALL sp_catchers_delete(?)', [id]);
       return result[0][0].affected_rows > 0;
     } catch (error) {
-      console.error('Error in CatcherTeam.delete:', error);
+      logger.error('Error in CatcherTeam.delete', error);
       throw error;
     }
   }
@@ -105,7 +108,7 @@ class CatcherTeam {
       const [rows] = await pool.execute('CALL sp_catchers_get_available()');
       return rows[0];
     } catch (error) {
-      console.error('Error in CatcherTeam.getAvailable:', error);
+      logger.error('Error in CatcherTeam.getAvailable', error);
       throw error;
     }
   }
