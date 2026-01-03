@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
 import NewReportModal from "../../components/ReportManagement/NewReportModal";
@@ -23,26 +23,28 @@ import {
 } from "@heroicons/react/24/outline";
 
 const IncidentReportingManagement = () => {
+  // UI State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [isNewReportModalOpen, setIsNewReportModalOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("date");
-  const [sortOrder, setSortOrder] = useState("desc");
   const [showFilters, setShowFilters] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [reports, setReports] = useState([]);
-  const [reportSchedules, setReportSchedules] = useState([]); // Store schedules for selected report
   
-  // Pagination state
+  // Data State
+  const [reports, setReports] = useState([]);
+  const [reportSchedules, setReportSchedules] = useState([]);
+  
+  // Filter State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  
+  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
+  
+  // Status Counts
   const [statusCounts, setStatusCounts] = useState({
     all: 0,
     Pending: 0,
@@ -50,81 +52,114 @@ const IncidentReportingManagement = () => {
     Verified: 0,
     Resolved: 0
   });
+  
+  // Loading and Error States
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  
+  // Refs for cleanup
+  const debounceTimerRef = useRef(null);
+  const isMountedRef = useRef(true);
 
-  const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
+  // Toggle drawer
+  const toggleDrawer = useCallback(() => setIsDrawerOpen(prev => !prev), []);
 
-  // Fetch reports from API with server-side search and pagination
+  // Cleanup on unmount
   useEffect(() => {
-    fetchReports();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchTerm, statusFilter]);
-
-  const fetchReports = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log("📥 Fetching incidents - Page:", currentPage, "Search:", searchTerm, "Status:", statusFilter);
-      
-      // Build query parameters for server-side filtering
-      const params = {
-        page: currentPage,
-        search: searchTerm || undefined,
-        status: statusFilter !== "all" ? statusFilter.toLowerCase().replace(' ', '_') : undefined
-      };
-      
-      const response = await apiService.incidents.getAll(params);
-      console.log("✅ Received incidents:", response.data);
-      
-      // Update pagination state from server response
-      if (response.data.pagination) {
-        setTotalPages(response.data.pagination.totalPages);
-        setTotalRecords(response.data.pagination.total);
-        setCurrentPage(response.data.pagination.page);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
-      
-      // Get status counts from separate API call (or from backend if available)
-      await fetchStatusCounts();
-      
-      const activeReports = response.data.records;
-      
-      console.log("📊 All incidents (including all statuses):", activeReports.length);
-      
-      // Transform backend data to frontend format
-      const transformedReports = activeReports.map(incident => ({
-        id: incident.id,
-        reporter: incident.reporter_name,
-        reporterContact: incident.reporter_contact,
-        type: incident.title,
-        address: incident.location,
-        date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
-        time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
-        status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
-        priority: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
-        description: incident.description,
-        animalType: extractAnimalType(incident.description),
-        animalCount: extractAnimalCount(incident.description),
-        injuries: extractInjuries(incident.description),
-        assignedTeam: incident.catcher_team_name || null,
-        followUpRequired: true,
-      }));
+    };
+  }, []);
 
-      console.log("✅ Reports transformed and ready:", transformedReports.length);
-      setReports(transformedReports);
-      setLoading(false);
-    } catch (err) {
-      console.error("❌ Error fetching reports:", err);
-      console.error("Error details:", err.response?.data);
-      setError("Failed to load reports. Please check your connection.");
-      setReports([]);
-      setLoading(false);
+  // Debounce search term
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
-  };
+
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchTerm]);
+
+  // Helper functions to extract data from description
+  const extractAnimalType = useCallback((description) => {
+    if (!description) return "Unknown";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('dog')) return 'Dog';
+    if (lowerDesc.includes('cat')) return 'Cat';
+    if (lowerDesc.includes('bird')) return 'Bird';
+    if (lowerDesc.includes('reptile') || lowerDesc.includes('snake')) return 'Reptile';
+    return 'Unknown';
+  }, []);
+
+  const extractAnimalCount = useCallback((description) => {
+    if (!description) return 1;
+    const match = description.match(/(\d+)\s*(animal|dog|cat|bird)/i);
+    return match ? parseInt(match[1], 10) : 1;
+  }, []);
+
+  const extractInjuries = useCallback((description) => {
+    if (!description) return "None";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('bite') || lowerDesc.includes('injury') || 
+        lowerDesc.includes('wound') || lowerDesc.includes('hurt')) {
+      return description;
+    }
+    return "None";
+  }, []);
+
+  // Transform backend incident data to frontend format
+  const transformIncident = useCallback((incident) => {
+    const getDateTime = (dateTimeStr, fallback) => {
+      const [date, time] = (dateTimeStr || fallback || '').split(' ');
+      return { date: date || 'N/A', time: time || 'N/A' };
+    };
+
+    const { date, time } = getDateTime(incident.incident_date, incident.created_at);
+    const capitalizeStatus = (status) => {
+      return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
+    };
+
+    return {
+      id: incident.id,
+      reporter: incident.reporter_name || 'Unknown',
+      reporterContact: incident.reporter_contact || 'N/A',
+      type: incident.title || 'Unknown Incident',
+      address: incident.location || 'Location not provided',
+      date,
+      time,
+      status: capitalizeStatus(incident.status || 'pending'),
+      priority: capitalizeStatus(incident.priority || 'medium'),
+      description: incident.description || 'No description available',
+      animalType: extractAnimalType(incident.description),
+      animalCount: extractAnimalCount(incident.description),
+      injuries: extractInjuries(incident.description),
+      assignedTeam: incident.catcher_team_name || null,
+      followUpRequired: incident.follow_up_required ?? true,
+      latitude: incident.latitude,
+      longitude: incident.longitude,
+    };
+  }, [extractAnimalType, extractAnimalCount, extractInjuries]);
 
   // Fetch status counts separately
-  const fetchStatusCounts = async () => {
+  const fetchStatusCounts = useCallback(async () => {
     try {
       const response = await apiService.incidents.getStatusCounts();
+      
+      if (!isMountedRef.current) return;
+      
       if (response.data.success) {
         const counts = {
           all: 0,
@@ -134,56 +169,119 @@ const IncidentReportingManagement = () => {
           Resolved: 0
         };
         
-        response.data.data.forEach(item => {
+        const data = response.data.data || [];
+        data.forEach(item => {
           const status = item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ');
-          counts[status] = item.count;
-          counts.all += item.count;
+          counts[status] = item.count || 0;
+          counts.all += item.count || 0;
         });
         
-        setStatusCounts(counts);
+        if (isMountedRef.current) {
+          setStatusCounts(counts);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch status counts:", err);
+      // Don't set error state, as this is not critical
     }
-  };
+  }, []);
 
-  // Handle search with debouncing
-  const handleSearch = (value) => {
+  // Fetch reports from API with server-side search and pagination
+  const fetchReports = useCallback(async () => {
+    try {
+      if (!isMountedRef.current) return;
+      
+      setLoading(true);
+      setError(null);
+      
+      console.log("📥 Fetching incidents - Page:", currentPage, "Search:", debouncedSearchTerm, "Status:", statusFilter);
+      
+      // Build query parameters for server-side filtering
+      const params = {
+        page: currentPage,
+        search: debouncedSearchTerm || undefined,
+        status: statusFilter !== "all" ? statusFilter.toLowerCase().replace(' ', '_') : undefined
+      };
+      
+      const response = await apiService.incidents.getAll(params);
+      
+      if (!isMountedRef.current) return;
+      
+      console.log("✅ Received incidents:", response.data);
+      
+      // Update pagination state from server response
+      if (response.data.pagination) {
+        setTotalPages(response.data.pagination.totalPages || 1);
+        setTotalRecords(response.data.pagination.total || 0);
+        setCurrentPage(response.data.pagination.page || 1);
+      }
+      
+      // Get status counts from separate API call
+      await fetchStatusCounts();
+      
+      const activeReports = response.data.records || [];
+      
+      console.log("📊 All incidents (including all statuses):", activeReports.length);
+      
+      // Transform backend data to frontend format
+      const transformedReports = activeReports.map(transformIncident);
+
+      console.log("✅ Reports transformed and ready:", transformedReports.length);
+      
+      if (isMountedRef.current) {
+        setReports(transformedReports);
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching reports:", err);
+      console.error("Error details:", err.response?.data);
+      
+      if (isMountedRef.current) {
+        setError(
+          err.response?.data?.message || 
+          err.message || 
+          "Failed to load reports. Please check your connection and try again."
+        );
+        setReports([]);
+        setLoading(false);
+      }
+    }
+  }, [currentPage, debouncedSearchTerm, statusFilter, transformIncident, fetchStatusCounts]);
+
+  // Handle search
+  const handleSearch = useCallback((value) => {
     setSearchTerm(value);
     setCurrentPage(1); // Reset to first page on new search
-  };
+  }, []);
 
   // Handle status filter change
-  const handleStatusFilter = (status) => {
+  const handleStatusFilter = useCallback((status) => {
     setStatusFilter(status);
     setCurrentPage(1); // Reset to first page on filter change
-  };
+  }, []);
 
   // Handle page navigation
-  const handlePageChange = (newPage) => {
+  const handlePageChange = useCallback((newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setCurrentPage(newPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  };
+  }, [totalPages]);
 
-  // Helper functions to extract data from description
-  const extractAnimalType = (description) => {
-    if (!description) return "Unknown";
-    const lowerDesc = description.toLowerCase();
-    if (lowerDesc.includes('dog')) return 'Dog';
-    if (lowerDesc.includes('cat')) return 'Cat';
-    return 'Unknown';
-  };
+  // Clear all filters
+  const clearFilters = useCallback(() => {
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+    setStatusFilter("all");
+    setCurrentPage(1);
+  }, []);
 
-  const extractAnimalCount = (description) => {
-    if (!description) return 1;
-    const match = description.match(/(\d+)\s*(animal|dog|cat)/i);
-    return match ? parseInt(match[1]) : 1;
-  };
-
-  const handleStatusUpdate = async (newStatus) => {
-    if (!selectedReport) return;
+  // Handle status update
+  const handleStatusUpdate = useCallback(async (newStatus) => {
+    if (!selectedReport || !newStatus) {
+      console.error("Missing selected report or new status");
+      return;
+    }
     
     try {
       setIsUpdatingStatus(true);
@@ -196,11 +294,13 @@ const IncidentReportingManagement = () => {
         title: selectedReport.type,
         description: selectedReport.description,
         location: selectedReport.address,
-        latitude: null,
-        longitude: null,
+        latitude: selectedReport.latitude || null,
+        longitude: selectedReport.longitude || null,
         status: newStatus.toLowerCase().replace(' ', '_'),
         priority: selectedReport.priority.toLowerCase(),
-        assigned_catcher_id: null
+        assigned_catcher_id: null,
+        reporter_name: selectedReport.reporter,
+        reporter_contact: selectedReport.reporterContact,
       };
       
       console.log("📦 Update data:", updateData);
@@ -209,12 +309,16 @@ const IncidentReportingManagement = () => {
       const response = await apiService.incidents.update(selectedReport.id, updateData);
       console.log("✅ Backend updated:", response.data);
       
+      if (!isMountedRef.current) return;
+      
       // Wait a moment for database to commit
       await new Promise(resolve => setTimeout(resolve, 300));
       
       // Refresh data from database to ensure consistency
       console.log("🔄 Refreshing reports from database...");
       await fetchReports();
+      
+      if (!isMountedRef.current) return;
       
       // Check if status is completed (resolved, rejected, cancelled)
       const completedStatuses = ['resolved', 'rejected', 'cancelled'];
@@ -237,56 +341,73 @@ const IncidentReportingManagement = () => {
     } catch (err) {
       console.error("❌ Error updating status:", err);
       console.error("Error details:", err.response?.data);
-      const errorMsg = err.response?.data?.message || "Failed to update status. Please try again.";
-      alert(`❌ Failed to update status\n\n${errorMsg}`);
-      setIsUpdatingStatus(false);
+      
+      if (isMountedRef.current) {
+        const errorMsg = err.response?.data?.message || err.message || "Failed to update status. Please try again.";
+        alert(`❌ Failed to update status\n\n${errorMsg}`);
+        setIsUpdatingStatus(false);
+      }
     }
-  };
-
-  const extractInjuries = (description) => {
-    if (!description) return "None";
-    const lowerDesc = description.toLowerCase();
-    if (lowerDesc.includes('bite') || lowerDesc.includes('injury') || lowerDesc.includes('wound')) {
-      return description;
-    }
-    return "None";
-  };
+  }, [selectedReport, reports, fetchReports]);
 
   // Fetch schedules for a specific incident
-  const fetchReportSchedules = async (incidentId) => {
+  const fetchReportSchedules = useCallback(async (incidentId) => {
+    if (!incidentId) {
+      console.warn("No incident ID provided for fetching schedules");
+      setReportSchedules([]);
+      return;
+    }
+    
     try {
       const response = await apiService.patrolSchedules.getAll();
-      const incidentSchedules = response.data.records.filter(
+      
+      if (!isMountedRef.current) return;
+      
+      const records = response.data.records || [];
+      const incidentSchedules = records.filter(
         schedule => schedule.incident_id === incidentId
       );
-      setReportSchedules(incidentSchedules);
+      
+      if (isMountedRef.current) {
+        setReportSchedules(incidentSchedules);
+      }
     } catch (err) {
       console.error("Error fetching schedules:", err);
-      setReportSchedules([]);
+      if (isMountedRef.current) {
+        setReportSchedules([]);
+      }
     }
-  };
+  }, []);
 
   // Handle new report submission from modal
-  const handleNewReportSubmit = async (newReportData) => {
+  const handleNewReportSubmit = useCallback(async (newReportData) => {
+    if (!newReportData) {
+      console.error("No report data provided");
+      alert("❌ Failed to submit report\n\nNo data provided.");
+      return;
+    }
+    
     try {
       console.log("📤 Creating new incident from New Report modal...");
       
       // Prepare data for backend API
       const incidentData = {
-        title: newReportData.type,
-        description: `${newReportData.details}${newReportData.animalType ? '\n\nAnimal: ' + newReportData.animalType : ''}${newReportData.animalCount > 1 ? ' (' + newReportData.animalCount + ')' : ''}${newReportData.injuries ? '\nInjuries: ' + newReportData.injuries : ''}`,
-        location: newReportData.location,
+        title: newReportData.type || 'Unknown Incident',
+        description: `${newReportData.details || 'No details provided'}${newReportData.animalType ? '\n\nAnimal: ' + newReportData.animalType : ''}${newReportData.animalCount > 1 ? ' (' + newReportData.animalCount + ')' : ''}${newReportData.injuries ? '\nInjuries: ' + newReportData.injuries : ''}`,
+        location: newReportData.location || 'Location not provided',
         status: 'pending',
-        priority: newReportData.severity.toLowerCase(),
-        reporter_name: newReportData.reporterName,
-        reporter_contact: newReportData.reporterContact,
-        incident_date: `${newReportData.date} ${newReportData.time}`,
+        priority: (newReportData.severity || 'medium').toLowerCase(),
+        reporter_name: newReportData.reporterName || 'Anonymous',
+        reporter_contact: newReportData.reporterContact || 'N/A',
+        incident_date: `${newReportData.date || new Date().toISOString().split('T')[0]} ${newReportData.time || '00:00:00'}`,
       };
 
       console.log("📦 Incident data:", incidentData);
 
       // Send to backend
       const response = await apiService.incidents.create(incidentData);
+      
+      if (!isMountedRef.current) return;
       
       console.log("✅ SUCCESS! Incident created with ID:", response.data.id);
 
@@ -301,16 +422,16 @@ const IncidentReportingManagement = () => {
     } catch (err) {
       console.error("❌ Error creating incident:", err);
       console.error("Error response:", err.response?.data);
-      const errorMsg = err.response?.data?.message || err.message || "Failed to submit report. Please try again.";
-      alert(`❌ Failed to submit report\n\n${errorMsg}\n\nCheck console (F12) for details.`);
+      
+      if (isMountedRef.current) {
+        const errorMsg = err.response?.data?.message || err.message || "Failed to submit report. Please try again.";
+        alert(`❌ Failed to submit report\n\n${errorMsg}\n\nCheck console (F12) for details.`);
+      }
     }
-  };
+  }, [fetchReports]);
 
-  // Note: Filtering and sorting now handled by backend API
-  // Reports are already filtered and paginated by the server
-  const displayReports = reports;
-
-  const getStatusIcon = (status) => {
+  // Get status icon for display
+  const getStatusIcon = useCallback((status) => {
     switch (status) {
       case "Pending":
         return <ClockIcon className="h-4 w-4 text-yellow-500" />;
@@ -323,22 +444,22 @@ const IncidentReportingManagement = () => {
       default:
         return <ClockIcon className="h-4 w-4 text-gray-500" />;
     }
-  };
+  }, []);
 
-  const getPriorityBadge = (priority) => {
+  const getPriorityBadge = useCallback((priority) => {
     const styles = {
       High: "bg-red-100 text-red-800",
       Medium: "bg-yellow-100 text-yellow-800",
       Low: "bg-green-100 text-green-800",
     };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[priority]}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[priority] || styles.Medium}`}>
         {priority}
       </span>
     );
-  };
+  }, []);
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = useCallback((status) => {
     const styles = {
       Pending: "bg-yellow-100 text-yellow-800",
       Verified: "bg-blue-100 text-blue-800",
@@ -348,11 +469,28 @@ const IncidentReportingManagement = () => {
       Cancelled: "bg-gray-100 text-gray-800",
     };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status]}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.Pending}`}>
         {status}
       </span>
     );
-  };
+  }, []);
+
+  // View report details
+  const handleViewReport = useCallback((report) => {
+    setSelectedReport(report);
+    fetchReportSchedules(report.id);
+  }, [fetchReportSchedules]);
+
+  // Close report details modal
+  const handleCloseReportDetails = useCallback(() => {
+    setSelectedReport(null);
+    setReportSchedules([]);
+  }, []);
+
+  // Fetch reports when dependencies change
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
 
   return (
     <div className="min-h-screen bg-[#E8E8E8]">
@@ -383,11 +521,25 @@ const IncidentReportingManagement = () => {
               <h1 className="text-2xl font-bold text-gray-800">All Incident Reports</h1>
               <p className="text-gray-600">View all incident reports with any status</p>
               {error && (
-                <p className="text-sm text-orange-600 mt-1">⚠️ {error}</p>
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                  <ExclamationTriangleIcon className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm text-red-800 font-medium">{error}</p>
+                    <button 
+                      onClick={fetchReports}
+                      className="text-xs text-red-700 hover:text-red-900 underline mt-1"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
-            <button className="bg-[#FA8630] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#E87928] transition-colors"
+            <button 
+              className="bg-[#FA8630] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#E87928] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => setIsNewReportModalOpen(true)}
+              disabled={loading}
+              aria-label="Create new report"
             >
               <PlusIcon className="h-5 w-5" />
               New Report
@@ -424,18 +576,22 @@ const IncidentReportingManagement = () => {
                 <div className="flex flex-col lg:flex-row gap-4">
                   {/* Search */}
                   <div className="flex-1 relative">
+                    <label htmlFor="search-input" className="sr-only">Search reports</label>
                     <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
                     <input
+                      id="search-input"
                       type="text"
                       placeholder="Search reports (searches database: type, reporter, location, animal, team)..."
                       value={searchTerm}
                       onChange={(e) => handleSearch(e.target.value)}
                       className="pl-10 pr-4 py-2 border w-full rounded-lg focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                      aria-label="Search reports by type, reporter, location, animal, or team"
                     />
                     {searchTerm && (
                       <button 
                         onClick={() => handleSearch("")}
                         className="absolute right-3 top-3"
+                        aria-label="Clear search"
                       >
                         <XMarkIcon className="h-5 w-5 text-gray-500 hover:text-gray-700" />
                       </button>
@@ -446,6 +602,8 @@ const IncidentReportingManagement = () => {
                   <button
                     onClick={() => setShowFilters(!showFilters)}
                     className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    aria-expanded={showFilters}
+                    aria-controls="filter-panel"
                   >
                     <FunnelIcon className="h-5 w-5" />
                     Filters
@@ -455,59 +613,31 @@ const IncidentReportingManagement = () => {
 
                 {/* Expanded Filters */}
                 {showFilters && (
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                  <div id="filter-panel" className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
                     {/* Status Filter */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                      <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                       <select
+                        id="status-filter"
                         value={statusFilter}
                         onChange={(e) => handleStatusFilter(e.target.value)}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                        aria-label="Filter by status"
                       >
                         <option value="all">All Status</option>
                         <option value="Pending">Pending</option>
                         <option value="Verified">Verified</option>
                         <option value="In Progress">In Progress</option>
+                        <option value="Resolved">Resolved</option>
                       </select>
                     </div>
 
-                    {/* Type Filter */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Incident Type</label>
-                      <select
-                        value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                      >
-                        <option value="all">All Types</option>
-                        <option value="Bite Incident">Bite Incident</option>
-                        <option value="Stray Animal">Stray Animal</option>
-                        <option value="Rabies Suspected">Rabies Suspected</option>
-                        <option value="Animal Nuisance">Animal Nuisance</option>
-                      </select>
-                    </div>
-
-                    {/* Sort */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
-                      <div className="flex gap-2">
-                        <select
-                          value={sortBy}
-                          onChange={(e) => setSortBy(e.target.value)}
-                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                        >
-                          <option value="date">Date</option>
-                          <option value="priority">Priority</option>
-                          <option value="status">Status</option>
-                          <option value="type">Type</option>
-                        </select>
-                        <button
-                          onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                          className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                        >
-                          {sortOrder === "asc" ? "A-Z" : "Z-A"}
-                        </button>
-                      </div>
+                    {/* Info text */}
+                    <div className="flex items-center">
+                      <p className="text-sm text-gray-600">
+                        <strong>Note:</strong> Sorting and type filtering are handled server-side.
+                        Use the search bar to filter by type, reporter, location, or animal.
+                      </p>
                     </div>
                   </div>
                 )}
@@ -517,11 +647,20 @@ const IncidentReportingManagement = () => {
               <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
                 <div className="flex justify-between items-center p-4 border-b border-gray-200">
                   <h2 className="text-lg font-semibold text-gray-800">Incident Reports ({totalRecords})</h2>
-                  <button className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800"><DocumentArrowDownIcon className="h-4 w-4" />Export</button>
+                  <button 
+                    className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={reports.length === 0}
+                    aria-label="Export reports"
+                    title="Export reports to CSV"
+                  >
+                    <DocumentArrowDownIcon className="h-4 w-4" />
+                    Export
+                  </button>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full" role="table" aria-label="Incident reports">
+                    <caption className="sr-only">List of incident reports with details and actions</caption>
                     <thead className="bg-[#FA8630]/10">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">ID</th>
@@ -536,17 +675,35 @@ const IncidentReportingManagement = () => {
                     </thead>
 
                     <tbody className="divide-y divide-gray-200">
-                      {displayReports.length ? (
-                        displayReports.map((report) => (
+                      {reports.length ? (
+                        reports.map((report) => (
                           <tr key={report.id} className="hover:bg-gray-50 transition-colors">
                             <td className="px-6 py-4"><span className="text-sm font-medium text-gray-900">#{report.id}</span></td>
                             <td className="px-6 py-4"><div><p className="text-sm font-medium text-gray-900">{report.reporter}</p><p className="text-xs text-gray-500">{report.reporterContact}</p></div></td>
                             <td className="px-6 py-4"><div><p className="text-sm font-medium text-gray-900">{report.type}</p><p className="text-xs text-gray-500">{report.animalType} • {report.animalCount} animal(s)</p></div></td>
-                            <td className="px-6 py-4"><p className="text-sm text-gray-900 max-w-xs truncate">{report.address}</p></td>
+                            <td className="px-6 py-4"><p className="text-sm text-gray-900 max-w-xs truncate" title={report.address}>{report.address}</p></td>
                             <td className="px-6 py-4"><div><p className="text-sm text-gray-900">{report.date}</p><p className="text-xs text-gray-500">{report.time}</p></div></td>
                             <td className="px-6 py-4">{getPriorityBadge(report.priority)}</td>
                             <td className="px-6 py-4">{getStatusBadge(report.status)}</td>
-                            <td className="px-6 py-4"><div className="flex items-center gap-2"><button onClick={() => { setSelectedReport(report); fetchReportSchedules(report.id); }} className="text-[#FA8630] hover:text-[#E87928] p-1 rounded hover:bg-[#FA8630]/10 transition-colors" title="View Details"><EyeIcon className="h-5 w-5" /></button><button className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 transition-colors" title="Assign Team"><UserIcon className="h-5 w-5" /></button></div></td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  onClick={() => handleViewReport(report)} 
+                                  className="text-[#FA8630] hover:text-[#E87928] p-1 rounded hover:bg-[#FA8630]/10 transition-colors" 
+                                  title="View Details"
+                                  aria-label={`View details for report ${report.id}`}
+                                >
+                                  <EyeIcon className="h-5 w-5" />
+                                </button>
+                                <button 
+                                  className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 transition-colors" 
+                                  title="Assign Team"
+                                  aria-label={`Assign team to report ${report.id}`}
+                                >
+                                  <UserIcon className="h-5 w-5" />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))
                       ) : (
@@ -555,7 +712,12 @@ const IncidentReportingManagement = () => {
                             <div className="text-gray-500">
                               <ClipboardDocumentListIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                               <p>No reports found matching your criteria</p>
-                              <button onClick={() => { handleSearch(""); handleStatusFilter("all"); setTypeFilter("all"); }} className="text-[#FA8630] hover:text-[#E87928] mt-2">Clear all filters</button>
+                              <button 
+                                onClick={clearFilters} 
+                                className="text-[#FA8630] hover:text-[#E87928] mt-2 underline"
+                              >
+                                Clear all filters
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -653,7 +815,11 @@ const IncidentReportingManagement = () => {
               {selectedReport && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                   <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
-                    <button className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors" onClick={() => setSelectedReport(null)}>
+                    <button 
+                      className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors" 
+                      onClick={handleCloseReportDetails}
+                      aria-label="Close modal"
+                    >
                       <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
                     </button>
 
@@ -866,3 +1032,6 @@ const IncidentReportingManagement = () => {
 };
 
 export default IncidentReportingManagement;
+
+// Display name for debugging
+IncidentReportingManagement.displayName = 'IncidentReportingManagement';
