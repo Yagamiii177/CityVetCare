@@ -30,7 +30,7 @@ api.interceptors.request.use(
     console.log('📤 API Request:', config.method.toUpperCase(), config.url);
     console.log('📍 Full URL:', config.baseURL + config.url);
     console.log('📦 Request Data:', config.data);
-    const token = localStorage.getItem('auth_token');
+    const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -66,7 +66,9 @@ api.interceptors.response.use(
       switch (error.response.status) {
         case 401:
           console.error('⚠️ Unauthorized - clearing token');
-          localStorage.removeItem('auth_token');
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
           break;
         case 403:
           console.error('⚠️ Access forbidden');

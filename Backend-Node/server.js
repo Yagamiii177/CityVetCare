@@ -4,12 +4,16 @@ import dotenv from 'dotenv';
 import { testConnection } from './config/database.js';
 
 // Import routes
+import authRouter from './routes/auth.js';
 import incidentsRouter from './routes/incidents.js';
 import patrolStaffRouter from './routes/patrol-staff.js';
 import patrolSchedulesRouter from './routes/patrol-schedules.js';
 import catchersRouter from './routes/catchers.js';
 import dashboardRouter from './routes/dashboard.js';
 import healthRouter from './routes/health.js';
+import notificationsRouter from './routes/notifications.js';
+import verificationsRouter from './routes/verifications.js';
+import auditRouter from './routes/audit.js';
 
 // Load environment variables
 dotenv.config();
@@ -35,14 +39,18 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'CityVetCare API',
-    version: '2.0.0',
+    version: '3.0.0',
     platform: 'Node.js/Express',
     endpoints: {
       '/api/health': 'Health check',
+      '/api/auth': 'Authentication (login, register, refresh)',
       '/api/incidents': 'Incident management',
+      '/api/verifications': 'Incident verification (veterinarian)',
       '/api/catchers': 'Catcher team management',
       '/api/patrol-staff': 'Patrol staff management',
       '/api/patrol-schedules': 'Patrol schedule management',
+      '/api/notifications': 'Notification system',
+      '/api/audit': 'Audit logs',
       '/api/dashboard': 'Dashboard statistics'
     },
     documentation: 'See /migrations/MIGRATION_LOG.md for database updates'
@@ -50,10 +58,14 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/health', healthRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/incidents', incidentsRouter);
+app.use('/api/verifications', verificationsRouter);
 app.use('/api/catchers', catchersRouter);
 app.use('/api/patrol-staff', patrolStaffRouter);
 app.use('/api/patrol-schedules', patrolSchedulesRouter);
+app.use('/api/notifications', notificationsRouter);
+app.use('/api/audit', auditRouter);
 app.use('/api/dashboard', dashboardRouter);
 
 // 404 handler
