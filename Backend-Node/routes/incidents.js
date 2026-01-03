@@ -97,7 +97,10 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    res.json(incident);
+    res.json({
+      success: true,
+      data: incident
+    });
   } catch (error) {
     console.error('Error fetching incident:', error);
     res.status(500).json({ 
@@ -114,26 +117,53 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { title, location } = req.body;
+    console.log('📥 Received incident creation request:', req.body);
+    
+    // Generate title from incident_type if not provided
+    let title = req.body.title;
+    if (!title && req.body.incident_type) {
+      if (req.body.incident_type === 'incident') {
+        title = 'Incident/Bite Report';
+      } else if (req.body.incident_type === 'stray') {
+        title = 'Stray Animal Report';
+      } else if (req.body.incident_type === 'lost') {
+        title = 'Lost Pet Report';
+      } else {
+        title = 'Animal Report';
+      }
+    }
 
-    if (!title || !location) {
+    // Validate required fields
+    if (!title) {
       return res.status(400).json({ 
         error: true,
-        message: 'Title and location are required' 
+        message: 'Title or incident_type is required' 
       });
     }
 
-    const incident = await Incident.create(req.body);
+    // Add title to request body
+    const incidentData = {
+      ...req.body,
+      title: title
+    };
+
+    console.log('📦 Creating incident with data:', incidentData);
+
+    const incident = await Incident.create(incidentData);
+    
+    console.log('✅ Incident created successfully:', incident.id);
     
     res.status(201).json({
+      success: true,
       message: 'Incident created successfully',
       id: incident.id,
       data: incident
     });
   } catch (error) {
-    console.error('Error creating incident:', error);
+    console.error('❌ Error creating incident:', error);
     res.status(500).json({ 
       error: true,
+      success: false,
       message: 'Failed to create incident',
       details: error.message 
     });
@@ -146,16 +176,20 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   try {
+    console.log('🔄 Updating incident:', req.params.id, 'with data:', req.body);
     const updated = await Incident.update(req.params.id, req.body);
     
     if (!updated) {
+      console.log('❌ Incident not found or no changes made');
       return res.status(404).json({ 
         error: true,
         message: 'Incident not found or no changes made' 
       });
     }
 
+    console.log('✅ Incident updated successfully:', req.params.id);
     res.json({ 
+      success: true,
       message: 'Incident updated successfully',
       id: req.params.id
     });

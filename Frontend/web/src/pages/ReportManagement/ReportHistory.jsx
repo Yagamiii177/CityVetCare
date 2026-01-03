@@ -65,7 +65,7 @@ const ReportHistory = () => {
         return status === 'resolved' || status === 'rejected' || status === 'cancelled';
       });
 
-      // Transform backend data to frontend format
+      // Transform backend data to frontend format with new mobile fields
       const transformedReports = historicalReports.map(incident => ({
         id: incident.id,
         reporter: incident.reporter_name || 'Anonymous',
@@ -79,6 +79,13 @@ const ReportHistory = () => {
         description: incident.description,
         assignedTeam: incident.catcher_team_name || 'Not Assigned',
         images: Array.isArray(incident.images) ? incident.images : [],
+        // NEW: Mobile form fields
+        reportType: incident.incident_type,
+        animalType: incident.animal_type ? (incident.animal_type.charAt(0).toUpperCase() + incident.animal_type.slice(1)) : 'Unknown',
+        petBreed: incident.pet_breed || 'Not specified',
+        petColor: incident.pet_color || 'Not specified',
+        petGender: incident.pet_gender ? (incident.pet_gender.charAt(0).toUpperCase() + incident.pet_gender.slice(1)) : 'Unknown',
+        petSize: incident.pet_size ? (incident.pet_size.charAt(0).toUpperCase() + incident.pet_size.slice(1)) : 'Unknown',
       }));
 
       // Sort by completed date (most recent first)

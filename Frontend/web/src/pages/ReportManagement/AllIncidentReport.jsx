@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
 import NewReportModal from "../../components/ReportManagement/NewReportModal";
+import { NotificationModal } from "../../components/ReportManagement/Modal";
 import { apiService } from "../../utils/api";
 import {
   EyeIcon,
@@ -57,6 +58,9 @@ const IncidentReportingManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  
+  // Modal state
+  const [notificationModal, setNotificationModal] = useState({ isOpen: false, title: '', message: '', type: 'success' });
   
   // Refs for cleanup
   const debounceTimerRef = useRef(null);
@@ -132,6 +136,14 @@ const IncidentReportingManagement = () => {
       return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
     };
 
+    // Format report type from database
+    const formatReportType = (type) => {
+      if (type === 'incident') return 'Incident/Bite Report';
+      if (type === 'stray') return 'Stray Animal Report';
+      if (type === 'lost') return 'Lost Pet Report';
+      return 'Animal Report';
+    };
+
     return {
       id: incident.id,
       reporter: incident.reporter_name || 'Unknown',
@@ -143,7 +155,14 @@ const IncidentReportingManagement = () => {
       status: capitalizeStatus(incident.status || 'pending'),
       priority: capitalizeStatus(incident.priority || 'medium'),
       description: incident.description || 'No description available',
-      animalType: extractAnimalType(incident.description),
+      // NEW: Use actual database fields instead of parsing description
+      reportType: formatReportType(incident.incident_type),
+      animalType: incident.animal_type ? capitalizeStatus(incident.animal_type) : 'Unknown',
+      petBreed: incident.pet_breed || 'Not specified',
+      petColor: incident.pet_color || 'Not specified',
+      petGender: incident.pet_gender ? capitalizeStatus(incident.pet_gender) : 'Unknown',
+      petSize: incident.pet_size ? capitalizeStatus(incident.pet_size) : 'Unknown',
+      // Keep old fields for backwards compatibility
       animalCount: extractAnimalCount(incident.description),
       injuries: extractInjuries(incident.description),
       assignedTeam: incident.catcher_team_name || null,
@@ -151,7 +170,7 @@ const IncidentReportingManagement = () => {
       latitude: incident.latitude,
       longitude: incident.longitude,
     };
-  }, [extractAnimalType, extractAnimalCount, extractInjuries]);
+  }, [extractAnimalCount, extractInjuries]);
 
   // Fetch status counts separately
   const fetchStatusCounts = useCallback(async () => {
@@ -329,14 +348,24 @@ const IncidentReportingManagement = () => {
       
       if (isCompleted) {
         setSelectedReport(null);
-        alert(`✅ Status updated to ${newStatus}!\n\nThis report has been moved to Report History.`);
+        setNotificationModal({
+          isOpen: true,
+          title: 'Status Updated',
+          message: `Status updated to ${newStatus}!\n\nThis report has been moved to Report History.`,
+          type: 'success'
+        });
       } else {
         // Find and update selected report with fresh data
         const updatedReport = reports.find(r => r.id === selectedReport.id);
         if (updatedReport) {
           setSelectedReport(updatedReport);
         }
-        alert(`✅ Status updated to ${newStatus} successfully!\n\nThe table has been refreshed with the latest data.`);
+        setNotificationModal({
+          isOpen: true,
+          title: 'Success',
+          message: `Status updated to ${newStatus} successfully!\n\nThe table has been refreshed with the latest data.`,
+          type: 'success'
+        });
       }
     } catch (err) {
       console.error("❌ Error updating status:", err);
@@ -344,7 +373,12 @@ const IncidentReportingManagement = () => {
       
       if (isMountedRef.current) {
         const errorMsg = err.response?.data?.message || err.message || "Failed to update status. Please try again.";
-        alert(`❌ Failed to update status\n\n${errorMsg}`);
+        setNotificationModal({
+          isOpen: true,
+          title: 'Error',
+          message: `Failed to update status\n\n${errorMsg}`,
+          type: 'error'
+        });
         setIsUpdatingStatus(false);
       }
     }
@@ -383,36 +417,58 @@ const IncidentReportingManagement = () => {
   const handleNewReportSubmit = useCallback(async (newReportData) => {
     if (!newReportData) {
       console.error("No report data provided");
-      alert("❌ Failed to submit report\n\nNo data provided.");
+      setNotificationModal({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'No data provided. Please fill in the form.',
+        type: 'error'
+      });
       return;
     }
     
     try {
-      console.log("📤 Creating new incident from New Report modal...");
+      console.log("📤 Creating new incident from New Report modal with mobile structure...");
+      console.log("📦 Form data received:", newReportData);
       
-      // Prepare data for backend API
+      // The data is already in the correct format from NewReportModal
+      // Just ensure we have all required backend fields
       const incidentData = {
-        title: newReportData.type || 'Unknown Incident',
-        description: `${newReportData.details || 'No details provided'}${newReportData.animalType ? '\n\nAnimal: ' + newReportData.animalType : ''}${newReportData.animalCount > 1 ? ' (' + newReportData.animalCount + ')' : ''}${newReportData.injuries ? '\nInjuries: ' + newReportData.injuries : ''}`,
-        location: newReportData.location || 'Location not provided',
+        // Required backend fields
+        incident_type: newReportData.incident_type || newReportData.reportType || 'stray',
+        description: newReportData.description || 'Report submitted from admin portal',
+        location: newReportData.location || 'Location to be determined',
         status: 'pending',
-        priority: (newReportData.severity || 'medium').toLowerCase(),
-        reporter_name: newReportData.reporterName || 'Anonymous',
-        reporter_contact: newReportData.reporterContact || 'N/A',
-        incident_date: `${newReportData.date || new Date().toISOString().split('T')[0]} ${newReportData.time || '00:00:00'}`,
+        priority: 'medium',
+        reporter_name: newReportData.reporter_name || 'Admin Portal',
+        reporter_contact: newReportData.reporter_contact || newReportData.contactNumber || 'N/A',
+        incident_date: newReportData.incident_date,
+        // Pet information fields
+        pet_color: newReportData.pet_color,
+        pet_breed: newReportData.pet_breed,
+        animal_type: newReportData.animal_type,
+        pet_gender: newReportData.pet_gender,
+        pet_size: newReportData.pet_size,
+        images: newReportData.images || [],
+        latitude: newReportData.latitude || null,
+        longitude: newReportData.longitude || null,
       };
 
-      console.log("📦 Incident data:", incidentData);
+      console.log("📦 Sending to backend:", incidentData);
 
       // Send to backend
       const response = await apiService.incidents.create(incidentData);
       
       if (!isMountedRef.current) return;
       
-      console.log("✅ SUCCESS! Incident created with ID:", response.data.id);
+      console.log("✅ SUCCESS! Backend response:", response);
 
       // Show success message
-      alert(`✅ Incident report submitted successfully!\n\nReport ID: ${response.data.id}\n\nThe report will now appear in the table.`);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Success!',
+        message: `Report submitted successfully!\n\nReport ID: ${response.data?.id || 'Generated'}\n\nThe report has been added to the system with all pet information.`,
+        type: 'success'
+      });
       
       // Refresh the reports list to show new incident
       console.log("🔄 Refreshing reports list...");
@@ -424,8 +480,13 @@ const IncidentReportingManagement = () => {
       console.error("Error response:", err.response?.data);
       
       if (isMountedRef.current) {
-        const errorMsg = err.response?.data?.message || err.message || "Failed to submit report. Please try again.";
-        alert(`❌ Failed to submit report\n\n${errorMsg}\n\nCheck console (F12) for details.`);
+        const errorMsg = err.response?.data?.message || err.response?.data?.details || err.message || "Failed to submit report. Please try again.";
+        setNotificationModal({
+          isOpen: true,
+          title: 'Error',
+          message: `Failed to submit report:\n\n${errorMsg}`,
+          type: 'error'
+        });
       }
     }
   }, [fetchReports]);
@@ -680,7 +741,18 @@ const IncidentReportingManagement = () => {
                           <tr key={report.id} className="hover:bg-gray-50 transition-colors">
                             <td className="px-6 py-4"><span className="text-sm font-medium text-gray-900">#{report.id}</span></td>
                             <td className="px-6 py-4"><div><p className="text-sm font-medium text-gray-900">{report.reporter}</p><p className="text-xs text-gray-500">{report.reporterContact}</p></div></td>
-                            <td className="px-6 py-4"><div><p className="text-sm font-medium text-gray-900">{report.type}</p><p className="text-xs text-gray-500">{report.animalType} • {report.animalCount} animal(s)</p></div></td>
+                            <td className="px-6 py-4">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{report.type}</p>
+                                <p className="text-xs text-gray-500">
+                                  {report.animalType && report.petBreed 
+                                    ? `${report.animalType} • ${report.petBreed}`
+                                    : report.animalType || 'Unknown animal'
+                                  }
+                                  {report.petColor && ` • ${report.petColor}`}
+                                </p>
+                              </div>
+                            </td>
                             <td className="px-6 py-4"><p className="text-sm text-gray-900 max-w-xs truncate" title={report.address}>{report.address}</p></td>
                             <td className="px-6 py-4"><div><p className="text-sm text-gray-900">{report.date}</p><p className="text-xs text-gray-500">{report.time}</p></div></td>
                             <td className="px-6 py-4">{getPriorityBadge(report.priority)}</td>
@@ -813,7 +885,7 @@ const IncidentReportingManagement = () => {
 
               {/* Report Details Modal */}
               {selectedReport && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                   <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
                     <button 
                       className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors" 
@@ -862,8 +934,8 @@ const IncidentReportingManagement = () => {
                             <div><p className="text-xs text-gray-500">Priority</p><div className="mt-1">{getPriorityBadge(selectedReport.priority)}</div></div>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500">Animal Information</p>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalType} • {selectedReport.animalCount} animal(s)</p>
+                            <p className="text-xs text-gray-500">Report Type</p>
+                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.reportType || 'Animal Report'}</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500">Assigned Team</p>
@@ -873,6 +945,39 @@ const IncidentReportingManagement = () => {
                             <p className="text-xs text-gray-500">Follow-up Required</p>
                             <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.followUpRequired ? "Yes" : "No"}</p>
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Pet/Animal Information Section */}
+                      <div className="mt-6 bg-orange-50 p-4 rounded-lg border border-orange-100">
+                        <h3 className="font-semibold text-gray-800 border-b border-orange-200 pb-2 mb-4">Pet/Animal Information</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-xs text-gray-600">Type of Animal</p>
+                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalType || 'Not specified'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-600">Breed</p>
+                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.petBreed || 'Not specified'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-600">Color</p>
+                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.petColor || 'Not specified'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-600">Gender</p>
+                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.petGender || 'Unknown'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-600">Size</p>
+                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.petSize || 'Unknown'}</p>
+                          </div>
+                          {selectedReport.animalCount && (
+                            <div>
+                              <p className="text-xs text-gray-600">Animal Count</p>
+                              <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalCount} animal(s)</p>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1026,6 +1131,15 @@ const IncidentReportingManagement = () => {
         isOpen={isNewReportModalOpen}
         onClose={() => setIsNewReportModalOpen(false)}
         onSubmit={handleNewReportSubmit}
+      />
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notificationModal.isOpen}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        type={notificationModal.type}
+        onClose={() => setNotificationModal({ ...notificationModal, isOpen: false })}
       />
     </div>
   );

@@ -72,24 +72,30 @@ class Incident {
   static async create(data) {
     try {
       const [result] = await pool.execute(
-        'CALL sp_incidents_create(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'CALL sp_incidents_create(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           data.reporter_name || 'Anonymous',
-          data.reporter_contact || '',
+          data.reporter_contact || data.contactNumber || '',
           data.title,
           data.description || '',
           data.location,
           data.latitude || null,
           data.longitude || null,
-          data.incident_date || null,
+          data.incident_date || data.date || null,
           data.priority || 'medium',
           data.status || 'pending',
           data.images ? JSON.stringify(data.images) : null,
-          data.assigned_catcher_id || null
+          data.assigned_catcher_id || null,
+          data.incident_type || data.reportType || 'incident',
+          data.pet_color || data.petColor || null,
+          data.pet_breed || data.petBreed || null,
+          data.animal_type || data.animalType || null,
+          data.pet_gender || data.petGender || null,
+          data.pet_size || data.petSize || null
         ]
       );
 
-      const insertId = result[0][0].id;
+      const insertId = result[0][0].incident_id;
       return { id: insertId, ...data };
     } catch (error) {
       console.error('Error in Incident.create:', error);
@@ -103,21 +109,27 @@ class Incident {
   static async update(id, data) {
     try {
       const [result] = await pool.execute(
-        'CALL sp_incidents_update(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'CALL sp_incidents_update(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           id,
           data.reporter_name || null,
-          data.reporter_contact || null,
+          data.reporter_contact || data.contactNumber || null,
           data.title || null,
           data.description || null,
           data.location || null,
           data.latitude || null,
           data.longitude || null,
-          data.incident_date || null,
+          data.incident_date || data.date || null,
           data.priority || null,
           data.status || null,
           data.images ? JSON.stringify(data.images) : null,
-          data.assigned_catcher_id || null
+          data.assigned_catcher_id || null,
+          data.incident_type || data.reportType || null,
+          data.pet_color || data.petColor || null,
+          data.pet_breed || data.petBreed || null,
+          data.animal_type || data.animalType || null,
+          data.pet_gender || data.petGender || null,
+          data.pet_size || data.petSize || null
         ]
       );
 

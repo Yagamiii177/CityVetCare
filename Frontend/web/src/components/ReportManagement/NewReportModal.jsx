@@ -1,88 +1,123 @@
 import { useState } from "react";
 import {
   XMarkIcon,
-  UserIcon,
   PhoneIcon,
   MapPinIcon,
   PlusCircleIcon,
+  CalendarIcon,
+  PhotoIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 
 const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
+  // Notification modal state
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationType, setNotificationType] = useState('error');
   const [formData, setFormData] = useState({
-    type: "",
+    // Report Information
+    reportType: "",
+    contactNumber: "",
+    date: new Date().toISOString().split('T')[0],
+    description: "",
     location: "",
-    reporterName: "",
-    reporterContact: "",
-    reporterAddress: "",
-    details: "",
+    // Pet Report Information
+    petColor: "",
+    petBreed: "",
     animalType: "",
-    animalCount: 1,
-    injuries: "",
-    severity: "Low",
-    followUpRequired: true,
+    petGender: "",
+    petSize: "",
+    images: [],
   });
 
   // Handle form change
   const handleChange = (e) => {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: type === "checkbox" ? e.target.checked : value,
+      [name]: value,
     });
   };
 
-  // Submit handler with validation and better error handling
+  // Handle button selection (for animal type, gender, size)
+  const handleButtonSelect = (field, value) => {
+    setFormData({
+      ...formData,
+      [field]: value,
+    });
+  };
+
+  // Handle image upload
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    const imageUrls = files.map(file => URL.createObjectURL(file));
+    setFormData({
+      ...formData,
+      images: [...formData.images, ...imageUrls],
+    });
+  };
+
+  // Submit handler with validation
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Validate required fields
-    if (!formData.type || !formData.location || !formData.reporterName || !formData.reporterContact || !formData.details) {
-      alert("⚠️ Please fill in all required fields marked with *");
+    // Validate required fields (matching mobile form requirements)
+    if (!formData.reportType || !formData.animalType || !formData.petGender || !formData.petSize) {
+      setNotificationMessage('Please fill all required fields:\n\n• Type of Report\n• Type of Animal\n• Pet\'s Gender\n• Pet\'s Size');
+      setNotificationType('error');
+      setShowNotification(true);
       return;
     }
     
-    console.log("📝 New Report Modal - Preparing data...");
+    console.log("📝 New Report Modal - Preparing data with mobile structure...");
 
+    // Prepare data matching the mobile form structure AND backend expectations
     const newReport = {
-      type: formData.type,
-      location: formData.location,
-      date: new Date().toISOString().split("T")[0],
-      time: new Date().toLocaleTimeString("en-US", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      reporterName: formData.reporterName,
-      reporterContact: formData.reporterContact,
-      reporterAddress: formData.reporterAddress,
-      details: formData.details,
+      // Backend primary fields
+      incident_type: formData.reportType,
+      reporter_contact: formData.contactNumber || 'N/A',
+      incident_date: `${formData.date} ${new Date().toTimeString().split(' ')[0]}`,
+      description: formData.description || 'No description provided',
+      location: formData.location || 'Location to be determined',
+      pet_color: formData.petColor || null,
+      pet_breed: formData.petBreed || null,
+      animal_type: formData.animalType,
+      pet_gender: formData.petGender,
+      pet_size: formData.petSize,
+      images: formData.images,
+      status: "pending",
+      priority: "medium",
+      reporter_name: "Admin Portal",
+      // Also include camelCase for frontend compatibility
+      reportType: formData.reportType,
+      contactNumber: formData.contactNumber,
+      date: formData.date,
+      petColor: formData.petColor,
+      petBreed: formData.petBreed,
       animalType: formData.animalType,
-      animalCount: parseInt(formData.animalCount) || 1,
-      injuries: formData.injuries,
-      severity: formData.severity,
-      status: "Pending",
-      assignedTo: "",
-      followUpRequired: formData.followUpRequired,
+      petGender: formData.petGender,
+      petSize: formData.petSize,
     };
     
-    console.log("📦 Submitting report:", newReport);
+    console.log("📦 Submitting report with new structure:", newReport);
 
     // Call parent submit handler
     onSubmit(newReport);
 
     // Reset form
     setFormData({
-      type: "",
+      reportType: "",
+      contactNumber: "",
+      date: new Date().toISOString().split('T')[0],
+      description: "",
       location: "",
-      reporterName: "",
-      reporterContact: "",
-      reporterAddress: "",
-      details: "",
+      petColor: "",
+      petBreed: "",
       animalType: "",
-      animalCount: 1,
-      injuries: "",
-      severity: "Low",
-      followUpRequired: true,
+      petGender: "",
+      petSize: "",
+      images: [],
     });
 
     // Close modal
@@ -92,266 +127,362 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
   // Reset form when modal closes
   const handleClose = () => {
     setFormData({
-      type: "",
+      reportType: "",
+      contactNumber: "",
+      date: new Date().toISOString().split('T')[0],
+      description: "",
       location: "",
-      reporterName: "",
-      reporterContact: "",
-      reporterAddress: "",
-      details: "",
+      petColor: "",
+      petBreed: "",
       animalType: "",
-      animalCount: 1,
-      injuries: "",
-      severity: "Low",
-      followUpRequired: true,
+      petGender: "",
+      petSize: "",
+      images: [],
     });
     onClose();
   };
 
+  // Selection button component for type, gender, size
+  const SelectionButton = ({ label, selected, onClick }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-1 py-3 px-4 rounded-lg border-2 font-medium transition-all ${
+        selected
+          ? 'border-[#FA8630] bg-[#FA8630] text-white'
+          : 'border-gray-300 bg-white text-gray-700 hover:border-[#FA8630]'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
+    <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
         <button
           className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
           onClick={handleClose}
+          type="button"
         >
           <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
         </button>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">Submit New Incident Report</h2>
-            <p className="text-gray-600">Fill in the details of the incident report</p>
+            <h2 className="text-2xl font-bold text-gray-800">Report Information</h2>
+            <p className="text-gray-600">Fill in the details matching mobile report form</p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Incident Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
-                Incident Information
-              </h3>
+          {/* REPORT INFORMATION SECTION */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-800 border-b-2 border-[#FA8630] pb-2">
+              Report Information
+            </h3>
 
-              {/* Incident Type */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Incident Type *
-                </label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleChange}
-                  required
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                >
-                  <option value="">Select incident type</option>
-                  <option value="Animal Bite">Animal Bite</option>
-                  <option value="Bite Incident">Bite Incident</option>
-                  <option value="Rabies Suspected">Rabies Suspected</option>
-                  <option value="Stray Animal">Stray Animal</option>
-                  <option value="Animal Nuisance">Animal Nuisance</option>
-                  <option value="Animal Attack">Animal Attack</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              {/* Location */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Incident Location *
-                </label>
-                <div className="flex items-center gap-2">
-                  <MapPinIcon className="h-5 w-5 text-gray-400" />
-                  <input
-                    type="text"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleChange}
-                    required
-                    placeholder="Enter exact location of incident"
-                    className="flex-1 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* Animal Information */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">
-                    Animal Type
-                  </label>
-                  <select
-                    name="animalType"
-                    value={formData.animalType}
-                    onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                  >
-                    <option value="">Select animal</option>
-                    <option value="Dog">Dog</option>
-                    <option value="Cat">Cat</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">
-                    Animal Count
-                  </label>
-                  <input
-                    type="number"
-                    name="animalCount"
-                    value={formData.animalCount}
-                    onChange={handleChange}
-                    min="1"
-                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* Severity */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Incident Severity
-                </label>
-                <select
-                  name="severity"
-                  value={formData.severity}
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                  <option value="Critical">Critical</option>
-                </select>
-              </div>
+            {/* Type of Report */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Type of Report <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="reportType"
+                value={formData.reportType}
+                onChange={handleChange}
+                required
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+              >
+                <option value="">Select report type</option>
+                <option value="incident">Incident/Bite Report</option>
+                <option value="stray">Stray Animal Report</option>
+                <option value="lost">Lost Pet Report</option>
+              </select>
             </div>
 
-            {/* Reporter Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
-                Reporter Information
-              </h3>
-
-              {/* Reporter Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Reporter Name *
-                </label>
-                <div className="flex items-center gap-2">
-                  <UserIcon className="h-5 w-5 text-gray-400" />
-                  <input
-                    type="text"
-                    name="reporterName"
-                    value={formData.reporterName}
-                    onChange={handleChange}
-                    required
-                    placeholder="Enter reporter's full name"
-                    className="flex-1 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* Contact Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Contact Number *
-                </label>
-                <div className="flex items-center gap-2">
-                  <PhoneIcon className="h-5 w-5 text-gray-400" />
-                  <input
-                    type="tel"
-                    name="reporterContact"
-                    value={formData.reporterContact}
-                    onChange={handleChange}
-                    required
-                    placeholder="09123456789"
-                    className="flex-1 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* Reporter Address */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Reporter Address
-                </label>
-                <textarea
-                  name="reporterAddress"
-                  value={formData.reporterAddress}
+            {/* Contact Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Contact Number
+              </label>
+              <div className="flex items-center gap-2">
+                <PhoneIcon className="h-5 w-5 text-gray-400" />
+                <input
+                  type="tel"
+                  name="contactNumber"
+                  value={formData.contactNumber}
                   onChange={handleChange}
-                  rows={3}
-                  placeholder="Enter complete address"
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                />
-              </div>
-
-              {/* Injuries */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Injuries Sustained
-                </label>
-                <textarea
-                  name="injuries"
-                  value={formData.injuries}
-                  onChange={handleChange}
-                  rows={2}
-                  placeholder="Describe any injuries from the incident"
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                  placeholder="e.g., 09438642023"
+                  className="flex-1 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
                 />
               </div>
             </div>
+
+            {/* Date of Incident */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Date of Incident
+              </label>
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5 text-gray-400" />
+                <input
+                  type="date"
+                  name="date"
+                  value={formData.date}
+                  onChange={handleChange}
+                  className="flex-1 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Location
+              </label>
+              <div className="flex items-center gap-2">
+                <MapPinIcon className="h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleChange}
+                  placeholder="Enter incident location"
+                  className="flex-1 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description (Optional)
+              </label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Provide additional details about the report..."
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+              />
+            </div>
           </div>
 
-          {/* Additional Details */}
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-2">
-              Incident Details *
-            </label>
-            <textarea
-              name="details"
-              value={formData.details}
-              onChange={handleChange}
-              required
-              rows={4}
-              placeholder="Provide detailed description of the incident..."
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-            />
+          {/* PET REPORT INFORMATION SECTION */}
+          <div className="space-y-4 bg-orange-50 p-4 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-800 border-b-2 border-[#FA8630] pb-2">
+              Pet Report Information
+            </h3>
+
+            {/* Pet's Color */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Pet's Color
+              </label>
+              <input
+                type="text"
+                name="petColor"
+                value={formData.petColor}
+                onChange={handleChange}
+                placeholder="e.g., Black"
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent bg-white"
+              />
+            </div>
+
+            {/* Pet's Breed */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Pet's Breed
+              </label>
+              <input
+                type="text"
+                name="petBreed"
+                value={formData.petBreed}
+                onChange={handleChange}
+                placeholder="e.g., Labrador, Aspin, etc."
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent bg-white"
+              />
+            </div>
+
+            {/* Type of Animal */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Type of Animal <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-3">
+                <SelectionButton
+                  label="Dog"
+                  selected={formData.animalType === 'dog'}
+                  onClick={() => handleButtonSelect('animalType', 'dog')}
+                />
+                <SelectionButton
+                  label="Cat"
+                  selected={formData.animalType === 'cat'}
+                  onClick={() => handleButtonSelect('animalType', 'cat')}
+                />
+              </div>
+            </div>
+
+            {/* Pet's Gender */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Pet's Gender <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-3">
+                <SelectionButton
+                  label="Male"
+                  selected={formData.petGender === 'male'}
+                  onClick={() => handleButtonSelect('petGender', 'male')}
+                />
+                <SelectionButton
+                  label="Female"
+                  selected={formData.petGender === 'female'}
+                  onClick={() => handleButtonSelect('petGender', 'female')}
+                />
+              </div>
+            </div>
+
+            {/* Pet's Size */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Pet's Size <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-3">
+                <SelectionButton
+                  label="Small"
+                  selected={formData.petSize === 'small'}
+                  onClick={() => handleButtonSelect('petSize', 'small')}
+                />
+                <SelectionButton
+                  label="Medium"
+                  selected={formData.petSize === 'medium'}
+                  onClick={() => handleButtonSelect('petSize', 'medium')}
+                />
+                <SelectionButton
+                  label="Large"
+                  selected={formData.petSize === 'large'}
+                  onClick={() => handleButtonSelect('petSize', 'large')}
+                />
+              </div>
+            </div>
+
+            {/* Upload Images */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Upload Images (Optional)
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Tap to upload photos (Views of reported pet)
+              </p>
+              <div className="relative">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <label
+                  htmlFor="image-upload"
+                  className="flex items-center justify-center gap-2 w-full border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-[#FA8630] hover:bg-white transition-all bg-white"
+                >
+                  <PhotoIcon className="h-6 w-6 text-gray-400" />
+                  <span className="text-gray-600">Tap to upload photos</span>
+                </label>
+              </div>
+              
+              {/* Image Preview */}
+              {formData.images.length > 0 && (
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {formData.images.map((img, idx) => (
+                    <div key={idx} className="relative group">
+                      <img
+                        src={img}
+                        alt={`Preview ${idx + 1}`}
+                        className="w-full h-20 object-cover rounded-lg border border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newImages = formData.images.filter((_, i) => i !== idx);
+                          setFormData({ ...formData, images: newImages });
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Follow-up Required */}
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              name="followUpRequired"
-              checked={formData.followUpRequired}
-              onChange={handleChange}
-              className="h-4 w-4 text-[#FA8630] focus:ring-[#FA8630] border-gray-300 rounded"
-            />
-            <label className="text-sm font-medium text-gray-600">
-              Follow-up required
-            </label>
-          </div>
-
-          {/* Submit Button */}
-          <div className="flex gap-4 pt-4 border-t border-gray-200">
+          {/* Submit Buttons */}
+          <div className="flex gap-4 pt-4">
             <button
               type="submit"
               className="flex-1 bg-[#FA8630] text-white px-6 py-3 rounded-lg hover:bg-[#E87928] transition-colors font-medium flex items-center justify-center gap-2"
             >
               <PlusCircleIcon className="h-5 w-5" />
-              Submit Incident Report
+              Submit Report
             </button>
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 bg-white text-gray-700 px-6 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium"
+              className="px-8 bg-white text-gray-700 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium"
             >
               Cancel
             </button>
           </div>
         </form>
       </div>
+
+      {/* Notification Modal */}
+      {showNotification && (
+        <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full animate-in fade-in zoom-in duration-200">
+            <div className={`p-6 border-b ${
+              notificationType === 'error' ? 'border-red-100' : 'border-green-100'
+            }`}>
+              <div className="flex items-center gap-3">
+                {notificationType === 'error' ? (
+                  <div className="p-2 bg-red-100 rounded-full">
+                    <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+                  </div>
+                ) : (
+                  <div className="p-2 bg-green-100 rounded-full">
+                    <CheckCircleIcon className="h-6 w-6 text-green-600" />
+                  </div>
+                )}
+                <h3 className={`text-lg font-semibold ${
+                  notificationType === 'error' ? 'text-red-900' : 'text-green-900'
+                }`}>
+                  {notificationType === 'error' ? 'Validation Error' : 'Success'}
+                </h3>
+              </div>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-700 whitespace-pre-line">{notificationMessage}</p>
+            </div>
+            <div className="p-4 bg-gray-50 flex justify-end rounded-b-xl">
+              <button
+                onClick={() => setShowNotification(false)}
+                className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                  notificationType === 'error'
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

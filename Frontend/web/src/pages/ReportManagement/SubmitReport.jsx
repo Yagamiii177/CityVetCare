@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
+import { NotificationModal } from "../../components/ReportManagement/Modal";
 import { apiService } from "../../utils/api";
 import {
   PlusCircleIcon,
@@ -20,6 +21,9 @@ const SubmitIncidentReportPage = () => {
   const [activeTab, setActiveTab] = useState("form"); // "form" or "reports"
   const [reports, setReports] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Modal state
+  const [notificationModal, setNotificationModal] = useState({ isOpen: false, title: '', message: '', type: 'success' });
 
   // Form data
   const [formData, setFormData] = useState({
@@ -78,9 +82,19 @@ const SubmitIncidentReportPage = () => {
     try {
       console.log("🧪 Testing API connection...");
       const response = await apiService.incidents.getAll();
-      alert(`✅ API Connection Test SUCCESS!\n\nTotal incidents: ${response.data?.total || 0}\n\nBackend is connected and working!`);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Connection Success',
+        message: `API Connection Test SUCCESS!\n\nTotal incidents: ${response.data?.total || 0}\n\nBackend is connected and working!`,
+        type: 'success'
+      });
     } catch (error) {
-      alert(`❌ API Connection Test FAILED\n\nError: ${error.message}\n\nCheck console (F12) for details.`);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Connection Failed',
+        message: `API Connection Test FAILED\n\nError: ${error.message}\n\nCheck console (F12) for details.`,
+        type: 'error'
+      });
       console.error("Connection test failed:", error);
     }
   };
@@ -119,7 +133,12 @@ const SubmitIncidentReportPage = () => {
     
     // Validate required fields
     if (!formData.type || !formData.location || !formData.reporterName || !formData.reporterContact || !formData.details) {
-      alert("⚠️ Please fill in all required fields:\n- Incident Type\n- Location\n- Reporter Name\n- Contact Number\n- Incident Details");
+      setNotificationModal({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Please fill in all required fields:\n- Incident Type\n- Location\n- Reporter Name\n- Contact Number\n- Incident Details',
+        type: 'warning'
+      });
       return;
     }
     
@@ -161,7 +180,12 @@ const SubmitIncidentReportPage = () => {
       });
 
       // Show success message
-      alert(`✅ Success! Incident report submitted successfully!\n\nReport ID: ${response.data.id || 'Created'}\n\nThe report will now appear in all admin tables.`);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Success!',
+        message: `Incident report submitted successfully!\n\nReport ID: ${response.data.id || 'Created'}\n\nThe report will now appear in all admin tables.`,
+        type: 'success'
+      });
       
       // Refresh reports and switch to reports tab
       await fetchReports();
@@ -193,7 +217,12 @@ const SubmitIncidentReportPage = () => {
         errorMsg += "Check console (F12) for more details.";
       }
       
-      alert(errorMsg);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Submission Failed',
+        message: errorMsg,
+        type: 'error'
+      });
       setSubmitting(false);
     }
   };
@@ -630,6 +659,15 @@ const SubmitIncidentReportPage = () => {
 
         </div>
       </main>
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notificationModal.isOpen}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        type={notificationModal.type}
+        onClose={() => setNotificationModal({ ...notificationModal, isOpen: false })}
+      />
     </div>
   );
 };

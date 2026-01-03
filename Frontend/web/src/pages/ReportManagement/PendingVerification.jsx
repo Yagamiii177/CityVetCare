@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
+import { ConfirmModal, NotificationModal, InputModal } from "../../components/ReportManagement/Modal";
 import { apiService } from "../../utils/api";
 import {
   EyeIcon,
@@ -25,6 +26,12 @@ const PendingVerification = () => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reportSchedules, setReportSchedules] = useState([]); // Store schedules for selected report
+  
+  // Modal states
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'info' });
+  const [rejectModal, setRejectModal] = useState({ isOpen: false, reportId: null });
+  const [rejectReason, setRejectReason] = useState('');
+  const [notificationModal, setNotificationModal] = useState({ isOpen: false, title: '', message: '', type: 'success' });
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
@@ -46,7 +53,7 @@ const PendingVerification = () => {
         return status === 'pending' || status === 'pending_verification';
       });
       
-      // Transform backend data to frontend format
+      // Transform backend data to frontend format with new mobile fields
       const transformedReports = pendingReports.map(incident => ({
         id: incident.id,
         reporter: incident.reporter_name,
@@ -59,7 +66,13 @@ const PendingVerification = () => {
         status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
         priority: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
         description: incident.description,
-        animalType: extractAnimalType(incident.description),
+        // NEW: Use database fields directly from mobile form
+        reportType: incident.incident_type ? (incident.incident_type === 'incident' ? 'Incident/Bite Report' : incident.incident_type === 'stray' ? 'Stray Animal Report' : 'Lost Pet Report') : 'Animal Report',
+        animalType: incident.animal_type ? (incident.animal_type.charAt(0).toUpperCase() + incident.animal_type.slice(1)) : extractAnimalType(incident.description),
+        petBreed: incident.pet_breed || 'Not specified',
+        petColor: incident.pet_color || 'Not specified',
+        petGender: incident.pet_gender ? (incident.pet_gender.charAt(0).toUpperCase() + incident.pet_gender.slice(1)) : 'Unknown',
+        petSize: incident.pet_size ? (incident.pet_size.charAt(0).toUpperCase() + incident.pet_size.slice(1)) : 'Unknown',
         animalCount: extractAnimalCount(incident.description),
         injuries: extractInjuries(incident.description),
         submittedBy: "System",
@@ -133,19 +146,27 @@ const PendingVerification = () => {
     return matchesSearch && matchesType;
   });
 
-  // Handle Verify - Update status to 'approved' in backend
-  const handleVerify = async (id) => {
-    if (!window.confirm(`Are you sure you want to approve report #${id}?`)) {
-      return;
-    }
+  // Handle Verify - Update status to 'verified' in backend
+  const handleVerify = (id) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Approve Report',
+      message: `Are you sure you want to approve report #${id}? This will move it to verified status and make it available for patrol scheduling.`,
+      type: 'success',
+      onConfirm: () => confirmApproval(id)
+    });
+  };
 
+  const confirmApproval = async (id) => {
+    setConfirmModal({ ...confirmModal, isOpen: false });
+    
     try {
       const report = reports.find(r => r.id === id);
       if (!report) return;
 
       // First, fetch the complete incident data from backend
       const incidentResponse = await apiService.incidents.getById(id);
-      const incident = incidentResponse.data;
+      const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
 
       // Update status in backend with all required fields
       await apiService.incidents.update(id, {
@@ -154,7 +175,7 @@ const PendingVerification = () => {
         location: incident.location,
         latitude: incident.latitude,
         longitude: incident.longitude,
-        status: 'approved',
+        status: 'verified',
         priority: incident.priority,
         assigned_catcher_id: incident.assigned_catcher_id,
       });
@@ -166,17 +187,44 @@ const PendingVerification = () => {
         setSelectedReport(null);
       }
       
-      alert(`Report #${id} has been approved successfully! It will now appear in All Incident Reports and Incident Monitoring.`);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Success!',
+        message: `Report #${id} has been approved successfully! It will now appear in All Incident Reports and Incident Monitoring.`,
+        type: 'success'
+      });
     } catch (error) {
       console.error("Error approving report:", error);
-      alert(`Error approving report: ${error.response?.data?.message || error.message}`);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Error',
+        message: `Failed to approve report: ${error.response?.data?.message || error.message}`,
+        type: 'error'
+      });
     }
   };
 
   // Handle Reject - Update status to 'rejected' in backend
-  const handleReject = async (id) => {
-    const reason = prompt("Please enter rejection reason:");
-    if (!reason) return;
+  const handleReject = (id) => {
+    setRejectReason('');
+    setRejectModal({ isOpen: true, reportId: id });
+  };
+
+  const confirmRejection = async () => {
+    const id = rejectModal.reportId;
+    const reason = rejectReason.trim();
+    
+    if (!reason) {
+      setNotificationModal({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Please enter a rejection reason.',
+        type: 'warning'
+      });
+      return;
+    }
+    
+    setRejectModal({ isOpen: false, reportId: null });
 
     try {
       const report = reports.find(r => r.id === id);
@@ -184,7 +232,7 @@ const PendingVerification = () => {
 
       // First, fetch the complete incident data from backend
       const incidentResponse = await apiService.incidents.getById(id);
-      const incident = incidentResponse.data;
+      const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
 
       // Update status in backend with rejection note and all required fields
       await apiService.incidents.update(id, {
@@ -205,10 +253,20 @@ const PendingVerification = () => {
         setSelectedReport(null);
       }
       
-      alert(`Report #${id} has been rejected.`);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Report Rejected',
+        message: `Report #${id} has been rejected and moved to Report History.`,
+        type: 'info'
+      });
     } catch (error) {
       console.error("Error rejecting report:", error);
-      alert(`Error rejecting report: ${error.response?.data?.message || error.message}`);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Error',
+        message: `Failed to reject report: ${error.response?.data?.message || error.message}`,
+        type: 'error'
+      });
     }
   };
 
@@ -427,7 +485,7 @@ const PendingVerification = () => {
                               <div>
                                 <p className="text-sm font-medium text-gray-900">{report.type}</p>
                                 <p className="text-xs text-gray-500">
-                                  {report.animalType} • {report.animalCount} animal(s)
+                                  {report.animalType}{report.petBreed && report.petBreed !== 'Not specified' ? ` • ${report.petBreed}` : ''}{report.petColor && report.petColor !== 'Not specified' ? ` • ${report.petColor}` : ''}
                                 </p>
                               </div>
                             </td>
@@ -493,7 +551,7 @@ const PendingVerification = () => {
 
           {/* Detailed Modal - Simplified */}
           {selectedReport && (
-            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
               <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
                 <button
                   className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
@@ -567,7 +625,7 @@ const PendingVerification = () => {
                             Animal Type
                           </label>
                           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                            <span className="text-gray-800">{selectedReport.animalType}</span>
+                            <span className="text-gray-800">{selectedReport.animalType} • {selectedReport.petBreed} • {selectedReport.petColor} • {selectedReport.petGender} • {selectedReport.petSize}</span>
                           </div>
                         </div>
 
@@ -706,6 +764,41 @@ const PendingVerification = () => {
           )}
         </div>
       </main>
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
+
+      {/* Reject Modal with Input */}
+      <InputModal
+        isOpen={rejectModal.isOpen}
+        title="Reject Report"
+        message={`Please provide a reason for rejecting report #${rejectModal.reportId}:`}
+        placeholder="Enter rejection reason..."
+        value={rejectReason}
+        onChange={(e) => setRejectReason(e.target.value)}
+        onConfirm={confirmRejection}
+        onCancel={() => {
+          setRejectModal({ isOpen: false, reportId: null });
+          setRejectReason('');
+        }}
+        type="error"
+      />
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notificationModal.isOpen}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        type={notificationModal.type}
+        onClose={() => setNotificationModal({ ...notificationModal, isOpen: false })}
+      />
     </div>
   );
 };

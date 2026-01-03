@@ -80,20 +80,37 @@ const IncidentMonitoring = () => {
             return status === 'verified' || status === 'in_progress';
           });
           
-          // Transform to frontend format
-          const transformedReports = activeReports.map(incident => ({
-            id: incident.id,
-            type: incident.title,
-            location: incident.location,
-            lat: incident.latitude || 13.9094,
-            lng: incident.longitude || 121.7740,
-            status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
-            priority: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
-            date: incident.incident_date || incident.created_at,
-            description: incident.description,
-            reporter: incident.reporter_name,
-            contact: incident.reporter_contact
-          }));
+          // Transform to frontend format with new mobile fields
+          const transformedReports = activeReports.map(incident => {
+            const incidentDate = incident.incident_date || incident.created_at;
+            const [datePart, timePart] = incidentDate.split(' ');
+            
+            return {
+              id: incident.id,
+              type: incident.title,
+              location: incident.location,
+              address: incident.location,
+              latitude: incident.latitude || 14.5995,
+              longitude: incident.longitude || 120.9842,
+              lat: incident.latitude || 14.5995,
+              lng: incident.longitude || 120.9842,
+              status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
+              priority: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
+              date: datePart || incidentDate.split('T')[0] || new Date().toISOString().split('T')[0],
+              time: timePart || incidentDate.split('T')[1]?.split('.')[0] || new Date().toTimeString().split(' ')[0],
+              description: incident.description,
+              reporter: incident.reporter_name || 'Anonymous',
+              contact: incident.reporter_contact || 'No contact',
+              // NEW: Mobile form fields
+              reportType: incident.incident_type,
+              animalType: incident.animal_type ? (incident.animal_type.charAt(0).toUpperCase() + incident.animal_type.slice(1)) : 'Unknown',
+              petBreed: incident.pet_breed || 'Not specified',
+              petColor: incident.pet_color || 'Not specified',
+              petGender: incident.pet_gender ? (incident.pet_gender.charAt(0).toUpperCase() + incident.pet_gender.slice(1)) : 'Unknown',
+              petSize: incident.pet_size ? (incident.pet_size.charAt(0).toUpperCase() + incident.pet_size.slice(1)) : 'Unknown',
+              animalCount: 1 // Default to 1, can be extracted from description if needed
+            };
+          });
           
           setReports(transformedReports);
         }
@@ -161,12 +178,18 @@ const IncidentMonitoring = () => {
     // Fit map to show all markers when reports change
     useEffect(() => {
       if (filteredReports.length > 0) {
-        const group = new L.FeatureGroup(
-          filteredReports.map(report => 
-            L.marker([report.latitude, report.longitude])
-          )
+        const validReports = filteredReports.filter(report => 
+          report.latitude && report.longitude
         );
-        map.fitBounds(group.getBounds(), { padding: [20, 20] });
+        
+        if (validReports.length > 0) {
+          const group = new L.FeatureGroup(
+            validReports.map(report => 
+              L.marker([report.latitude, report.longitude])
+            )
+          );
+          map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 15 });
+        }
       }
     }, [filteredReports, map]);
 
@@ -321,9 +344,10 @@ const IncidentMonitoring = () => {
             ) : (
               <MapContainer
                 center={[14.5995, 120.9842]} // Default to Manila
-                zoom={13}
+                zoom={12}
                 className="h-full w-full"
                 scrollWheelZoom={true}
+                zoomControl={true}
               >
                 <TileLayer
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -365,7 +389,7 @@ const IncidentMonitoring = () => {
                         
                         <div className="flex justify-between items-center pt-2">
                           {getStatusBadge(report.status)}
-                          <span className="text-xs text-gray-500">{report.animalType}</span>
+                          <span className="text-xs text-gray-500">{report.animalType}{report.petBreed && report.petBreed !== 'Not specified' ? ` • ${report.petBreed}` : ''}{report.petColor && report.petColor !== 'Not specified' ? ` • ${report.petColor}` : ''}</span>
                         </div>
                         
                         <p className="text-sm text-gray-700 border-t pt-2 mt-2">
@@ -390,7 +414,7 @@ const IncidentMonitoring = () => {
 
       {/* Simple Detail Modal */}
       {selectedReport && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
             <button
               className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
@@ -474,7 +498,13 @@ const IncidentMonitoring = () => {
                       Animal Type
                     </label>
                     <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                      <span className="text-gray-800">{selectedReport.animalType || 'Not specified'}</span>
+                      <span className="text-gray-800">
+                        {selectedReport.animalType || 'Unknown'}
+                        {selectedReport.petBreed && selectedReport.petBreed !== 'Not specified' && ` • ${selectedReport.petBreed}`}
+                        {selectedReport.petColor && selectedReport.petColor !== 'Not specified' && ` • ${selectedReport.petColor}`}
+                        {selectedReport.petGender && selectedReport.petGender !== 'Unknown' && ` • ${selectedReport.petGender}`}
+                        {selectedReport.petSize && selectedReport.petSize !== 'Unknown' && ` • ${selectedReport.petSize}`}
+                      </span>
                     </div>
                   </div>
 
@@ -483,7 +513,7 @@ const IncidentMonitoring = () => {
                       Animal Count
                     </label>
                     <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                      <span className="text-gray-800">{selectedReport.animalCount || 1}</span>
+                      <span className="text-gray-800">{selectedReport.animalCount || 1} animal(s)</span>
                     </div>
                   </div>
                 </div>

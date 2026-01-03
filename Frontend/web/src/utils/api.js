@@ -98,47 +98,47 @@ export const apiService = {
   // Incidents
   incidents: {
     getAll: (filters = {}) => api.get('/incidents', { params: filters }),
-    getById: (id) => api.get(`/incidents?id=${id}`),
+    getById: (id) => api.get(`/incidents/${id}`),
     create: (data) => api.post('/incidents', data),
-    update: (id, data) => api.put('/incidents', { id, ...data }),
-    delete: (id) => api.delete('/incidents', { data: { id } }),
+    update: (id, data) => api.put(`/incidents/${id}`, data),
+    delete: (id) => api.delete(`/incidents/${id}`),
     getStatusCounts: () => api.get('/incidents/status-counts'),
   },
 
   // Catcher Teams
   catchers: {
     getAll: (filters = {}) => api.get('/catchers', { params: filters }),
-    getById: (id) => api.get(`/catchers?id=${id}`),
+    getById: (id) => api.get(`/catchers/${id}`),
     create: (data) => api.post('/catchers', data),
-    update: (id, data) => api.put('/catchers', { id, ...data }),
-    delete: (id) => api.delete('/catchers', { data: { id } }),
+    update: (id, data) => api.put(`/catchers/${id}`, data),
+    delete: (id) => api.delete(`/catchers/${id}`),
   },
 
   // Schedules
   schedules: {
     getAll: (filters = {}) => api.get('/schedules', { params: filters }),
-    getById: (id) => api.get(`/schedules?id=${id}`),
+    getById: (id) => api.get(`/schedules/${id}`),
     create: (data) => api.post('/schedules', data),
-    update: (id, data) => api.put('/schedules', { id, ...data }),
-    delete: (id) => api.delete('/schedules', { data: { id } }),
+    update: (id, data) => api.put(`/schedules/${id}`, data),
+    delete: (id) => api.delete(`/schedules/${id}`),
   },
 
   // Patrol Staff
   patrolStaff: {
     getAll: (filters = {}) => api.get('/patrol-staff', { params: filters }),
-    getById: (id) => api.get(`/patrol-staff?id=${id}`),
+    getById: (id) => api.get(`/patrol-staff/${id}`),
     create: (data) => api.post('/patrol-staff', data),
-    update: (id, data) => api.put('/patrol-staff', { id, ...data }),
-    delete: (id) => api.delete('/patrol-staff', { data: { id } }),
+    update: (id, data) => api.put(`/patrol-staff/${id}`, data),
+    delete: (id) => api.delete(`/patrol-staff/${id}`),
   },
 
   // Patrol Schedules
   patrolSchedules: {
     getAll: (filters = {}) => api.get('/patrol-schedules', { params: filters }),
-    getById: (id) => api.get(`/patrol-schedules?id=${id}`),
+    getById: (id) => api.get(`/patrol-schedules/${id}`),
     create: (data) => api.post('/patrol-schedules', data),
-    update: (id, data) => api.put('/patrol-schedules', { id, ...data }),
-    delete: (id) => api.delete('/patrol-schedules', { data: { id } }),
+    update: (id, data) => api.put(`/patrol-schedules/${id}`, data),
+    delete: (id) => api.delete(`/patrol-schedules/${id}`),
   },
 
   // Dashboard

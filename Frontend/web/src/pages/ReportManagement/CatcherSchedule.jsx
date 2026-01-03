@@ -127,21 +127,21 @@ const AnimalCatcherSchedule = () => {
 
       // Fetch complete incident data before updating
       const incidentResponse = await apiService.incidents.getById(formData.incident_id);
-      const incident = incidentResponse.data;
+      const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
 
-      // Update incident status to 'scheduled' with all required fields
+      // Update incident status to 'verified' (scheduled in patrol_schedules) with all required fields
       await apiService.incidents.update(formData.incident_id, {
         title: incident.title,
         description: incident.description,
         location: incident.location,
         latitude: incident.latitude,
         longitude: incident.longitude,
-        status: "scheduled",
+        status: "verified",
         priority: incident.priority,
         assigned_catcher_id: incident.assigned_catcher_id,
       });
 
-      setSuccessMessage("Patrol schedule created successfully! Incident status updated to 'Scheduled'.");
+      setSuccessMessage("Patrol schedule created successfully! Incident status updated to 'Verified'.");
       
       // Reset form
       setFormData({
@@ -196,7 +196,7 @@ const AnimalCatcherSchedule = () => {
       if (incidentStatus && incidentId) {
         // Fetch complete incident data before updating
         const incidentResponse = await apiService.incidents.getById(incidentId);
-        const incident = incidentResponse.data;
+        const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
         
         await apiService.incidents.update(incidentId, {
           title: incident.title,
