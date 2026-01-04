@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
 import { ConfirmModal, NotificationModal, InputModal } from "../../components/ReportManagement/Modal";
-import { apiService } from "../../utils/api";
+import { apiService, getImageUrl } from "../../utils/api";
 import {
   EyeIcon,
   XMarkIcon,
@@ -64,8 +64,8 @@ const PendingVerification = () => {
         date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
         time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
         status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
-        priority: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
         description: incident.description,
+        images: incident.images || [], // Add images field
         // NEW: Use database fields directly from mobile form
         reportType: incident.incident_type ? (incident.incident_type === 'incident' ? 'Incident/Bite Report' : incident.incident_type === 'stray' ? 'Stray Animal Report' : 'Lost Pet Report') : 'Animal Report',
         animalType: incident.animal_type ? (incident.animal_type.charAt(0).toUpperCase() + incident.animal_type.slice(1)) : extractAnimalType(incident.description),
@@ -168,7 +168,7 @@ const PendingVerification = () => {
       const incidentResponse = await apiService.incidents.getById(id);
       const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
 
-      // Update status in backend with all required fields
+      // Update status in backend with all required fields including mobile fields
       await apiService.incidents.update(id, {
         title: incident.title,
         description: incident.description,
@@ -176,8 +176,14 @@ const PendingVerification = () => {
         latitude: incident.latitude,
         longitude: incident.longitude,
         status: 'verified',
-        priority: incident.priority,
         assigned_catcher_id: incident.assigned_catcher_id,
+        // Include mobile report fields
+        incident_type: incident.incident_type,
+        pet_color: incident.pet_color,
+        pet_breed: incident.pet_breed,
+        animal_type: incident.animal_type,
+        pet_gender: incident.pet_gender,
+        pet_size: incident.pet_size,
       });
       
       // Refresh the list
@@ -234,7 +240,7 @@ const PendingVerification = () => {
       const incidentResponse = await apiService.incidents.getById(id);
       const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
 
-      // Update status in backend with rejection note and all required fields
+      // Update status in backend with rejection note and all required fields including mobile fields
       await apiService.incidents.update(id, {
         title: incident.title,
         description: `${incident.description}\n\n[REJECTED: ${reason}]`,
@@ -242,8 +248,14 @@ const PendingVerification = () => {
         latitude: incident.latitude,
         longitude: incident.longitude,
         status: 'rejected',
-        priority: incident.priority,
         assigned_catcher_id: incident.assigned_catcher_id,
+        // Include mobile report fields
+        incident_type: incident.incident_type,
+        pet_color: incident.pet_color,
+        pet_breed: incident.pet_breed,
+        animal_type: incident.animal_type,
+        pet_gender: incident.pet_gender,
+        pet_size: incident.pet_size,
       });
       
       // Refresh the list
@@ -270,22 +282,7 @@ const PendingVerification = () => {
     }
   };
 
-  // Get priority badge
-  const getPriorityBadge = (priority) => {
-    const styles = {
-      Critical: "bg-red-100 text-red-800 border border-red-200",
-      High: "bg-orange-100 text-orange-800 border border-orange-200",
-      Medium: "bg-yellow-100 text-yellow-800 border border-yellow-200",
-      Low: "bg-green-100 text-green-800 border border-green-200",
-    };
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[priority]}`}>
-        {priority}
-      </span>
-    );
-  };
-
-  // Stats
+  // Get status badge
   const stats = {
     total: pendingReports.length,
     bite: pendingReports.filter(r => r.type === "Bite Incident").length,
@@ -457,9 +454,6 @@ const PendingVerification = () => {
                           Date & Time
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                          Priority
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
@@ -499,9 +493,6 @@ const PendingVerification = () => {
                               </div>
                             </td>
                             <td className="px-6 py-4">
-                              {getPriorityBadge(report.priority)}
-                            </td>
-                            <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => { setSelectedReport(report); fetchReportSchedules(report.id); }}
@@ -533,7 +524,7 @@ const PendingVerification = () => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="px-6 py-8 text-center">
+                          <td colSpan={6} className="px-6 py-8 text-center">
                             <div className="text-gray-500">
                               <CheckCircleIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                               <p>No pending reports found</p>
@@ -549,214 +540,346 @@ const PendingVerification = () => {
             )}
           </div>
 
-          {/* Detailed Modal - Simplified */}
+          {/* Enhanced Detail Modal - Matching MonitoringIncidents */}
           {selectedReport && (
-            <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-              <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-y-auto">
+              <div className="bg-white w-full max-w-4xl my-8 rounded-xl shadow-2xl relative animate-fadeIn">
+                {/* Close Button - Fixed at top */}
                 <button
-                  className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                  className="absolute right-4 top-4 z-10 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 transition-colors border border-gray-200"
                   onClick={() => setSelectedReport(null)}
+                  aria-label="Close modal"
                 >
-                  <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
+                  <XMarkIcon className="h-5 w-5 text-gray-700" />
                 </button>
 
-                <div className="p-6 space-y-6">
-                  {/* Header */}
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Report #{selectedReport.id}</h2>
-                    <p className="text-gray-600">{selectedReport.type} - Pending Verification</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Reporter Information */}
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
-                        Reporter Information
-                      </h3>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Reporter Name
-                        </label>
-                        <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                          <UserIcon className="h-5 w-5 text-gray-400" />
-                          <span className="text-gray-800">{selectedReport.reporter}</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Contact Number
-                        </label>
-                        <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                          <PhoneIcon className="h-5 w-5 text-gray-400" />
-                          <span className="text-gray-800">{selectedReport.reporterContact}</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Reporter Address
-                        </label>
-                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                          <span className="text-gray-800">{selectedReport.reporterAddress}</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Submitted Via
-                        </label>
-                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                          <span className="text-gray-800">{selectedReport.submittedBy}</span>
+                {/* Scrollable Content */}
+                <div className="max-h-[85vh] overflow-y-auto">
+                  <div className="p-8 space-y-6">
+                    {/* Header Section */}
+                    <div className="border-b border-gray-200 pb-4">
+                      <div className="flex items-start justify-between pr-12">
+                        <div>
+                          <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedReport.type}</h2>
+                          <p className="text-gray-500">Report ID: #{selectedReport.id}</p>
+                          <span className="inline-block mt-2 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+                            Pending Verification
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Incident Details */}
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
-                        Incident Information
+                    {/* Images Section */}
+                    {selectedReport.images && selectedReport.images.length > 0 && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                          <svg className="h-5 w-5 text-[#FA8630]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          Report Images ({selectedReport.images.length})
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          {selectedReport.images.map((image, index) => (
+                            <div key={index} className="relative group">
+                              <img
+                                src={getImageUrl(image)}
+                                alt={`Report ${index + 1}`}
+                                className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 hover:border-[#FA8630] transition-all cursor-pointer shadow-sm"
+                                onClick={() => window.open(getImageUrl(image), '_blank')}
+                                onError={(e) => {
+                                  e.target.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                <span className="text-white text-sm font-medium">Click to enlarge</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Main Content Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Reporter Information */}
+                      <div className="bg-gradient-to-br from-blue-50 to-white p-5 rounded-xl border border-blue-100 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                          <UserIcon className="h-5 w-5 text-blue-600" />
+                          Reporter Information
+                        </h3>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Reporter Name
+                            </label>
+                            <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="text-gray-900 font-medium">{selectedReport.reporter}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Contact Number
+                            </label>
+                            <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                              <PhoneIcon className="h-4 w-4 text-gray-400" />
+                              <span className="text-gray-900 font-medium">{selectedReport.reporterContact}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Reporter Address
+                            </label>
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="text-gray-900 font-medium">{selectedReport.reporterAddress}</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Date
+                              </label>
+                              <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                                <CalendarDaysIcon className="h-4 w-4 text-gray-400" />
+                                <span className="text-gray-900 font-medium text-sm">{selectedReport.date}</span>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Time
+                              </label>
+                              <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                <span className="text-gray-900 font-medium text-sm">{selectedReport.time}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Incident Information */}
+                      <div className="bg-gradient-to-br from-orange-50 to-white p-5 rounded-xl border border-orange-100 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                          <ExclamationTriangleIcon className="h-5 w-5 text-[#FA8630]" />
+                          Incident Information
+                        </h3>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Report Type
+                            </label>
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="text-gray-900 font-medium">{selectedReport.reportType || 'Animal Report'}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Incident Type
+                            </label>
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="text-gray-900 font-medium">{selectedReport.type}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Current Status
+                            </label>
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
+                                {selectedReport.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Animal Details Section */}
+                    <div className="bg-gradient-to-br from-green-50 to-white p-5 rounded-xl border border-green-100 shadow-sm">
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Animal Details
                       </h3>
                       
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-600 mb-1">
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
                             Animal Type
                           </label>
-                          <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                            <span className="text-gray-800">{selectedReport.animalType} • {selectedReport.petBreed} • {selectedReport.petColor} • {selectedReport.petGender} • {selectedReport.petSize}</span>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.animalType || 'Unknown'}</span>
                           </div>
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-600 mb-1">
-                            Animal Count
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Breed
                           </label>
-                          <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                            <span className="text-gray-800">{selectedReport.animalCount} animal(s)</span>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.petBreed}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Color
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.petColor}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Gender
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.petGender}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Size
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.petSize}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Count
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.animalCount || 1} animal(s)</span>
                           </div>
                         </div>
                       </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Priority Level
-                        </label>
-                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                          {getPriorityBadge(selectedReport.priority)}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Injuries Reported
-                        </label>
-                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                          <span className="text-gray-800">{selectedReport.injuries || "None reported"}</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Incident Date & Time
-                        </label>
-                        <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                          <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
-                          <span className="text-gray-800">{selectedReport.date} at {selectedReport.time}</span>
-                        </div>
-                      </div>
                     </div>
-                  </div>
 
-                  {/* Location */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      Incident Location
-                    </label>
-                    <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                      <MapPinIcon className="h-5 w-5 text-gray-400" />
-                      <span className="text-gray-800">{selectedReport.address}</span>
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      Incident Description
-                    </label>
-                    <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                      <p className="text-gray-800 whitespace-pre-wrap">{selectedReport.description}</p>
-                    </div>
-                  </div>
-
-                  {/* Patrol Schedule Table */}
-                  {reportSchedules.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">
-                        Patrol Schedule History
+                    {/* Location Section */}
+                    <div className="space-y-3">
+                      <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <MapPinIcon className="h-5 w-5 text-red-600" />
+                        Location Details
                       </h3>
-                      <div className="overflow-hidden rounded-lg border border-gray-300">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-100">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Assigned Staff</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Schedule Date</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Created</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200 bg-white">
-                            {reportSchedules.map((schedule) => (
-                              <tr key={schedule.id}>
-                                <td className="px-4 py-3 text-gray-800">
-                                  {schedule.assigned_staff_names || "No staff assigned"}
-                                </td>
-                                <td className="px-4 py-3 text-gray-800">
-                                  {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleString() : "N/A"}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    schedule.status === 'completed' ? 'bg-green-100 text-green-800 border border-green-200' :
-                                    schedule.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                                    'bg-blue-100 text-blue-800 border border-blue-200'
-                                  }`}>
-                                    {schedule.status.replace('_', ' ').toUpperCase()}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-gray-800">
-                                  {new Date(schedule.created_at).toLocaleString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <MapPinIcon className="h-5 w-5 text-red-500 mt-1 flex-shrink-0" />
+                        <div>
+                          <p className="text-gray-900 font-medium">{selectedReport.address}</p>
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-4 pt-4 border-t border-gray-200">
-                    <button
-                      onClick={() => handleVerify(selectedReport.id)}
-                      className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
-                    >
-                      <CheckCircleIcon className="h-5 w-5" />
-                      Approve Report
-                    </button>
-                    <button
-                      onClick={() => handleReject(selectedReport.id)}
-                      className="flex-1 bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 transition-colors font-medium flex items-center justify-center gap-2"
-                    >
-                      <XCircleIcon className="h-5 w-5" />
-                      Reject Report
-                    </button>
+                    {/* Description Section */}
+                    <div className="space-y-3">
+                      <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <svg className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Incident Description
+                      </h3>
+                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-gray-800 leading-relaxed">{selectedReport.description}</p>
+                      </div>
+                    </div>
+
+                    {/* Injuries Section */}
+                    {selectedReport.injuries && selectedReport.injuries !== "None" && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                          <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
+                          Injuries/Concerns
+                        </h3>
+                        <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                          <p className="text-gray-800 leading-relaxed">{selectedReport.injuries}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Patrol Schedule Table */}
+                    {reportSchedules.length > 0 && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                          <ClockIcon className="h-5 w-5 text-blue-600" />
+                          Patrol Schedule History
+                        </h3>
+                        <div className="overflow-hidden rounded-lg border border-gray-300">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Assigned Staff</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Schedule Date</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Created</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 bg-white">
+                              {reportSchedules.map((schedule) => (
+                                <tr key={schedule.id}>
+                                  <td className="px-4 py-3 text-gray-800">
+                                    {schedule.assigned_staff_names || "No staff assigned"}
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-800">
+                                    {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleString() : "N/A"}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      schedule.status === 'completed' ? 'bg-green-100 text-green-800 border border-green-200' :
+                                      schedule.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                                      'bg-blue-100 text-blue-800 border border-blue-200'
+                                    }`}>
+                                      {schedule.status.replace('_', ' ').toUpperCase()}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-800">
+                                    {new Date(schedule.created_at).toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-4 border-t border-gray-200">
+                      <button
+                        onClick={() => handleVerify(selectedReport.id)}
+                        className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <CheckCircleIcon className="h-5 w-5" />
+                        Approve Report
+                      </button>
+                      <button
+                        onClick={() => handleReject(selectedReport.id)}
+                        className="flex-1 bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <XCircleIcon className="h-5 w-5" />
+                        Reject Report
+                      </button>
+                      <button
+                        onClick={() => setSelectedReport(null)}
+                        className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium shadow-sm"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

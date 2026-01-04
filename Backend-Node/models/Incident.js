@@ -13,7 +13,7 @@ class Incident {
         'CALL sp_incidents_get_all(?, ?, ?, ?, ?)',
         [
           filters.status || null,
-          filters.priority || null,
+          filters.incident_type || null,
           filters.search || null,
           filters.limit || 1000,
           filters.offset || 0
@@ -74,22 +74,38 @@ class Incident {
    */
   static async create(data) {
     try {
+      // Clean and validate incident_type - never allow empty string
+      let incidentType = data.incident_type || data.reportType || null;
+      if (incidentType === '') incidentType = null;
+      if (!incidentType) incidentType = 'incident';
+      
+      // Handle images - check if already stringified to avoid double-stringifying
+      let imagesData = null;
+      if (data.images) {
+        if (typeof data.images === 'string') {
+          // Already a JSON string from mobile app
+          imagesData = data.images;
+        } else {
+          // Array or object needs stringifying (from web app)
+          imagesData = JSON.stringify(data.images);
+        }
+      }
+      
       const [result] = await pool.execute(
-        'CALL sp_incidents_create(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'CALL sp_incidents_create(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           data.reporter_name || 'Anonymous',
           data.reporter_contact || data.contactNumber || '',
-          data.title,
+          data.title || 'Incident Report',
           data.description || '',
           data.location,
           data.latitude || null,
           data.longitude || null,
           data.incident_date || data.date || null,
-          data.priority || 'medium',  // Fixed: priority comes before status
           data.status || 'pending',
-          data.images ? JSON.stringify(data.images) : null,
+          imagesData,
           data.assigned_catcher_id || null,
-          data.incident_type || data.reportType || 'incident',
+          incidentType,
           data.pet_color || data.petColor || null,
           data.pet_breed || data.petBreed || null,
           data.animal_type || data.animalType || null,
@@ -111,8 +127,22 @@ class Incident {
    */
   static async update(id, data) {
     try {
+      // Handle images - check if already stringified to avoid double-stringifying
+      let imagesData = null;
+      if (data.images !== undefined) {
+        if (data.images === null) {
+          imagesData = null;
+        } else if (typeof data.images === 'string') {
+          // Already a JSON string from mobile app
+          imagesData = data.images;
+        } else {
+          // Array or object needs stringifying (from web app)
+          imagesData = JSON.stringify(data.images);
+        }
+      }
+      
       const [result] = await pool.execute(
-        'CALL sp_incidents_update(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'CALL sp_incidents_update(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           id,
           data.reporter_name || null,
@@ -123,9 +153,8 @@ class Incident {
           data.latitude || null,
           data.longitude || null,
           data.incident_date || data.date || null,
-          data.priority || null,
           data.status || null,
-          data.images ? JSON.stringify(data.images) : null,
+          imagesData !== null ? imagesData : (data.images !== undefined ? null : undefined),
           data.assigned_catcher_id || null,
           data.incident_type || data.reportType || null,
           data.pet_color || data.petColor || null,

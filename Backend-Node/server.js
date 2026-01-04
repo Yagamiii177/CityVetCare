@@ -1,17 +1,24 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { testConnection } from './config/database.js';
 import Logger from './utils/logger.js';
 import validateEnv from './utils/validateEnv.js';
 
 // Import routes
+import authRouter from './routes/auth.js';
 import incidentsRouter from './routes/incidents.js';
 import patrolStaffRouter from './routes/patrol-staff.js';
 import patrolSchedulesRouter from './routes/patrol-schedules.js';
 import catchersRouter from './routes/catchers.js';
 import dashboardRouter from './routes/dashboard.js';
 import healthRouter from './routes/health.js';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables
 dotenv.config();
@@ -36,6 +43,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve uploaded files as static files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Request logging middleware
 app.use((req, res, next) => {
   logger.debug(`${req.method} ${req.path}`);
@@ -50,6 +60,7 @@ app.get('/', (req, res) => {
     platform: 'Node.js/Express',
     endpoints: {
       '/api/health': 'Health check',
+      '/api/auth': 'Authentication (login, register)',
       '/api/incidents': 'Incident management',
       '/api/catchers': 'Catcher team management',
       '/api/patrol-staff': 'Patrol staff management',
@@ -61,6 +72,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/health', healthRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/incidents', incidentsRouter);
 app.use('/api/catchers', catchersRouter);
 app.use('/api/patrol-staff', patrolStaffRouter);

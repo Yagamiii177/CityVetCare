@@ -42,14 +42,10 @@ const NotificationBell = ({ onNotificationClick }) => {
     
     // Remove this specific notification
     try {
-      await fetch(`${API_BASE_URL}/notifications`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      await api.delete('/notifications', {
+        data: {
           notification_id: notification.id
-        })
+        }
       });
       
       // Update local state
@@ -62,14 +58,8 @@ const NotificationBell = ({ onNotificationClick }) => {
 
   const markAllAsRead = async () => {
     try {
-      await fetch(`${API_BASE_URL}/notifications`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'mark_read'
-        })
+      await api.post('/notifications', {
+        action: 'mark_read'
       });
       
       setNotifications([]);
@@ -77,19 +67,6 @@ const NotificationBell = ({ onNotificationClick }) => {
       setShowDropdown(false);
     } catch {
       // Failed to mark notifications as read
-    }
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'high':
-        return 'text-red-600 bg-red-50';
-      case 'medium':
-        return 'text-yellow-600 bg-yellow-50';
-      case 'low':
-        return 'text-green-600 bg-green-50';
-      default:
-        return 'text-gray-600 bg-gray-50';
     }
   };
 
@@ -163,7 +140,7 @@ const NotificationBell = ({ onNotificationClick }) => {
                   >
                     <div className="flex items-start space-x-3">
                       {/* Icon */}
-                      <div className={`flex-shrink-0 p-2 rounded-full ${getPriorityColor(notification.priority)}`}>
+                      <div className="flex-shrink-0 p-2 rounded-full text-orange-600 bg-orange-50">
                         <ExclamationTriangleIcon className="h-4 w-4" />
                       </div>
                       
@@ -187,11 +164,8 @@ const NotificationBell = ({ onNotificationClick }) => {
                           <span>Reporter: {notification.reporter}</span>
                         </div>
                         
-                        {/* Priority and Time */}
+                        {/* Time */}
                         <div className="flex items-center justify-between mt-2">
-                          <span className={`inline-block px-2 py-1 text-xs font-medium rounded ${getPriorityColor(notification.priority)}`}>
-                            {notification.priority?.toUpperCase()}
-                          </span>
                           <span className="text-xs text-gray-400">
                             {formatTimeAgo(notification.timestamp)}
                           </span>

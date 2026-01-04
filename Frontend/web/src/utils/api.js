@@ -95,6 +95,15 @@ export const apiService = {
     update: (id, data) => api.put(`/incidents/${id}`, data),
     delete: (id) => api.delete(`/incidents/${id}`),
     getStatusCounts: () => api.get('/incidents/status-counts'),
+    uploadImages: (files) => {
+      const formData = new FormData();
+      files.forEach(file => {
+        formData.append('images', file);
+      });
+      return api.post('/incidents/upload-images', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+    },
   },
 
   // Catcher Teams
@@ -148,3 +157,26 @@ export const apiService = {
 };
 
 export default api;
+
+/**
+ * Helper function to get full image URL
+ * Converts relative image path to full URL
+ * @param {string} imagePath - Relative image path (e.g., "/uploads/incident-images/image.jpg")
+ * @returns {string} Full image URL
+ */
+export const getImageUrl = (imagePath) => {
+  if (!imagePath) return '';
+  
+  // If already a full URL, return as is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  
+  // Remove /api from base URL for static file serving
+  // API_BASE_URL is like "http://localhost:3000/api"
+  // But images are served at "http://localhost:3000/uploads"
+  const baseUrl = API_BASE_URL.replace('/api', '');
+  
+  // If it's a relative path, prepend the base URL
+  return `${baseUrl}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+};

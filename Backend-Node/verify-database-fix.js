@@ -22,7 +22,6 @@ async function verifyStoredProcedure() {
       latitude: 14.5995,
       longitude: 120.9842,
       incident_date: new Date(),
-      priority: 'medium',
       status: 'pending',
       images: JSON.stringify(['test.jpg']),
       assigned_catcher_id: null,
@@ -34,10 +33,10 @@ async function verifyStoredProcedure() {
       pet_size: 'medium'
     };
 
-    logger.info('Testing sp_incidents_create with 18 parameters...');
+    logger.info('Testing sp_incidents_create with 17 parameters (no priority)...');
     
     const [result] = await pool.execute(
-      'CALL sp_incidents_create(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'CALL sp_incidents_create(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         testData.reporter_name,
         testData.reporter_contact,
@@ -47,7 +46,6 @@ async function verifyStoredProcedure() {
         testData.latitude,
         testData.longitude,
         testData.incident_date,
-        testData.priority,
         testData.status,
         testData.images,
         testData.assigned_catcher_id,
@@ -68,7 +66,8 @@ async function verifyStoredProcedure() {
     logger.info('Test data cleaned up');
 
     logger.success('✅ DATABASE IS CORRECTLY CONFIGURED!');
-    logger.success('✅ Stored procedures are working with 18 parameters');
+    logger.success('✅ Stored procedures are working with 17 parameters (no priority)');
+    logger.success('✅ incident_type field is working correctly');
     logger.success('✅ Your incident report submission should now work!');
     
   } catch (error) {

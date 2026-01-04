@@ -21,11 +21,7 @@ BEGIN
         SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count,
         SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_count,
         SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_count,
-        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count,
-        SUM(CASE WHEN priority = 'low' THEN 1 ELSE 0 END) as low_priority,
-        SUM(CASE WHEN priority = 'medium' THEN 1 ELSE 0 END) as medium_priority,
-        SUM(CASE WHEN priority = 'high' THEN 1 ELSE 0 END) as high_priority,
-        SUM(CASE WHEN priority = 'urgent' THEN 1 ELSE 0 END) as urgent_priority
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count
     FROM incidents;
 END$$
 
@@ -44,7 +40,6 @@ BEGIN
         ps.*,
         i.title as incident_title,
         i.location as incident_location,
-        i.priority as incident_priority,
         i.status as incident_status
     FROM patrol_schedules ps
     LEFT JOIN incidents i ON ps.incident_id = i.id
@@ -212,8 +207,7 @@ BEGIN
         DATE(incident_date) as incident_day,
         COUNT(*) as incident_count,
         SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_count,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count,
-        SUM(CASE WHEN priority = 'urgent' OR priority = 'high' THEN 1 ELSE 0 END) as high_priority_count
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count
     FROM incidents
     WHERE YEAR(incident_date) = p_year
     AND MONTH(incident_date) = p_month

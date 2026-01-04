@@ -75,7 +75,6 @@ export const testCreateIncident = async () => {
       description: 'This is a test incident created by automated testing',
       location: 'Test Location, Barangay Testing',
       status: 'pending',
-      priority: 'medium',
       reporter_name: 'Test Reporter',
       reporter_contact: '09123456789',
       incident_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
@@ -109,7 +108,6 @@ export const testUpdateIncident = async (id) => {
       description: 'This incident has been updated by automated testing',
       location: 'Updated Location',
       status: 'verified',
-      priority: 'high',
     };
     
     const response = await apiService.incidents.update(id, updateData);

@@ -28,6 +28,7 @@ const SubmitIncidentReportPage = () => {
   // Form data
   const [formData, setFormData] = useState({
     type: "",
+    reportType: "", // Maps to incident_type in backend
     location: "",
     reporterName: "",
     reporterContact: "",
@@ -53,24 +54,37 @@ const SubmitIncidentReportPage = () => {
   const fetchReports = async () => {
     try {
       const response = await apiService.incidents.getAll();
-      const transformedReports = response.data.records.map(incident => ({
-        id: `RPT-${incident.id.toString().padStart(3, '0')}`,
-        type: incident.title,
-        location: incident.location,
-        date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
-        time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
-        reporterName: incident.reporter_name,
-        reporterContact: incident.reporter_contact,
-        reporterAddress: incident.location,
-        details: incident.description,
-        animalType: extractAnimalType(incident.description),
-        animalCount: 1,
-        injuries: extractInjuries(incident.description),
-        severity: incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1),
-        status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
-        assignedTo: incident.catcher_team_name || "",
-        followUpRequired: true,
-      }));
+      const transformedReports = response.data.records.map(incident => {
+        // Format report type from database
+        const formatReportType = (type) => {
+          // Handle empty strings and null/undefined
+          if (!type || type === '') return 'Incident/Bite Report';
+          if (type === 'incident') return 'Incident/Bite Report';
+          if (type === 'stray') return 'Stray Animal Report';
+          if (type === 'lost') return 'Lost Pet Report';
+          return incident.title || 'Animal Report';
+        };
+        
+        return {
+          id: `RPT-${incident.id.toString().padStart(3, '0')}`,
+          type: formatReportType(incident.incident_type),
+          location: incident.location,
+          date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
+          time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
+          reporterName: incident.reporter_name,
+          reporterContact: incident.reporter_contact,
+          reporterAddress: incident.location,
+          details: incident.description,
+          animalType: incident.animal_type || extractAnimalType(incident.description),
+          animalCount: 1,
+          injuries: extractInjuries(incident.description),
+          severity: incident.priority ? incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1) : 'Low',
+          status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
+          assignedTo: incident.catcher_team_name || "",
+          followUpRequired: true,
+          reportType: incident.incident_type, // Keep the raw value for reference
+        };
+      });
       setReports(transformedReports);
     } catch (error) {
       console.error("Error fetching reports:", error);
@@ -80,7 +94,6 @@ const SubmitIncidentReportPage = () => {
   // Test API connection
   const testConnection = async () => {
     try {
-      console.log("🧪 Testing API connection...");
       const response = await apiService.incidents.getAll();
       setNotificationModal({
         isOpen: true,
@@ -119,10 +132,26 @@ const SubmitIncidentReportPage = () => {
   // Handle form change
   const handleChange = (e) => {
     const { name, value, type } = e.target;
-    setFormData({ 
-      ...formData, 
-      [name]: type === 'checkbox' ? e.target.checked : value 
-    });
+    
+    // Map incident type to reportType for backend
+    if (name === 'type') {
+      let mappedReportType = 'incident';
+      if (value === 'Stray Animal Report') {
+        mappedReportType = 'stray';
+      } else if (value.includes('Lost') || value.includes('Missing')) {
+        mappedReportType = 'lost';
+      }
+      setFormData({ 
+        ...formData, 
+        [name]: value,
+        reportType: mappedReportType
+      });
+    } else {
+      setFormData({ 
+        ...formData, 
+        [name]: type === 'checkbox' ? e.target.checked : value 
+      });
+    }
   };
 
 
@@ -155,6 +184,8 @@ const SubmitIncidentReportPage = () => {
         reporter_name: formData.reporterName,
         reporter_contact: formData.reporterContact,
         incident_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        incident_type: formData.reportType || 'incident', // Add report type
+        animal_type: formData.animalType ? formData.animalType.toLowerCase() : null,
       };
 
       console.log("📤 Submitting incident report...");
@@ -167,6 +198,7 @@ const SubmitIncidentReportPage = () => {
       // Reset form
       setFormData({
         type: "",
+        reportType: "",
         location: "",
         reporterName: "",
         reporterContact: "",
@@ -346,11 +378,11 @@ const SubmitIncidentReportPage = () => {
                       className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
                     >
                       <option value="">Select incident type</option>
-                      <option value="Animal Bite">Animal Bite</option>
-                      <option value="Rabies Suspected">Rabies Suspected</option>
+                      <option value="Animal Bite">Incident/Bite Report</option>
                       <option value="Stray Animal Report">Stray Animal Report</option>
+                      <option value="Lost Pet Report">Lost Pet Report</option>
                       <option value="Animal Nuisance">Animal Nuisance</option>
-                      <option value="Animal Attack">Animal Attack</option>
+                      <option value="Rabies Suspected">Rabies Suspected</option>
                       <option value="Other">Other</option>
                     </select>
                   </div>
@@ -548,6 +580,7 @@ const SubmitIncidentReportPage = () => {
                   onClick={() => {
                     setFormData({
                       type: "",
+                      reportType: "",
                       location: "",
                       reporterName: "",
                       reporterContact: "",

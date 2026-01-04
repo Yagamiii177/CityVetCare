@@ -3,7 +3,7 @@ import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
 import NewReportModal from "../../components/ReportManagement/NewReportModal";
 import { NotificationModal } from "../../components/ReportManagement/Modal";
-import { apiService } from "../../utils/api";
+import { apiService, getImageUrl } from "../../utils/api";
 import FrontendLogger from "../../utils/logger";
 
 const logger = new FrontendLogger('INCIDENT-REPORT');
@@ -100,17 +100,7 @@ const IncidentReportingManagement = () => {
     };
   }, [searchTerm]);
 
-  // Helper functions to extract data from description
-  const extractAnimalType = useCallback((description) => {
-    if (!description) return "Unknown";
-    const lowerDesc = description.toLowerCase();
-    if (lowerDesc.includes('dog')) return 'Dog';
-    if (lowerDesc.includes('cat')) return 'Cat';
-    if (lowerDesc.includes('bird')) return 'Bird';
-    if (lowerDesc.includes('reptile') || lowerDesc.includes('snake')) return 'Reptile';
-    return 'Unknown';
-  }, []);
-
+  // Helper function to extract animal count from description
   const extractAnimalCount = useCallback((description) => {
     if (!description) return 1;
     const match = description.match(/(\d+)\s*(animal|dog|cat|bird)/i);
@@ -141,6 +131,8 @@ const IncidentReportingManagement = () => {
 
     // Format report type from database
     const formatReportType = (type) => {
+      // Handle empty strings and null/undefined
+      if (!type || type === '') return 'Incident/Bite Report';
       if (type === 'incident') return 'Incident/Bite Report';
       if (type === 'stray') return 'Stray Animal Report';
       if (type === 'lost') return 'Lost Pet Report';
@@ -156,8 +148,8 @@ const IncidentReportingManagement = () => {
       date,
       time,
       status: capitalizeStatus(incident.status || 'pending'),
-      priority: capitalizeStatus(incident.priority || 'medium'),
       description: incident.description || 'No description available',
+      images: incident.images || [], // Add images field
       // NEW: Use actual database fields instead of parsing description
       reportType: formatReportType(incident.incident_type),
       animalType: incident.animal_type ? capitalizeStatus(incident.animal_type) : 'Unknown',
@@ -243,12 +235,8 @@ const IncidentReportingManagement = () => {
       
       const activeReports = response.data.records || [];
       
-      console.log("📊 All incidents (including all statuses):", activeReports.length);
-      
       // Transform backend data to frontend format
       const transformedReports = activeReports.map(transformIncident);
-
-      console.log("✅ Reports transformed and ready:", transformedReports.length);
       
       if (isMountedRef.current) {
         setReports(transformedReports);
@@ -318,17 +306,13 @@ const IncidentReportingManagement = () => {
         latitude: selectedReport.latitude || null,
         longitude: selectedReport.longitude || null,
         status: newStatus.toLowerCase().replace(' ', '_'),
-        priority: selectedReport.priority.toLowerCase(),
         assigned_catcher_id: null,
         reporter_name: selectedReport.reporter,
         reporter_contact: selectedReport.reporterContact,
       };
       
-      console.log("📦 Update data:", updateData);
-      
       // Update in backend
-      const response = await apiService.incidents.update(selectedReport.id, updateData);
-      console.log("✅ Backend updated:", response.data);
+      await apiService.incidents.update(selectedReport.id, updateData);
       
       if (!isMountedRef.current) return;
       
@@ -388,7 +372,6 @@ const IncidentReportingManagement = () => {
   // Fetch schedules for a specific incident
   const fetchReportSchedules = useCallback(async (incidentId) => {
     if (!incidentId) {
-      console.warn("No incident ID provided for fetching schedules");
       setReportSchedules([]);
       return;
     }
@@ -430,6 +413,26 @@ const IncidentReportingManagement = () => {
     try {
       logger.debug('Creating new incident', newReportData);
       
+      // Upload images first if there are any
+      let uploadedImageUrls = [];
+      if (newReportData.imageFiles && newReportData.imageFiles.length > 0) {
+        logger.debug('Uploading images...', { count: newReportData.imageFiles.length });
+        try {
+          const uploadResponse = await apiService.incidents.uploadImages(newReportData.imageFiles);
+          uploadedImageUrls = uploadResponse.data.images || [];
+          logger.debug('Images uploaded successfully', uploadedImageUrls);
+        } catch (uploadError) {
+          logger.error('Image upload failed', uploadError);
+          setNotificationModal({
+            isOpen: true,
+            title: 'Image Upload Error',
+            message: `Failed to upload images: ${uploadError.response?.data?.message || uploadError.message}\n\nPlease try again.`,
+            type: 'error'
+          });
+          return;
+        }
+      }
+      
       // The data is already in the correct format from NewReportModal
       // Just ensure we have all required backend fields
       const incidentData = {
@@ -438,7 +441,6 @@ const IncidentReportingManagement = () => {
         description: newReportData.description || 'Report submitted from admin portal',
         location: newReportData.location || 'Location to be determined',
         status: 'pending',
-        priority: 'medium',
         reporter_name: newReportData.reporter_name || 'Admin Portal',
         reporter_contact: newReportData.reporter_contact || newReportData.contactNumber || 'N/A',
         incident_date: newReportData.incident_date,
@@ -448,7 +450,7 @@ const IncidentReportingManagement = () => {
         animal_type: newReportData.animal_type,
         pet_gender: newReportData.pet_gender,
         pet_size: newReportData.pet_size,
-        images: newReportData.images || [],
+        images: uploadedImageUrls, // Use uploaded image URLs
         latitude: newReportData.latitude || null,
         longitude: newReportData.longitude || null,
       };
@@ -503,19 +505,6 @@ const IncidentReportingManagement = () => {
       default:
         return <ClockIcon className="h-4 w-4 text-gray-500" />;
     }
-  }, []);
-
-  const getPriorityBadge = useCallback((priority) => {
-    const styles = {
-      High: "bg-red-100 text-red-800",
-      Medium: "bg-yellow-100 text-yellow-800",
-      Low: "bg-green-100 text-green-800",
-    };
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[priority] || styles.Medium}`}>
-        {priority}
-      </span>
-    );
   }, []);
 
   const getStatusBadge = useCallback((status) => {
@@ -727,7 +716,6 @@ const IncidentReportingManagement = () => {
                         <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Type & Animal</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Location</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Date/Time</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Priority</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Actions</th>
                       </tr>
@@ -753,7 +741,6 @@ const IncidentReportingManagement = () => {
                             </td>
                             <td className="px-6 py-4"><p className="text-sm text-gray-900 max-w-xs truncate" title={report.address}>{report.address}</p></td>
                             <td className="px-6 py-4"><div><p className="text-sm text-gray-900">{report.date}</p><p className="text-xs text-gray-500">{report.time}</p></div></td>
-                            <td className="px-6 py-4">{getPriorityBadge(report.priority)}</td>
                             <td className="px-6 py-4">{getStatusBadge(report.status)}</td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
@@ -778,7 +765,7 @@ const IncidentReportingManagement = () => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={8} className="px-6 py-8 text-center">
+                          <td colSpan={7} className="px-6 py-8 text-center">
                             <div className="text-gray-500">
                               <ClipboardDocumentListIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                               <p>No reports found matching your criteria</p>
@@ -881,184 +868,334 @@ const IncidentReportingManagement = () => {
                 )}
               </div>
 
-              {/* Report Details Modal */}
+              {/* Enhanced Report Details Modal - Matching MonitoringIncidents */}
               {selectedReport && (
-                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-                  <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
-                    <button 
-                      className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors" 
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-y-auto">
+                  <div className="bg-white w-full max-w-4xl my-8 rounded-xl shadow-2xl relative animate-fadeIn">
+                    {/* Close Button - Fixed at top */}
+                    <button
+                      className="absolute right-4 top-4 z-10 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 transition-colors border border-gray-200"
                       onClick={handleCloseReportDetails}
                       aria-label="Close modal"
                     >
-                      <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
+                      <XMarkIcon className="h-5 w-5 text-gray-700" />
                     </button>
 
-                    <div className="p-6">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2 rounded-full bg-[#FA8630]/10"><ClipboardDocumentListIcon className="h-6 w-6 text-[#FA8630]" /></div>
-                        <div>
-                          <h2 className="text-xl font-bold text-gray-800">Incident Report #{selectedReport.id}</h2>
-                          <p className="text-gray-600">{selectedReport.type}</p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <h3 className="font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
-                          <div className="flex items-center gap-3">
-                            <UserIcon className="h-5 w-5 text-gray-400" />
+                    {/* Scrollable Content */}
+                    <div className="max-h-[85vh] overflow-y-auto">
+                      <div className="p-8 space-y-6">
+                        {/* Header Section */}
+                        <div className="border-b border-gray-200 pb-4">
+                          <div className="flex items-start justify-between pr-12">
                             <div>
-                              <p className="text-sm font-medium text-gray-900">{selectedReport.reporter}</p>
-                              <p className="text-xs text-gray-500">{selectedReport.reporterContact}</p>
+                              <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedReport.type}</h2>
+                              <p className="text-gray-500">Incident ID: #{selectedReport.id}</p>
+                            </div>
+                            <div>
+                              {getStatusBadge(selectedReport.status)}
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{selectedReport.date}</p>
-                              <p className="text-xs text-gray-500">{selectedReport.time}</p>
+                        </div>
+
+                        {/* Images Section */}
+                        {selectedReport.images && selectedReport.images.length > 0 && (
+                          <div className="space-y-3">
+                            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                              <svg className="h-5 w-5 text-[#FA8630]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              Report Images ({selectedReport.images.length})
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                              {selectedReport.images.map((image, index) => (
+                                <div key={index} className="relative group">
+                                  <img
+                                    src={getImageUrl(image)}
+                                    alt={`Incident ${index + 1}`}
+                                    className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 hover:border-[#FA8630] transition-all cursor-pointer shadow-sm"
+                                    onClick={() => window.open(getImageUrl(image), '_blank')}
+                                    onError={(e) => {
+                                      e.target.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+                                    }}
+                                  />
+                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                    <span className="text-white text-sm font-medium">Click to enlarge</span>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <MapPinIcon className="h-5 w-5 text-gray-400" />
-                            <div><p className="text-sm font-medium text-gray-900">{selectedReport.address}</p></div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-4">
-                          <h3 className="font-semibold text-gray-800 border-b pb-2">Incident Details</h3>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div><p className="text-xs text-gray-500">Status</p><div className="mt-1">{getStatusBadge(selectedReport.status)}</div></div>
-                            <div><p className="text-xs text-gray-500">Priority</p><div className="mt-1">{getPriorityBadge(selectedReport.priority)}</div></div>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Report Type</p>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.reportType || 'Animal Report'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Assigned Team</p>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.assignedTeam || "Not assigned"}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Follow-up Required</p>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.followUpRequired ? "Yes" : "No"}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Pet/Animal Information Section */}
-                      <div className="mt-6 bg-orange-50 p-4 rounded-lg border border-orange-100">
-                        <h3 className="font-semibold text-gray-800 border-b border-orange-200 pb-2 mb-4">Pet/Animal Information</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                          <div>
-                            <p className="text-xs text-gray-600">Type of Animal</p>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalType || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-600">Breed</p>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.petBreed || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-600">Color</p>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.petColor || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-600">Gender</p>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.petGender || 'Unknown'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-600">Size</p>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.petSize || 'Unknown'}</p>
-                          </div>
-                          {selectedReport.animalCount && (
-                            <div>
-                              <p className="text-xs text-gray-600">Animal Count</p>
-                              <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalCount} animal(s)</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="mt-6">
-                        <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Description</h3>
-                        <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">{selectedReport.description}</p>
-                      </div>
-
-                      {selectedReport.injuries && selectedReport.injuries !== "None" && (
-                        <div className="mt-4">
-                          <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Injuries Reported</h3>
-                          <p className="text-gray-700 bg-red-50 p-4 rounded-lg border border-red-100">{selectedReport.injuries}</p>
-                        </div>
-                      )}
-
-                      {/* Patrol Schedule Table */}
-                      <div className="mt-6">
-                        <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Patrol Schedule History</h3>
-                        {reportSchedules.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Assigned Staff</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Schedule Date</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Status</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Created</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-200">
-                                {reportSchedules.map((schedule) => (
-                                  <tr key={schedule.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3">
-                                      <div className="text-sm text-gray-900">
-                                        {schedule.assigned_staff_names || "No staff assigned"}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <div className="text-sm text-gray-900">
-                                        {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleString() : "N/A"}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                        schedule.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                        schedule.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-blue-100 text-blue-800'
-                                      }`}>
-                                        {schedule.status.replace('_', ' ')}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-700">
-                                      {new Date(schedule.created_at).toLocaleString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      })}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <div className="text-center py-6 bg-gray-50 rounded-lg">
-                            <CalendarIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                            <p className="text-sm text-gray-600">No patrol schedules yet</p>
-                            <p className="text-xs text-gray-500 mt-1">Schedules will appear here when created</p>
                           </div>
                         )}
-                      </div>
 
-                      <div className="flex gap-3 mt-6 pt-6 border-t border-gray-200">
-                        <button 
-                          onClick={() => setIsStatusModalOpen(true)}
-                          className="flex-1 bg-[#FA8630] text-white py-2 px-4 rounded-lg hover:bg-[#E87928] transition-colors"
-                        >
-                          Update Status
-                        </button>
-                        <button className="flex-1 bg-white text-gray-700 py-2 px-4 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">Assign Team</button>
-                        <button className="flex-1 bg-white text-gray-700 py-2 px-4 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">Add Note</button>
+                        {/* Main Content Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* Reporter Information */}
+                          <div className="bg-gradient-to-br from-blue-50 to-white p-5 rounded-xl border border-blue-100 shadow-sm">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                              <UserIcon className="h-5 w-5 text-blue-600" />
+                              Reporter Information
+                            </h3>
+                            
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                  Reporter Name
+                                </label>
+                                <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                                  <span className="text-gray-900 font-medium">{selectedReport.reporter}</span>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                  Contact Number
+                                </label>
+                                <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                  <span className="text-gray-900 font-medium">{selectedReport.reporterContact}</span>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                    Date
+                                  </label>
+                                  <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                                    <CalendarDaysIcon className="h-4 w-4 text-gray-400" />
+                                    <span className="text-gray-900 font-medium text-sm">{selectedReport.date}</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                    Time
+                                  </label>
+                                  <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                    <span className="text-gray-900 font-medium text-sm">{selectedReport.time}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Incident Information */}
+                          <div className="bg-gradient-to-br from-orange-50 to-white p-5 rounded-xl border border-orange-100 shadow-sm">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                              <ExclamationTriangleIcon className="h-5 w-5 text-[#FA8630]" />
+                              Incident Information
+                            </h3>
+                            
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                  Report Type
+                                </label>
+                                <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                  <span className="text-gray-900 font-medium">{selectedReport.reportType || 'Animal Report'}</span>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                  Current Status
+                                </label>
+                                <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                  {getStatusBadge(selectedReport.status)}
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                  Assigned Team
+                                </label>
+                                <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                  <span className="text-gray-900 font-medium">{selectedReport.assignedTeam || 'Not assigned'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Animal Details Section */}
+                        <div className="bg-gradient-to-br from-green-50 to-white p-5 rounded-xl border border-green-100 shadow-sm">
+                          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                            <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Animal Details
+                          </h3>
+                          
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Animal Type
+                              </label>
+                              <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                <span className="text-gray-900 font-medium">{selectedReport.animalType || 'Unknown'}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Breed
+                              </label>
+                              <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                <span className="text-gray-900 font-medium">{selectedReport.petBreed}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Color
+                              </label>
+                              <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                <span className="text-gray-900 font-medium">{selectedReport.petColor}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Gender
+                              </label>
+                              <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                <span className="text-gray-900 font-medium">{selectedReport.petGender}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Size
+                              </label>
+                              <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                <span className="text-gray-900 font-medium">{selectedReport.petSize}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Count
+                              </label>
+                              <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                <span className="text-gray-900 font-medium">{selectedReport.animalCount || 1} animal(s)</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Location Section */}
+                        <div className="space-y-3">
+                          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                            <MapPinIcon className="h-5 w-5 text-red-600" />
+                            Location Details
+                          </h3>
+                          <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <MapPinIcon className="h-5 w-5 text-red-500 mt-1 flex-shrink-0" />
+                            <div>
+                              <p className="text-gray-900 font-medium">{selectedReport.address}</p>
+                              {selectedReport.latitude && selectedReport.longitude && (
+                                <p className="text-sm text-gray-500 mt-1">Coordinates: {selectedReport.latitude}, {selectedReport.longitude}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Description Section */}
+                        <div className="space-y-3">
+                          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                            <svg className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Incident Description
+                          </h3>
+                          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <p className="text-gray-800 leading-relaxed">{selectedReport.description}</p>
+                          </div>
+                        </div>
+
+                        {/* Injuries Section */}
+                        {selectedReport.injuries && selectedReport.injuries !== "None" && (
+                          <div className="space-y-3">
+                            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                              <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
+                              Injuries/Concerns
+                            </h3>
+                            <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                              <p className="text-gray-800 leading-relaxed">{selectedReport.injuries}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Patrol Schedule Table */}
+                        {reportSchedules.length > 0 && (
+                          <div className="space-y-3">
+                            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                              <ClockIcon className="h-5 w-5 text-blue-600" />
+                              Patrol Schedule History
+                            </h3>
+                            <div className="overflow-hidden rounded-lg border border-gray-300">
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-100">
+                                  <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Assigned Staff</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Schedule Date</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Created</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 bg-white">
+                                  {reportSchedules.map((schedule) => (
+                                    <tr key={schedule.id}>
+                                      <td className="px-4 py-3 text-gray-800">
+                                        {schedule.assigned_staff_names || "No staff assigned"}
+                                      </td>
+                                      <td className="px-4 py-3 text-gray-800">
+                                        {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleString() : "N/A"}
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                          schedule.status === 'completed' ? 'bg-green-100 text-green-800 border border-green-200' :
+                                          schedule.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                                          'bg-blue-100 text-blue-800 border border-blue-200'
+                                        }`}>
+                                          {schedule.status.replace('_', ' ').toUpperCase()}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-gray-800">
+                                        {new Date(schedule.created_at).toLocaleString('en-US', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          year: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 pt-4 border-t border-gray-200">
+                          <button
+                            onClick={() => setIsStatusModalOpen(true)}
+                            className="flex-1 bg-[#FA8630] text-white px-6 py-3 rounded-lg hover:bg-[#E87928] transition-colors font-medium shadow-sm"
+                          >
+                            Update Status
+                          </button>
+                          <button
+                            className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+                          >
+                            Assign Team
+                          </button>
+                          <button
+                            onClick={handleCloseReportDetails}
+                            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium shadow-sm"
+                          >
+                            Close
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

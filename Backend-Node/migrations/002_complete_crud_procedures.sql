@@ -16,7 +16,7 @@ DELIMITER $$
 DROP PROCEDURE IF EXISTS sp_incidents_get_all$$
 CREATE PROCEDURE sp_incidents_get_all(
     IN p_status VARCHAR(50),
-    IN p_priority VARCHAR(50),
+    IN p_incident_type VARCHAR(50),
     IN p_search VARCHAR(255),
     IN p_limit INT,
     IN p_offset INT
@@ -32,7 +32,7 @@ BEGIN
     FROM incidents i
     LEFT JOIN catcher_teams ct ON i.assigned_catcher_id = ct.id
     WHERE (p_status IS NULL OR i.status = p_status)
-    AND (p_priority IS NULL OR i.priority = p_priority)
+    AND (p_incident_type IS NULL OR i.incident_type = p_incident_type)
     AND (p_search IS NULL OR p_search = '' OR
          i.title LIKE CONCAT('%', p_search, '%') OR
          i.description LIKE CONCAT('%', p_search, '%') OR
@@ -72,21 +72,28 @@ CREATE PROCEDURE sp_incidents_create(
     IN p_latitude DECIMAL(10,8),
     IN p_longitude DECIMAL(11,8),
     IN p_incident_date DATETIME,
-    IN p_priority VARCHAR(50),
     IN p_status VARCHAR(50),
     IN p_images JSON,
-    IN p_assigned_catcher_id INT
+    IN p_assigned_catcher_id INT,
+    IN p_incident_type VARCHAR(50),
+    IN p_pet_color VARCHAR(100),
+    IN p_pet_breed VARCHAR(100),
+    IN p_animal_type VARCHAR(50),
+    IN p_pet_gender VARCHAR(20),
+    IN p_pet_size VARCHAR(20)
 )
 BEGIN
     INSERT INTO incidents (
         reporter_name, reporter_contact, title, description,
         location, latitude, longitude, incident_date,
-        priority, status, images, assigned_catcher_id, created_at
+        status, images, assigned_catcher_id, created_at,
+        incident_type, pet_color, pet_breed, animal_type, pet_gender, pet_size
     ) VALUES (
         p_reporter_name, p_reporter_contact, p_title, p_description,
         p_location, p_latitude, p_longitude, COALESCE(p_incident_date, NOW()),
-        p_priority, COALESCE(p_status, 'pending'), p_images, 
-        p_assigned_catcher_id, NOW()
+        COALESCE(p_status, 'pending'), p_images, 
+        p_assigned_catcher_id, NOW(),
+        p_incident_type, p_pet_color, p_pet_breed, p_animal_type, p_pet_gender, p_pet_size
     );
     
     SELECT LAST_INSERT_ID() as id;
@@ -106,10 +113,15 @@ CREATE PROCEDURE sp_incidents_update(
     IN p_latitude DECIMAL(10,8),
     IN p_longitude DECIMAL(11,8),
     IN p_incident_date DATETIME,
-    IN p_priority VARCHAR(50),
     IN p_status VARCHAR(50),
     IN p_images JSON,
-    IN p_assigned_catcher_id INT
+    IN p_assigned_catcher_id INT,
+    IN p_incident_type VARCHAR(50),
+    IN p_pet_color VARCHAR(100),
+    IN p_pet_breed VARCHAR(100),
+    IN p_animal_type VARCHAR(50),
+    IN p_pet_gender VARCHAR(20),
+    IN p_pet_size VARCHAR(20)
 )
 BEGIN
     UPDATE incidents SET
@@ -121,10 +133,15 @@ BEGIN
         latitude = COALESCE(p_latitude, latitude),
         longitude = COALESCE(p_longitude, longitude),
         incident_date = COALESCE(p_incident_date, incident_date),
-        priority = COALESCE(p_priority, priority),
         status = COALESCE(p_status, status),
         images = COALESCE(p_images, images),
         assigned_catcher_id = COALESCE(p_assigned_catcher_id, assigned_catcher_id),
+        incident_type = COALESCE(p_incident_type, incident_type),
+        pet_color = COALESCE(p_pet_color, pet_color),
+        pet_breed = COALESCE(p_pet_breed, pet_breed),
+        animal_type = COALESCE(p_animal_type, animal_type),
+        pet_gender = COALESCE(p_pet_gender, pet_gender),
+        pet_size = COALESCE(p_pet_size, pet_size),
         updated_at = NOW()
     WHERE id = p_id;
     
@@ -348,7 +365,6 @@ BEGIN
         s.*,
         i.title as incident_title,
         i.location as incident_location,
-        i.priority as incident_priority,
         ct.team_name as catcher_team_name
     FROM schedules s
     LEFT JOIN incidents i ON s.incident_id = i.id
@@ -369,7 +385,6 @@ BEGIN
         s.*,
         i.title as incident_title,
         i.location as incident_location,
-        i.priority as incident_priority,
         i.status as incident_status,
         ct.team_name as catcher_team_name
     FROM schedules s
@@ -482,12 +497,11 @@ BEGIN
     SELECT 
         COUNT(*) as total_incidents,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_incidents,
-        SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as approved_incidents,
+        SUM(CASE WHEN status = 'approved' OR status = 'verified' THEN 1 ELSE 0 END) as approved_incidents,
+        SUM(CASE WHEN status = 'verified' OR status = 'approved' THEN 1 ELSE 0 END) as verified_incidents,
         SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_incidents,
         SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_incidents,
-        SUM(CASE WHEN status = 'rejected' OR status = 'cancelled' THEN 1 ELSE 0 END) as rejected_incidents,
-        SUM(CASE WHEN priority = 'urgent' THEN 1 ELSE 0 END) as urgent_priority_count,
-        SUM(CASE WHEN priority = 'high' THEN 1 ELSE 0 END) as high_priority_count
+        SUM(CASE WHEN status = 'rejected' OR status = 'cancelled' THEN 1 ELSE 0 END) as rejected_incidents
     FROM incidents;
     
     -- Catcher teams statistics

@@ -39,6 +39,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
     petGender: "",
     petSize: "",
     images: [],
+    imageFiles: [], // Store actual File objects
   });
 
   // Handle form change
@@ -65,6 +66,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
     setFormData({
       ...formData,
       images: [...formData.images, ...imageUrls],
+      imageFiles: [...formData.imageFiles, ...files], // Store actual File objects
     });
   };
 
@@ -108,7 +110,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       animal_type: formData.animalType,
       pet_gender: formData.petGender,
       pet_size: formData.petSize,
-      images: formData.images,
+      imageFiles: formData.imageFiles, // Pass File objects instead of blob URLs
       status: "pending",
       reporter_name: "Admin Portal",
       // Also include camelCase for frontend compatibility
@@ -142,6 +144,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       petGender: "",
       petSize: "",
       images: [],
+      imageFiles: [],
     });
 
     // Close modal
@@ -164,6 +167,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       petGender: "",
       petSize: "",
       images: [],
+      imageFiles: [],
     });
     onClose();
   };

@@ -11,14 +11,6 @@ export const INCIDENT_STATUS = {
   RESOLVED: 'Resolved',
 };
 
-// Incident Priority
-export const INCIDENT_PRIORITY = {
-  LOW: 'Low',
-  MEDIUM: 'Medium',
-  HIGH: 'High',
-  CRITICAL: 'Critical',
-};
-
 // Incident Types
 export const INCIDENT_TYPES = {
   BITE: 'Bite Incident',
@@ -59,26 +51,6 @@ export const STATUS_COLORS = {
     bg: 'bg-green-100',
     text: 'text-green-800',
     icon: 'text-green-500',
-  },
-};
-
-// Priority Colors for UI
-export const PRIORITY_COLORS = {
-  [INCIDENT_PRIORITY.LOW]: {
-    bg: 'bg-green-100',
-    text: 'text-green-800',
-  },
-  [INCIDENT_PRIORITY.MEDIUM]: {
-    bg: 'bg-yellow-100',
-    text: 'text-yellow-800',
-  },
-  [INCIDENT_PRIORITY.HIGH]: {
-    bg: 'bg-red-100',
-    text: 'text-red-800',
-  },
-  [INCIDENT_PRIORITY.CRITICAL]: {
-    bg: 'bg-purple-100',
-    text: 'text-purple-800',
   },
 };
 

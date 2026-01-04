@@ -45,7 +45,6 @@ const ReportHistory = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(intervalId);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchHistoryReports = async () => {

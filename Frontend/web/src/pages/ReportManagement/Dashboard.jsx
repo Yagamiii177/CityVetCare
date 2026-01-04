@@ -146,13 +146,14 @@ const IncidentDashboard = () => {
     return months;
   };
 
-  // Generate category distribution
+  // Generate category distribution by incident type
   const generateCategoryData = (incidents) => {
     const categories = {};
     
     incidents.forEach(inc => {
-      const priority = inc.priority || 'Medium';
-      categories[priority] = (categories[priority] || 0) + 1;
+      const type = inc.incident_type || 'other';
+      const displayType = type.charAt(0).toUpperCase() + type.slice(1);
+      categories[displayType] = (categories[displayType] || 0) + 1;
     });
 
     return Object.entries(categories).map(([name, value]) => ({
@@ -363,14 +364,14 @@ const IncidentDashboard = () => {
 
           {/* Category and Status Analytics */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Priority Distribution */}
+            {/* Incident Type Distribution */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-800">
-                    Priority Distribution
+                    Incident Type Distribution
                   </h2>
-                  <p className="text-sm text-gray-500 mt-1">Incident severity breakdown</p>
+                  <p className="text-sm text-gray-500 mt-1">Breakdown by incident category</p>
                 </div>
                 <ExclamationTriangleIcon className="h-6 w-6 text-[#FA8630]" />
               </div>

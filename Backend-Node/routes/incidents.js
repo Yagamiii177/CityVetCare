@@ -1,6 +1,7 @@
 import express from 'express';
 import Incident from '../models/Incident.js';
 import Logger from '../utils/logger.js';
+import { upload } from '../config/multer.js';
 
 const router = express.Router();
 const logger = new Logger('INCIDENTS');
@@ -8,7 +9,7 @@ const logger = new Logger('INCIDENTS');
 /**
  * GET /api/incidents
  * Get all incidents with optional filters, search, and pagination
- * Query params: page, limit, search, status, priority
+ * Query params: page, limit, search, status, incident_type
  */
 router.get('/', async (req, res) => {
   try {
@@ -20,7 +21,7 @@ router.get('/', async (req, res) => {
     // Search and filter params
     const filters = {
       status: req.query.status,
-      priority: req.query.priority,
+      incident_type: req.query.incident_type,
       search: req.query.search, // This will search across multiple fields
       limit: limit,
       offset: offset
@@ -33,7 +34,7 @@ router.get('/', async (req, res) => {
     // Get total count for pagination
     const allIncidents = await Incident.getAll({ 
       status: req.query.status,
-      priority: req.query.priority,
+      incident_type: req.query.incident_type,
       search: req.query.search
     });
     const total = allIncidents.length;
@@ -114,6 +115,77 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
+ * POST /api/incidents/upload-images
+ * Upload images for incident report
+ * This endpoint should be called BEFORE creating the incident to get image URLs
+ */
+router.post('/upload-images', (req, res) => {
+  upload.array('images', 10)(req, res, (err) => {
+    if (err) {
+      // Handle multer errors
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        logger.error('File too large', { limit: '10MB' });
+        return res.status(400).json({
+          success: false,
+          error: true,
+          message: 'Image file is too large. Maximum size is 10MB per image.',
+          code: 'FILE_TOO_LARGE'
+        });
+      }
+      
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({
+          success: false,
+          error: true,
+          message: 'Too many images. Maximum is 10 images per report.',
+          code: 'TOO_MANY_FILES'
+        });
+      }
+
+      logger.error('Upload error', err);
+      return res.status(500).json({
+        success: false,
+        error: true,
+        message: err.message || 'Failed to upload images',
+        details: err.toString()
+      });
+    }
+
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: true,
+          message: 'No images uploaded'
+        });
+      }
+
+      // Generate URLs for uploaded images
+      const imageUrls = req.files.map(file => {
+        return `/uploads/incident-images/${file.filename}`;
+      });
+
+      logger.success('Images uploaded successfully', { count: imageUrls.length });
+
+      res.json({
+        success: true,
+        message: 'Images uploaded successfully',
+        images: imageUrls,
+        count: imageUrls.length
+      });
+    } catch (error) {
+      logger.error('Failed to process uploaded images', error);
+      res.status(500).json({
+        success: false,
+        error: true,
+        message: 'Failed to process uploaded images',
+        details: error.message
+      });
+    }
+  });
+});
+
+/**
  * POST /api/incidents
  * Create new incident
  */
@@ -121,14 +193,19 @@ router.post('/', async (req, res) => {
   try {
     logger.debug('Creating new incident', req.body);
     
+    // Clean incident_type - convert empty string to null, then default to 'incident'
+    let incidentType = req.body.incident_type || req.body.reportType || null;
+    if (incidentType === '') incidentType = null;
+    if (!incidentType) incidentType = 'incident';
+    
     // Generate title from incident_type if not provided
     let title = req.body.title;
-    if (!title && req.body.incident_type) {
-      if (req.body.incident_type === 'incident') {
+    if (!title && incidentType) {
+      if (incidentType === 'incident') {
         title = 'Incident/Bite Report';
-      } else if (req.body.incident_type === 'stray') {
+      } else if (incidentType === 'stray') {
         title = 'Stray Animal Report';
-      } else if (req.body.incident_type === 'lost') {
+      } else if (incidentType === 'lost') {
         title = 'Lost Pet Report';
       } else {
         title = 'Animal Report';
@@ -143,10 +220,11 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Add title to request body
+    // Add title and cleaned incident_type to request body
     const incidentData = {
       ...req.body,
-      title: title
+      title: title,
+      incident_type: incidentType
     };
 
     const incident = await Incident.create(incidentData);

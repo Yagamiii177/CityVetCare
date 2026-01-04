@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
-import { apiService } from "../../utils/api";
+import { apiService, getImageUrl } from "../../utils/api";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -99,6 +99,7 @@ const IncidentMonitoring = () => {
               description: incident.description,
               reporter: incident.reporter_name || 'Anonymous',
               contact: incident.reporter_contact || 'No contact',
+              images: incident.images || [],
               // NEW: Mobile form fields
               reportType: incident.incident_type,
               animalType: incident.animal_type ? (incident.animal_type.charAt(0).toUpperCase() + incident.animal_type.slice(1)) : 'Unknown',
@@ -183,7 +184,7 @@ const IncidentMonitoring = () => {
           map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 15 });
         }
       }
-    }, [filteredReports, map]);
+    }, [map]); // filteredReports removed - it's calculated from reports which triggers re-renders
 
     return null;
   };
@@ -402,142 +403,256 @@ const IncidentMonitoring = () => {
         </div>
       </main>
 
-      {/* Simple Detail Modal */}
+      {/* Enhanced Detail Modal */}
       {selectedReport && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-4xl my-8 rounded-xl shadow-2xl relative animate-fadeIn">
+            {/* Close Button - Fixed at top */}
             <button
-              className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+              className="absolute right-4 top-4 z-10 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 transition-colors border border-gray-200"
               onClick={() => setSelectedReport(null)}
+              aria-label="Close modal"
             >
-              <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
+              <XMarkIcon className="h-5 w-5 text-gray-700" />
             </button>
 
-            <div className="p-6 space-y-6">
-              {/* Header */}
-              <div>
-                <h2 className="text-2xl font-bold text-gray-800">{selectedReport.type}</h2>
-                <p className="text-gray-600">Incident Report Details</p>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Reporter Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
-                    Reporter Information
-                  </h3>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      Reporter Name
-                    </label>
-                    <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                      <UserIcon className="h-5 w-5 text-gray-400" />
-                      <span className="text-gray-800">{selectedReport.reporter}</span>
+            {/* Scrollable Content */}
+            <div className="max-h-[85vh] overflow-y-auto">
+              <div className="p-8 space-y-6">
+                {/* Header Section */}
+                <div className="border-b border-gray-200 pb-4">
+                  <div className="flex items-start justify-between pr-12">
+                    <div>
+                      <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedReport.type}</h2>
+                      <p className="text-gray-500">Incident ID: #{selectedReport.id}</p>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      Contact Number
-                    </label>
-                    <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                      <span className="text-gray-800">{selectedReport.contact}</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      Report Date
-                    </label>
-                    <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                      <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
-                      <span className="text-gray-800">{selectedReport.date}</span>
+                    <div>
+                      {getStatusBadge(selectedReport.status)}
                     </div>
                   </div>
                 </div>
 
-                {/* Incident Details */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
-                    Incident Information
+                {/* Images Section */}
+                {selectedReport.images && selectedReport.images.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <svg className="h-5 w-5 text-[#FA8630]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Report Images ({selectedReport.images.length})
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {selectedReport.images.map((image, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={getImageUrl(image)}
+                            alt={`Incident ${index + 1}`}
+                            className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 hover:border-[#FA8630] transition-all cursor-pointer shadow-sm"
+                            onClick={() => window.open(getImageUrl(image), '_blank')}
+                            onError={(e) => {
+                              e.target.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                            <span className="text-white text-sm font-medium">Click to enlarge</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Reporter Information */}
+                  <div className="bg-gradient-to-br from-blue-50 to-white p-5 rounded-xl border border-blue-100 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <UserIcon className="h-5 w-5 text-blue-600" />
+                      Reporter Information
+                    </h3>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                          Reporter Name
+                        </label>
+                        <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                          <span className="text-gray-900 font-medium">{selectedReport.reporter}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                          Contact Number
+                        </label>
+                        <div className="p-3 bg-white rounded-lg border border-gray-200">
+                          <span className="text-gray-900 font-medium">{selectedReport.contact}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Date
+                          </label>
+                          <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                            <CalendarDaysIcon className="h-4 w-4 text-gray-400" />
+                            <span className="text-gray-900 font-medium text-sm">{selectedReport.date}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Time
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium text-sm">{selectedReport.time}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Incident Information */}
+                  <div className="bg-gradient-to-br from-orange-50 to-white p-5 rounded-xl border border-orange-100 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <ExclamationTriangleIcon className="h-5 w-5 text-[#FA8630]" />
+                      Incident Information
+                    </h3>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                          Report Type
+                        </label>
+                        <div className="p-3 bg-white rounded-lg border border-gray-200">
+                          <span className="text-gray-900 font-medium">{selectedReport.reportType || 'Animal Report'}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                          Current Status
+                        </label>
+                        <div className="p-3 bg-white rounded-lg border border-gray-200">
+                          {getStatusBadge(selectedReport.status)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Animal Details Section */}
+                <div className="bg-gradient-to-br from-green-50 to-white p-5 rounded-xl border border-green-100 shadow-sm">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Animal Details
                   </h3>
                   
-                  <div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">
-                        Status
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                        Animal Type
                       </label>
-                      <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                        {getStatusBadge(selectedReport.status)}
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-gray-900 font-medium">{selectedReport.animalType || 'Unknown'}</span>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">
-                        Status
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                        Breed
                       </label>
-                      <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                        {getStatusBadge(selectedReport.status)}
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-gray-900 font-medium">{selectedReport.petBreed}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                        Color
+                      </label>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-gray-900 font-medium">{selectedReport.petColor}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                        Gender
+                      </label>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-gray-900 font-medium">{selectedReport.petGender}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                        Size
+                      </label>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-gray-900 font-medium">{selectedReport.petSize}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                        Count
+                      </label>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-gray-900 font-medium">{selectedReport.animalCount || 1} animal(s)</span>
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      Animal Type
-                    </label>
-                    <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                      <span className="text-gray-800">
-                        {selectedReport.animalType || 'Unknown'}
-                        {selectedReport.petBreed && selectedReport.petBreed !== 'Not specified' && ` • ${selectedReport.petBreed}`}
-                        {selectedReport.petColor && selectedReport.petColor !== 'Not specified' && ` • ${selectedReport.petColor}`}
-                        {selectedReport.petGender && selectedReport.petGender !== 'Unknown' && ` • ${selectedReport.petGender}`}
-                        {selectedReport.petSize && selectedReport.petSize !== 'Unknown' && ` • ${selectedReport.petSize}`}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      Animal Count
-                    </label>
-                    <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                      <span className="text-gray-800">{selectedReport.animalCount || 1} animal(s)</span>
+                {/* Location Section */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <MapPinIcon className="h-5 w-5 text-red-600" />
+                    Location Details
+                  </h3>
+                  <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <MapPinIcon className="h-5 w-5 text-red-500 mt-1 flex-shrink-0" />
+                    <div>
+                      <p className="text-gray-900 font-medium">{selectedReport.location}</p>
+                      <p className="text-sm text-gray-500 mt-1">Coordinates: {selectedReport.latitude}, {selectedReport.longitude}</p>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Location */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Location
-                </label>
-                <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                  <MapPinIcon className="h-5 w-5 text-gray-400" />
-                  <span className="text-gray-800">{selectedReport.location}</span>
+                {/* Description Section */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <svg className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Incident Description
+                  </h3>
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <p className="text-gray-800 leading-relaxed">{selectedReport.description}</p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Description
-                </label>
-                <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                  <p className="text-gray-800">{selectedReport.description}</p>
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setSelectedReport(null)}
+                    className="flex-1 bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium shadow-sm"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    className="px-6 py-3 bg-[#FA8630] text-white rounded-lg hover:bg-[#E87928] transition-colors font-medium shadow-sm flex items-center gap-2"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print Report
+                  </button>
                 </div>
-              </div>
-
-              {/* Close Button */}
-              <div className="flex gap-4 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => setSelectedReport(null)}
-                  className="flex-1 bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium"
-                >
-                  Close
-                </button>
               </div>
             </div>
           </div>
