@@ -397,4 +397,40 @@ router.put('/change-password', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/auth/profile
+ * Get current user profile
+ */
+router.get('/profile', authenticateToken, async (req, res) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    const [users] = await connection.execute(
+      'SELECT id, username, email, full_name, contact_number, role, created_at FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: users[0]
+    });
+
+  } catch (error) {
+    logger.error('Get profile error', error);
+    res.status(500).json({
+      error: true,
+      message: 'Failed to get profile'
+    });
+  } finally {
+    connection.release();
+  }
+});
+
 export default router;
