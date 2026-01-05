@@ -31,4 +31,10 @@ const testConnection = async () => {
   }
 };
 
-export { pool, testConnection };
+// Helper function for queries
+const query = async (sql, params) => {
+  const [rows] = await pool.execute(sql, params);
+  return rows;
+};
+
+export { pool, testConnection, query };
