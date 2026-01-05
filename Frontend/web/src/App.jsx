@@ -1,9 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
-import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
-import DashboardPage from "./pages/Dashboard/DashboardPage";
-import MonitoringMap from "./pages/Map/MonitoringMap";
+import Landing from "./pages/Landing";
 import VaccinationDashboard from "./pages/VaccinationManagement/Dashboard";
 import ReportDashboard from "./pages/ReportManagement/Dashboard";
 import CampaignDashboard from "./pages/CampaignManagement/Dashboard";
@@ -21,44 +18,39 @@ import CatcherSchedule from "./pages/ReportManagement/CatcherSchedule";
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          {/* MAIN ROUTES */}
-          <Route path="/" element={<Login />} />
-          <Route path="/login" element={<Login />} />
-          
-          {/* NEW DASHBOARD & MAP ROUTES */}
-          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/map" element={<ProtectedRoute><MonitoringMap /></ProtectedRoute>} />
+    <Router>
+      <Routes>
+        {/* MAIN ROUTES */}
+        <Route path="/" element={<Login />} />
+        <Route path="/landing" element={<Landing />} />
 
-          {/* Vaccination MANAGEMENT ROUTES */}
-          <Route
-            path="/vaccination-dashboard"
-            element={<ProtectedRoute><VaccinationDashboard /></ProtectedRoute>}
-          />
+        {/* Vaccination MANAGEMENT ROUTES */}
+        <Route
+          path="/vaccination-dashboard"
+          element={<VaccinationDashboard />}
+        />
 
-          {/* STRAY ANIMAL MANAGEMENT ROUTES */}
-          <Route path="/stray-dashboard" element={<ProtectedRoute><StrayDashboard /></ProtectedRoute>} />
-          <Route path="/captured-animals" element={<ProtectedRoute><CapturedAnimals /></ProtectedRoute>} />
-          <Route path="/redemption-requests" element={<ProtectedRoute><RedemptionRequest /></ProtectedRoute>} />
-          <Route path="/adoption-list" element={<ProtectedRoute><AdoptionList /></ProtectedRoute>} />
-          <Route path="/statistics-logs" element={<ProtectedRoute><StatisticsLogs /></ProtectedRoute>} />
-          <Route path="/add-stray" element={<ProtectedRoute><AddStray /></ProtectedRoute>} />
+        {/* STRAY ANIMAL MANAGEMENT ROUTES */}
+        <Route path="/stray-dashboard" element={<StrayDashboard />} />
+        <Route path="/captured-animals" element={<CapturedAnimals />} />
+        <Route path="/redemption-requests" element={<RedemptionRequest />} />
+        <Route path="/adoption-list" element={<AdoptionList />} />
+        <Route path="/statistics-logs" element={<StatisticsLogs />} />
+        <Route path="/add-stray" element={<AddStray />} />
 
-          {/* REPORT MANAGEMENT ROUTES */}
-          <Route path="/report-dashboard" element={<ProtectedRoute><ReportDashboard /></ProtectedRoute>} />
-          <Route path="/all-incident-report" element={<ProtectedRoute><AllIncidentReport /></ProtectedRoute>} />
-          <Route path="/pending-verification" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
-          <Route path="/report-history" element={<ProtectedRoute><ReportHistory /></ProtectedRoute>} />
-          <Route path="/monitoring-incidents" element={<ProtectedRoute><IncidentMonitoring /></ProtectedRoute>} />
-          <Route path="/catcher-schedule" element={<ProtectedRoute><CatcherSchedule /></ProtectedRoute>} />
+        {/* REPORT MANAGEMENT ROUTES */}
+        <Route path="/report-dashboard" element={<ReportDashboard />} />
+        <Route path="/all-incident-report" element={<AllIncidentReport />} />
+        <Route path="/pending-verification" element={<PendingVerification />} />
+        <Route path="/report-history" element={<ReportHistory />} />
+        <Route path="/monitoring-incidents" element={<IncidentMonitoring />} />
+        <Route path="/catcher-schedule" element={<CatcherSchedule />} />
 
-          {/*CAMPAIGN MANAGEMENT ROUTES */}
-          <Route path="/campaign-dashboard" element={<ProtectedRoute><CampaignDashboard /></ProtectedRoute>} />
-        </Routes>
-      </Router>
-    </AuthProvider>
+
+        {/*CAMPAIGN MANAGEMENT ROUTES */}
+        <Route path="/campaign-dashboard" element={<CampaignDashboard />} />
+      </Routes>
+    </Router>
   );
 }
 

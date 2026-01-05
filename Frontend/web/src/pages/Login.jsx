@@ -1,42 +1,23 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { useAuth } from "../contexts/AuthContext";
 import "../pages/styles/Login.css";
 import logo from "../assets/logo.png";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setError("");
-    
-    if (!username || !password) {
-      setError("Please enter both username and password");
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const result = await login(username, password);
-      
-      if (result.success) {
-        // Navigate based on user role
-        navigate("/vaccination-dashboard");
-      } else {
-        setError(result.error || "Login failed. Please check your credentials.");
-      }
-    } catch (err) {
-      setError("An unexpected error occurred. Please try again.");
-      console.error("Login error:", err);
-    } finally {
-      setIsLoading(false);
+    if (username && password) {
+      setIsLoading(true);
+      // Simulate API call
+      setTimeout(() => {
+        navigate("/vaccination-dashboard"); //CHANGE THIS TO VACCINATION LATER
+        setIsLoading(false);
+      }, 1000);
     }
   };
 
@@ -152,13 +133,6 @@ const Login = () => {
           </div>
 
           <div className="p-6 space-y-4">
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
-                {error}
-              </div>
-            )}
-
             {/* Username Field */}
             <div className="space-y-2">
               <label
