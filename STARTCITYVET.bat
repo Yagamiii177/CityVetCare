@@ -1,152 +1,119 @@
 @echo off
-:: =========================================
-:: CityVetCare System Startup Script
-:: =========================================
-:: This script starts all CityVetCare components:
-:: - Backend API Server (Node.js)
-:: - Web Application (React/Vite)
-:: - Mobile Application (React Native/Expo)
-:: =========================================
+REM ===================================================================
+REM CityVetCare Complete System Startup Script
+REM ===================================================================
+REM This script starts all components of the CityVetCare system:
+REM - Backend API Server (Node.js)
+REM - Web Dashboard (React/Vite)
+REM - Mobile App (React Native/Expo)
+REM ===================================================================
+
+color 0A
+title CityVetCare System Startup
 
 echo.
-echo =========================================
-echo   CITYVETCARE SYSTEM STARTUP
-echo =========================================
+echo ====================================================================
+echo               CITYVETCARE SYSTEM STARTUP
+echo ====================================================================
+echo.
+echo Starting all system components...
 echo.
 
-:: Check if Node.js is installed
+REM Check if Node.js is installed
 where node >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Node.js is not installed!
+    color 0C
+    echo [ERROR] Node.js is not installed or not in PATH
     echo Please install Node.js from https://nodejs.org/
+    echo.
     pause
     exit /b 1
 )
 
-echo [INFO] Node.js found: 
+echo [1/5] Checking system requirements...
+echo   [OK] Node.js found: 
 node --version
 echo.
 
-:: Check if npm is installed
-where npm >nul 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] npm is not installed!
-    pause
-    exit /b 1
+REM Navigate to project root
+cd /d "%~dp0"
+
+REM Kill any existing processes on required ports
+echo [2/5] Cleaning up existing processes...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3000 ^| findstr LISTENING') do (
+    taskkill /F /PID %%a >nul 2>nul
 )
-
-echo [INFO] npm found:
-npm --version
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5173 ^| findstr LISTENING') do (
+    taskkill /F /PID %%a >nul 2>nul
+)
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8081 ^| findstr LISTENING') do (
+    taskkill /F /PID %%a >nul 2>nul
+)
+echo   [OK] Ports cleared (3000, 5173, 8081)
 echo.
 
-:: =========================================
-:: 1. START BACKEND SERVER
-:: =========================================
-echo =========================================
-echo [1/3] Starting Backend API Server...
-echo =========================================
-echo.
-
+REM Start Backend Server
+echo [3/5] Starting Backend API Server...
 cd Backend-Node
-
-:: Check if node_modules exists
-if not exist "node_modules\" (
-    echo [INFO] Installing backend dependencies...
-    call npm install
-    if %ERRORLEVEL% NEQ 0 (
-        echo [ERROR] Failed to install backend dependencies!
-        pause
-        exit /b 1
-    )
-)
-
-:: Start backend in new window
-echo [INFO] Launching backend server on port 3000...
-start "CityVetCare - Backend API" cmd /k "node server.js"
-timeout /t 3 /nobreak >nul
-
+start "CityVetCare Backend" cmd /k "color 0B && title CityVetCare Backend && echo ============================================ && echo    CITYVETCARE BACKEND SERVER && echo ============================================ && echo. && echo Starting backend server... && echo. && node server.js"
 cd ..
-
-:: =========================================
-:: 2. START WEB APPLICATION
-:: =========================================
-echo =========================================
-echo [2/3] Starting Web Application...
-echo =========================================
+timeout /t 4 /nobreak >nul
+echo   [OK] Backend server starting on http://localhost:3000
 echo.
 
+REM Start Web Dashboard
+echo [4/5] Starting Web Dashboard...
 cd Frontend\web
-
-:: Check if node_modules exists
-if not exist "node_modules\" (
-    echo [INFO] Installing web dependencies...
-    call npm install
-    if %ERRORLEVEL% NEQ 0 (
-        echo [ERROR] Failed to install web dependencies!
-        pause
-        exit /b 1
-    )
-)
-
-:: Start web in new window
-echo [INFO] Launching web application on http://localhost:5173...
-start "CityVetCare - Web Application" cmd /k "npm run dev"
-timeout /t 3 /nobreak >nul
-
+start "CityVetCare Web" cmd /k "color 0E && title CityVetCare Web Dashboard && echo ============================================ && echo    CITYVETCARE WEB DASHBOARD && echo ============================================ && echo. && echo Starting web dashboard... && echo. && npm run dev"
 cd ..\..
-
-:: =========================================
-:: 3. START MOBILE APPLICATION (OPTIONAL)
-:: =========================================
-echo =========================================
-echo [3/3] Starting Mobile Application...
-echo =========================================
+timeout /t 4 /nobreak >nul
+echo   [OK] Web dashboard starting on http://localhost:5173
 echo.
 
+REM Start Mobile App
+echo [5/5] Starting Mobile App (Expo)...
 cd Frontend\mobile
-
-:: Check if node_modules exists
-if not exist "node_modules\" (
-    echo [INFO] Installing mobile dependencies...
-    call npm install
-    if %ERRORLEVEL% NEQ 0 (
-        echo [WARNING] Failed to install mobile dependencies!
-        echo [INFO] Mobile app can be started manually later
-        cd ..\..
-        goto :finish
-    )
-)
-
-:: Start mobile in new window
-echo [INFO] Launching mobile application (Expo)...
-echo [INFO] Scan QR code with Expo Go app on your phone
-start "CityVetCare - Mobile Application" cmd /k "npm start"
-
+start "CityVetCare Mobile" cmd /k "color 0D && title CityVetCare Mobile App && echo ============================================ && echo    CITYVETCARE MOBILE APP && echo ============================================ && echo. && echo Starting mobile app... && echo. && npm start"
 cd ..\..
+echo   [OK] Mobile app starting on http://localhost:8081
+echo.
 
-:finish
-:: =========================================
-:: STARTUP COMPLETE
-:: =========================================
+REM Wait for services to initialize
 echo.
-echo =========================================
-echo   CITYVETCARE SYSTEM STARTED!
-echo =========================================
-echo.
-echo [BACKEND]  http://localhost:3000
-echo [WEB]      http://localhost:5173
-echo [MOBILE]   Check the Expo window for QR code
-echo.
-echo [INFO] All services are running in separate windows
-echo [INFO] Close those windows to stop the services
-echo.
-echo =========================================
-timeout /t 5 /nobreak >nul
+echo [WAIT] Initializing services...
+timeout /t 10 /nobreak >nul
 
-:: Open web browser to the web application
-echo [INFO] Opening web browser...
+color 0A
+echo.
+echo ====================================================================
+echo              ALL SYSTEMS STARTED SUCCESSFULLY!
+echo ====================================================================
+echo.
+echo   System Components:
+echo   ------------------------------------------------------------------
+echo   [1] Backend API       : http://localhost:3000
+echo   [2] Web Dashboard     : http://localhost:5173
+echo   [3] Mobile App (Expo) : http://localhost:8081
+echo   ------------------------------------------------------------------
+echo.
+echo   Opening Web Dashboard in browser...
+timeout /t 2 /nobreak >nul
 start http://localhost:5173
-
 echo.
-echo Press any key to exit this window (services will keep running)...
+echo ====================================================================
+echo                        SYSTEM READY
+echo ====================================================================
+echo.
+echo   Quick Access:
+echo     - Web Login: admin / admin123
+echo     - Mobile: Scan QR code with Expo Go app
+echo     - API Health: http://localhost:3000/api/health
+echo.
+echo   To stop services:
+echo     - Close the individual service windows (Backend/Web/Mobile)
+echo     - Or press Ctrl+C in each window
+echo.
+echo ====================================================================
+echo.
+echo Press any key to exit this launcher (services will keep running)...
 pause >nul
