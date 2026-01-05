@@ -1,19 +1,19 @@
 /**
  * API Configuration for CityVetCare Mobile App
  * Connects to Node.js/Express Backend
- * 
+ *
  * IMPORTANT: Update API_BASE_URL for your environment:
  * - Android Emulator: Use 10.0.2.2:3000
  * - iOS Simulator: Use localhost:3000
  * - Physical Device: Use your computer's IP address (find with ipconfig/ifconfig)
  */
 
-import { Platform } from 'react-native';
+import { Platform } from "react-native";
 
 // ============================================
 // 🔧 CONFIGURATION GUIDE
 // ============================================
-// 
+//
 // Are you testing on a PHYSICAL DEVICE (real phone/tablet)?
 // 1. Uncomment line 24 below
 // 2. Make sure your phone and PC are on the SAME WiFi
@@ -22,7 +22,7 @@ import { Platform } from 'react-native';
 // Are you using Android Emulator?
 // - No changes needed! Default works.
 //
-// Are you using iOS Simulator?  
+// Are you using iOS Simulator?
 // - No changes needed! Auto-detected.
 // ============================================
 
@@ -30,14 +30,14 @@ import { Platform } from 'react-native';
 const getApiBaseUrl = () => {
   // 🔥 FOR PHYSICAL DEVICE (iPhone/Android): Use PC's IP address
   // Make sure your phone and PC are on the SAME WiFi network!
-  return 'http://192.168.0.108:3000/api';
-  
+  return "http://192.168.1.9:3000/api";
+
   // UNCOMMENT FOR EMULATOR/SIMULATOR TESTING:
   // For Android Emulator:
   // if (Platform.OS === 'android') {
   //   return 'http://10.0.2.2:3000/api';
   // }
-  
+
   // For iOS Simulator:
   // if (Platform.OS === 'ios') {
   //   return 'http://localhost:3000/api';
@@ -46,12 +46,12 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
-console.log('🌐 CityVetCare API Base URL:', API_BASE_URL);
-console.log('📱 Platform:', Platform.OS);
+console.log("🌐 CityVetCare API Base URL:", API_BASE_URL);
+console.log("📱 Platform:", Platform.OS);
 
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
-  TIMEOUT: 30000, // 30 seconds
+  TIMEOUT: 15000, // 15 seconds for normal requests
   UPLOAD_TIMEOUT: 120000, // 2 minutes for image uploads
 };
 
@@ -102,69 +102,69 @@ export const API_ENDPOINTS = {
  * Incident Types
  */
 export const INCIDENT_TYPES = {
-  STRAY: 'stray',
-  BITE: 'bite',
-  INJURED: 'injured',
-  DEAD: 'dead',
-  OTHER: 'other',
+  STRAY: "stray",
+  BITE: "bite",
+  INJURED: "injured",
+  DEAD: "dead",
+  OTHER: "other",
 };
 
 export const INCIDENT_TYPE_LABELS = {
-  [INCIDENT_TYPES.STRAY]: 'Stray Animal',
-  [INCIDENT_TYPES.BITE]: 'Animal Bite',
-  [INCIDENT_TYPES.INJURED]: 'Injured Animal',
-  [INCIDENT_TYPES.DEAD]: 'Dead Animal',
-  [INCIDENT_TYPES.OTHER]: 'Other',
+  [INCIDENT_TYPES.STRAY]: "Stray Animal",
+  [INCIDENT_TYPES.BITE]: "Animal Bite",
+  [INCIDENT_TYPES.INJURED]: "Injured Animal",
+  [INCIDENT_TYPES.DEAD]: "Dead Animal",
+  [INCIDENT_TYPES.OTHER]: "Other",
 };
 
 /**
  * Status
  */
 export const STATUS = {
-  PENDING_VERIFICATION: 'pending_verification',
-  VERIFIED: 'verified',
-  ASSIGNED: 'assigned',
-  IN_PROGRESS: 'in_progress',
-  RESOLVED: 'resolved',
-  CLOSED: 'closed',
-  REJECTED: 'rejected',
+  PENDING_VERIFICATION: "pending_verification",
+  VERIFIED: "verified",
+  ASSIGNED: "assigned",
+  IN_PROGRESS: "in_progress",
+  RESOLVED: "resolved",
+  CLOSED: "closed",
+  REJECTED: "rejected",
 };
 
 export const STATUS_LABELS = {
-  [STATUS.PENDING_VERIFICATION]: 'Pending Verification',
-  [STATUS.VERIFIED]: 'Verified',
-  [STATUS.ASSIGNED]: 'Assigned',
-  [STATUS.IN_PROGRESS]: 'In Progress',
-  [STATUS.RESOLVED]: 'Resolved',
-  [STATUS.CLOSED]: 'Closed',
-  [STATUS.REJECTED]: 'Rejected',
+  [STATUS.PENDING_VERIFICATION]: "Pending Verification",
+  [STATUS.VERIFIED]: "Verified",
+  [STATUS.ASSIGNED]: "Assigned",
+  [STATUS.IN_PROGRESS]: "In Progress",
+  [STATUS.RESOLVED]: "Resolved",
+  [STATUS.CLOSED]: "Closed",
+  [STATUS.REJECTED]: "Rejected",
 };
 
 export const STATUS_COLORS = {
-  [STATUS.PENDING_VERIFICATION]: '#ffc107',
-  [STATUS.VERIFIED]: '#0dcaf0',
-  [STATUS.ASSIGNED]: '#0d6efd',
-  [STATUS.IN_PROGRESS]: '#17a2b8',
-  [STATUS.RESOLVED]: '#28a745',
-  [STATUS.CLOSED]: '#6c757d',
-  [STATUS.REJECTED]: '#dc3545',
+  [STATUS.PENDING_VERIFICATION]: "#ffc107",
+  [STATUS.VERIFIED]: "#0dcaf0",
+  [STATUS.ASSIGNED]: "#0d6efd",
+  [STATUS.IN_PROGRESS]: "#17a2b8",
+  [STATUS.RESOLVED]: "#28a745",
+  [STATUS.CLOSED]: "#6c757d",
+  [STATUS.REJECTED]: "#dc3545",
 };
 
 /**
  * User Roles
  */
 export const USER_ROLES = {
-  USER: 'user',
-  VETERINARIAN: 'veterinarian',
-  ADMIN: 'admin',
-  CATCHER: 'catcher',
+  USER: "user",
+  VETERINARIAN: "veterinarian",
+  ADMIN: "admin",
+  CATCHER: "catcher",
 };
 
 export const ROLE_LABELS = {
-  [USER_ROLES.USER]: 'Pet Owner / Citizen',
-  [USER_ROLES.VETERINARIAN]: 'City Veterinarian',
-  [USER_ROLES.ADMIN]: 'Administrator',
-  [USER_ROLES.CATCHER]: 'Animal Catcher',
+  [USER_ROLES.USER]: "Pet Owner / Citizen",
+  [USER_ROLES.VETERINARIAN]: "City Veterinarian",
+  [USER_ROLES.ADMIN]: "Administrator",
+  [USER_ROLES.CATCHER]: "Animal Catcher",
 };
 
 export default API_CONFIG;

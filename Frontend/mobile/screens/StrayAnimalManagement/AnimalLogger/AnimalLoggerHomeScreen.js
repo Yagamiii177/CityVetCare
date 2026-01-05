@@ -18,9 +18,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useAuth } from "../../../contexts/AuthContext";
 
 const RegisterStrayAnimalScreen = () => {
   const navigation = useNavigation();
+  const { logout } = useAuth();
   const [images, setImages] = useState({
     front: null,
     back: null,
@@ -170,8 +172,22 @@ const RegisterStrayAnimalScreen = () => {
           {/* Header */}
           <View style={styles.headerContainer}>
             <View style={styles.headerContent}>
-              <TouchableOpacity onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back-outline" size={24} color="black" />
+              <TouchableOpacity
+                onPress={async () => {
+                  Alert.alert("Logout", "Are you sure you want to logout?", [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Logout",
+                      style: "destructive",
+                      onPress: async () => {
+                        await logout();
+                        navigation.replace("Login");
+                      },
+                    },
+                  ]);
+                }}
+              >
+                <Ionicons name="log-out-outline" size={24} color="#dc3545" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Register Stray Animal</Text>
               <View style={{ width: 24 }} />
