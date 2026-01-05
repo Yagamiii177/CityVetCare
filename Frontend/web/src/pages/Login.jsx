@@ -29,7 +29,11 @@ const Login = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username,
+          password,
+          userType: "admin", // Web login is always for admin users
+        }),
       });
 
       const data = await response.json();
