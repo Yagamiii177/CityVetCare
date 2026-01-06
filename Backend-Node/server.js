@@ -14,6 +14,7 @@ import incidentsRouter from "./routes/incidents.js";
 import catchersRouter from "./routes/catchers.js";
 import dashboardRouter from "./routes/dashboard.js";
 import schedulesRouter from "./routes/schedules.js";
+import strayAnimalsRouter from "./routes/strayAnimals.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -85,6 +86,7 @@ app.get("/", (req, res) => {
       "/api/catchers": "Catcher team management",
       "/api/dashboard": "Dashboard statistics",
       "/api/schedules": "Patrol scheduling",
+      "/api/stray-animals": "Stray animals management",
     },
   });
 });
@@ -95,6 +97,7 @@ app.use("/api/incidents", incidentsRouter);
 app.use("/api/catchers", catchersRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/schedules", schedulesRouter);
+app.use("/api/stray-animals", strayAnimalsRouter);
 
 // 404 handler
 app.use((req, res) => {
