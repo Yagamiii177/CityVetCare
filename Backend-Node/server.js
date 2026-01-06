@@ -15,6 +15,8 @@ import catchersRouter from "./routes/catchers.js";
 import dashboardRouter from "./routes/dashboard.js";
 import schedulesRouter from "./routes/schedules.js";
 import strayAnimalsRouter from "./routes/strayAnimals.js";
+import patrolStaffRouter from "./routes/patrol-staff.js";
+import patrolSchedulesRouter from "./routes/patrol-schedules.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -60,8 +62,9 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase payload size limits for image uploads (10MB for mobile base64 images)
+app.use(express.json({ limit: '15mb' })); // Accommodate base64 encoding overhead
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Serve uploaded files as static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -76,7 +79,7 @@ app.use((req, res, next) => {
 app.get("/", (req, res) => {
   res.json({
     message: "CityVetCare API",
-    version: "3.0.0",
+    version: "3.1.0",
     platform: "Node.js/Express",
     description: "Complete report management system for City Vet Care",
     endpoints: {
@@ -86,6 +89,8 @@ app.get("/", (req, res) => {
       "/api/catchers": "Catcher team management",
       "/api/dashboard": "Dashboard statistics",
       "/api/schedules": "Patrol scheduling",
+      "/api/patrol-staff": "Patrol staff management (dedicated)",
+      "/api/patrol-schedules": "Patrol schedules management (dedicated)",
       "/api/stray-animals": "Stray animals management",
     },
   });
@@ -97,6 +102,8 @@ app.use("/api/incidents", incidentsRouter);
 app.use("/api/catchers", catchersRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/schedules", schedulesRouter);
+app.use("/api/patrol-staff", patrolStaffRouter);
+app.use("/api/patrol-schedules", patrolSchedulesRouter);
 app.use("/api/stray-animals", strayAnimalsRouter);
 
 // 404 handler

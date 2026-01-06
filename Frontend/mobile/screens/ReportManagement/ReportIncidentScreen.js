@@ -137,7 +137,7 @@ const ReportIncidentScreen = ({ navigation }) => {
         petBreed,
         petColor,
         contactNumber,
-        date,
+        date: date.toISOString(), // Convert to string to avoid serialization warning
         description,
       },
     });

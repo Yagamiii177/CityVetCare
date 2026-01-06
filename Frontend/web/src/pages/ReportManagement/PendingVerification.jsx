@@ -136,10 +136,10 @@ const PendingVerification = () => {
   // Search and type filter
   const filteredReports = pendingReports.filter((r) => {
     const matchesSearch = 
-      r.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.reporter.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.animalType.toLowerCase().includes(searchTerm.toLowerCase());
+      (r.type || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (r.reporter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (r.address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (r.animalType || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesType = filterType === "all" || r.type === filterType;
 

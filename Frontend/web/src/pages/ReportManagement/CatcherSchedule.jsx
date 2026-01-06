@@ -11,6 +11,8 @@ import {
   CheckCircleIcon,
   ExclamationCircleIcon,
   ArrowPathIcon,
+  XMarkIcon,
+  MagnifyingGlassIcon,
 } from "@heroicons/react/24/solid";
 
 const AnimalCatcherSchedule = () => {
@@ -23,6 +25,10 @@ const AnimalCatcherSchedule = () => {
   const [approvedIncidents, setApprovedIncidents] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [patrolStaff, setPatrolStaff] = useState([]);
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   
   // Form state
   const [formData, setFormData] = useState({
@@ -223,15 +229,27 @@ const AnimalCatcherSchedule = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case "scheduled":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-100 text-blue-800 border border-blue-200";
       case "in_progress":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800 border border-yellow-200";
       case "completed":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 border border-green-200";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 border border-gray-200";
     }
   };
+
+  // Filter schedules
+  const filteredSchedules = schedules.filter((schedule) => {
+    const matchesSearch = searchTerm === "" || 
+      schedule.incident_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      schedule.assigned_staff_names?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      schedule.incident_location?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === "all" || schedule.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="min-h-screen bg-[#E8E8E8]">
@@ -253,16 +271,21 @@ const AnimalCatcherSchedule = () => {
         }`}
       >
         <div className="px-6 py-8">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">
-              Patrol Schedule Management
-            </h1>
+          {/* Header with Search and Filters */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">
+                Patrol Schedule Management
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                Assign patrols and track their progress
+              </p>
+            </div>
             <button
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 bg-[#FA8630] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#E87928] transition-colors"
+              className="flex items-center gap-2 bg-[#FA8630] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#E87928] transition-colors shadow-sm"
             >
-              <PlusIcon className="h-4 w-4" />
+              {showForm ? <XMarkIcon className="h-4 w-4" /> : <PlusIcon className="h-4 w-4" />}
               {showForm ? "Cancel" : "New Schedule"}
             </button>
           </div>
@@ -483,9 +506,38 @@ const AnimalCatcherSchedule = () => {
           {/* Schedules Table */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-800">
-                Active Patrol Schedules
-              </h2>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <h2 className="text-lg font-semibold text-gray-800">
+                  Active Patrol Schedules ({filteredSchedules.length})
+                </h2>
+                
+                {/* Search and Filter Controls */}
+                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                  {/* Search */}
+                  <div className="relative flex-1 md:w-64">
+                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search schedules..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                    />
+                  </div>
+                  
+                  {/* Status Filter */}
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#FA8630] focus:border-transparent bg-white"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             {loading && schedules.length === 0 ? (
@@ -493,81 +545,97 @@ const AnimalCatcherSchedule = () => {
                 <ArrowPathIcon className="h-8 w-8 animate-spin text-[#FA8630] mx-auto mb-2" />
                 <p className="text-gray-600">Loading schedules...</p>
               </div>
-            ) : schedules.length === 0 ? (
+            ) : filteredSchedules.length === 0 ? (
               <div className="p-8 text-center">
                 <CalendarIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600 mb-2">No patrol schedules yet</p>
+                <p className="text-gray-600 mb-2">
+                  {searchTerm || statusFilter !== "all" 
+                    ? "No schedules match your filters" 
+                    : "No patrol schedules yet"}
+                </p>
                 <p className="text-sm text-gray-500">
-                  Click "New Schedule" to create your first patrol schedule
+                  {searchTerm || statusFilter !== "all"
+                    ? "Try adjusting your search or filter criteria"
+                    : "Click 'New Schedule' to create your first patrol schedule"}
                 </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-600 text-sm">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700 text-sm">
                         Incident
                       </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-600 text-sm">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700 text-sm">
                         Assigned Staff
                       </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-600 text-sm">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700 text-sm">
                         Location
                       </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-600 text-sm">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700 text-sm">
                         Schedule
                       </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-600 text-sm">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700 text-sm">
                         Status
                       </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-600 text-sm">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700 text-sm">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {schedules.map((schedule) => (
-                      <tr key={schedule.id} className="hover:bg-gray-50">
-                        <td className="py-3 px-4">
+                    {filteredSchedules.map((schedule) => (
+                      <tr key={schedule.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="py-4 px-4">
                           <div>
-                            <p className="font-medium text-gray-800">
+                            <p className="font-semibold text-gray-900 text-sm">
                               #{schedule.incident_id}
                             </p>
-                            <p className="text-sm text-gray-600">
+                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-1">
                               {schedule.incident_title || "No title"}
                             </p>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="text-sm text-gray-800">
-                            {schedule.assigned_staff_names || "No staff assigned"}
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-[#FA8630]/10 flex items-center justify-center flex-shrink-0">
+                              <UserGroupIcon className="h-4 w-4 text-[#FA8630]" />
+                            </div>
+                            <span className="text-sm text-gray-800 font-medium">
+                              {schedule.assigned_staff_names || "Unassigned"}
+                            </span>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <MapPinIcon className="h-4 w-4" />
-                            {schedule.incident_location || "N/A"}
+                        <td className="py-4 px-4">
+                          <div className="flex items-start gap-1.5 text-sm text-gray-600">
+                            <MapPinIcon className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <span className="line-clamp-2">{schedule.incident_location || "N/A"}</span>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <CalendarIcon className="h-4 w-4" />
-                            <div>
-                              {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleString() : "N/A"}
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                            <CalendarIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">
+                                {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleDateString() : "N/A"}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ""}
+                              </span>
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-4 px-4">
                           <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide ${getStatusColor(
                               schedule.status
                             )}`}
                           >
                             {schedule.status.replace("_", " ")}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-4 px-4">
                           <div className="flex gap-2">
                             {schedule.status === "scheduled" && (
                               <button
@@ -579,9 +647,9 @@ const AnimalCatcherSchedule = () => {
                                   )
                                 }
                                 disabled={loading}
-                                className="px-3 py-1 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600 transition-colors disabled:bg-gray-400"
+                                className="px-4 py-1.5 bg-yellow-500 text-white text-xs font-medium rounded-md hover:bg-yellow-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm"
                               >
-                                Start Patrol
+                                Start
                               </button>
                             )}
                             {schedule.status === "in_progress" && (
@@ -594,13 +662,14 @@ const AnimalCatcherSchedule = () => {
                                   )
                                 }
                                 disabled={loading}
-                                className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors disabled:bg-gray-400"
+                                className="px-4 py-1.5 bg-green-500 text-white text-xs font-medium rounded-md hover:bg-green-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm"
                               >
                                 Complete
                               </button>
                             )}
                             {schedule.status === "completed" && (
-                              <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                              <span className="px-4 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-md flex items-center gap-1">
+                                <CheckCircleIcon className="h-3.5 w-3.5" />
                                 Finished
                               </span>
                             )}

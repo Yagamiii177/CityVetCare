@@ -1,6 +1,5 @@
 import express from 'express';
 import pool from '../config/database.js';
-import Incident from '../models/Incident.js';
 import Logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -14,14 +13,25 @@ router.get('/', async (req, res) => {
   try {
     const query = `
       SELECT 
-        s.*,
-        i.title as incident_title,
-        i.location as incident_location,
-        ct.team_name as catcher_team_name
-      FROM schedules s
-      LEFT JOIN incidents i ON s.incident_id = i.id
-      LEFT JOIN catcher_teams ct ON s.catcher_team_id = ct.id
-      ORDER BY s.scheduled_date DESC, s.scheduled_time DESC
+        ps.schedule_id,
+        ps.report_id,
+        ps.assigned_catcher_id,
+        ps.schedule_date,
+        ps.schedule_time,
+        ps.status,
+        ps.notes,
+        ps.created_at,
+        ps.updated_at,
+        ir.description as incident_description,
+        ir.report_type,
+        ir.priority,
+        il.address_text as incident_location,
+        dc.full_name as catcher_name
+      FROM patrol_schedule ps
+      LEFT JOIN incident_report ir ON ps.report_id = ir.report_id
+      LEFT JOIN incident_location il ON ir.location_id = il.location_id
+      LEFT JOIN dog_catcher dc ON ps.assigned_catcher_id = dc.catcher_id
+      ORDER BY ps.schedule_date DESC, ps.schedule_time DESC
     `;
     
     const [schedules] = await pool.execute(query);
@@ -34,7 +44,8 @@ router.get('/', async (req, res) => {
     logger.error('Failed to fetch schedules', error);
     res.status(500).json({
       error: true,
-      message: 'Failed to fetch schedules'
+      message: 'Failed to fetch schedules',
+      details: error.message
     });
   }
 });
@@ -45,48 +56,48 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { incident_id, catcher_team_id, assigned_staff_name, scheduled_date, scheduled_time, notes } = req.body;
+    const { report_id, assigned_catcher_id, schedule_date, schedule_time, notes } = req.body;
     
-    if (!incident_id || !scheduled_date || !scheduled_time) {
+    if (!report_id || !assigned_catcher_id || !schedule_date) {
       return res.status(400).json({
         error: true,
-        message: 'Missing required fields: incident_id, scheduled_date, scheduled_time'
+        message: 'Missing required fields: report_id, assigned_catcher_id, schedule_date'
       });
     }
     
-    // Get incident location
-    const incident = await Incident.getById(incident_id);
-    if (!incident) {
+    // Check if incident report exists
+    const [reports] = await pool.execute(
+      'SELECT report_id FROM incident_report WHERE report_id = ?',
+      [report_id]
+    );
+    
+    if (reports.length === 0) {
       return res.status(404).json({
         error: true,
-        message: 'Incident not found'
+        message: 'Incident report not found'
       });
     }
     
     // Create schedule
     const [result] = await pool.execute(`
-      INSERT INTO schedules (
-        incident_id, catcher_team_id, assigned_staff_name,
-        scheduled_date, scheduled_time, location, status, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?)
+      INSERT INTO patrol_schedule (
+        report_id, assigned_catcher_id, schedule_date, schedule_time, status, notes
+      ) VALUES (?, ?, ?, ?, 'Assigned', ?)
     `, [
-      incident_id,
-      catcher_team_id || null,
-      assigned_staff_name || null,
-      scheduled_date,
-      scheduled_time,
-      incident.location,
+      report_id,
+      assigned_catcher_id,
+      schedule_date,
+      schedule_time || null,
       notes || null
     ]);
     
-    // Update incident status to 'scheduled'
-    await Incident.update(incident_id, {
-      status: 'scheduled',
-      assigned_catcher_id: catcher_team_id || null,
-      assigned_staff_name: assigned_staff_name || null
-    });
+    // Update incident report status to 'Scheduled'
+    await pool.execute(
+      'UPDATE incident_report SET status = ? WHERE report_id = ?',
+      ['Scheduled', report_id]
+    );
     
-    logger.info(`Schedule created for incident ${incident_id}`);
+    logger.info(`Schedule created for report ${report_id}`);
     
     res.status(201).json({
       success: true,
@@ -133,7 +144,7 @@ router.put('/:id', async (req, res) => {
     params.push(req.params.id);
     
     const [result] = await pool.execute(
-      `UPDATE schedules SET ${fields.join(', ')} WHERE id = ?`,
+      `UPDATE patrol_schedule SET ${fields.join(', ')} WHERE schedule_id = ?`,
       params
     );
     
@@ -152,7 +163,8 @@ router.put('/:id', async (req, res) => {
     logger.error('Failed to update schedule', error);
     res.status(500).json({
       error: true,
-      message: 'Failed to update schedule'
+      message: 'Failed to update schedule',
+      details: error.message
     });
   }
 });

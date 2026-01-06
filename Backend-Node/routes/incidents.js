@@ -111,21 +111,88 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
+ * POST /api/incidents/upload-images
+ * Upload images and return their URLs (separate endpoint for frontend)
+ */
+router.post('/upload-images', upload.array('images', 5), async (req, res) => {
+  try {
+    logger.info('📥 Image upload request received');
+    logger.debug('Uploading images', { 
+      fileCount: req.files?.length || 0,
+      headers: req.headers['content-type']
+    });
+    
+    if (!req.files || req.files.length === 0) {
+      logger.warn('No images provided in upload request');
+      return res.status(400).json({
+        success: false,
+        error: true,
+        message: 'No images provided'
+      });
+    }
+
+    const imageUrls = req.files.map(file => `/uploads/incident-images/${file.filename}`);
+    
+    logger.info(`✅ Uploaded ${imageUrls.length} images successfully`);
+    logger.debug('Image URLs:', imageUrls);
+    
+    res.json({
+      success: true,
+      message: 'Images uploaded successfully',
+      images: imageUrls,
+      data: {
+        images: imageUrls
+      }
+    });
+  } catch (error) {
+    logger.error('❌ Failed to upload images', error);
+    res.status(500).json({
+      success: false,
+      error: true,
+      message: 'Failed to upload images',
+      details: error.message
+    });
+  }
+});
+
+/**
  * POST /api/incidents
  * Create new incident (with optional image upload)
  */
 router.post('/', upload.array('images', 5), async (req, res) => {
   try {
-    logger.debug('Creating new incident', req.body);
+    logger.info('📝 Creating new incident');
+    logger.debug('Request body:', { ...req.body, images: req.body.images ? '[...]' : 'none' });
+    
+    // Handle images from both file upload and JSON array
+    let images = [];
+    if (req.files && req.files.length > 0) {
+      // File upload from web form
+      images = req.files.map(file => `/uploads/incident-images/${file.filename}`);
+      logger.debug('Images from file upload:', images.length);
+    } else if (req.body.images) {
+      // JSON array from mobile or API call
+      if (Array.isArray(req.body.images)) {
+        images = req.body.images;
+      } else if (typeof req.body.images === 'string') {
+        try {
+          images = JSON.parse(req.body.images);
+        } catch (e) {
+          logger.warn('Failed to parse images string');
+          images = [];
+        }
+      }
+      logger.debug('Images from request body:', images.length);
+    }
     
     const incidentData = {
       ...req.body,
-      images: req.files ? req.files.map(file => `/uploads/incident-images/${file.filename}`) : []
+      images: images
     };
 
     const incidentId = await Incident.create(incidentData);
     
-    logger.info(`Incident created successfully with ID: ${incidentId}`);
+    logger.info(`✅ Incident created successfully with ID: ${incidentId}`);
     
     res.status(201).json({
       success: true,
@@ -137,7 +204,7 @@ router.post('/', upload.array('images', 5), async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Failed to create incident', error);
+    logger.error('❌ Failed to create incident', error);
     res.status(500).json({
       error: true,
       message: 'Failed to create incident',

@@ -7,49 +7,51 @@ const logger = new Logger('CATCHERS');
 
 /**
  * GET /api/catchers
- * Get all catcher teams
+ * Get all dog catchers
  */
 router.get('/', async (req, res) => {
   try {
-    const [teams] = await pool.execute('SELECT * FROM catcher_teams ORDER BY team_name');
+    const query = 'SELECT * FROM dog_catcher ORDER BY full_name';
+    
+    const [catchers] = await pool.execute(query);
     
     res.json({
       success: true,
-      data: teams
+      data: catchers
     });
   } catch (error) {
-    logger.error('Failed to fetch catcher teams', error);
+    logger.error('Failed to fetch dog catchers', error);
     res.status(500).json({
       error: true,
-      message: 'Failed to fetch catcher teams'
+      message: 'Failed to fetch dog catchers'
     });
   }
 });
 
 /**
  * GET /api/catchers/:id
- * Get single catcher team
+ * Get single dog catcher
  */
 router.get('/:id', async (req, res) => {
   try {
-    const [teams] = await pool.execute('SELECT * FROM catcher_teams WHERE id = ?', [req.params.id]);
+    const [catchers] = await pool.execute('SELECT * FROM dog_catcher WHERE catcher_id = ?', [req.params.id]);
     
-    if (teams.length === 0) {
+    if (catchers.length === 0) {
       return res.status(404).json({
         error: true,
-        message: 'Catcher team not found'
+        message: 'Dog catcher not found'
       });
     }
     
     res.json({
       success: true,
-      data: teams[0]
+      data: catchers[0]
     });
   } catch (error) {
-    logger.error('Failed to fetch catcher team', error);
+    logger.error('Failed to fetch dog catcher', error);
     res.status(500).json({
       error: true,
-      message: 'Failed to fetch catcher team'
+      message: 'Failed to fetch dog catcher'
     });
   }
 });

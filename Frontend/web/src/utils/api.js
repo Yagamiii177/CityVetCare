@@ -126,7 +126,7 @@ export const apiService = {
     delete: (id) => api.delete(`/schedules/${id}`),
   },
 
-  // Patrol Staff
+  // Patrol Staff (Dedicated endpoint)
   patrolStaff: {
     getAll: (filters = {}) => api.get("/patrol-staff", { params: filters }),
     getById: (id) => api.get(`/patrol-staff/${id}`),
@@ -135,10 +135,11 @@ export const apiService = {
     delete: (id) => api.delete(`/patrol-staff/${id}`),
   },
 
-  // Patrol Schedules
+  // Patrol Schedules (Dedicated endpoint)
   patrolSchedules: {
     getAll: (filters = {}) => api.get("/patrol-schedules", { params: filters }),
     getById: (id) => api.get(`/patrol-schedules/${id}`),
+    getByIncident: (incidentId) => api.get(`/patrol-schedules/incident/${incidentId}`),
     create: (data) => api.post("/patrol-schedules", data),
     update: (id, data) => api.put(`/patrol-schedules/${id}`, data),
     delete: (id) => api.delete(`/patrol-schedules/${id}`),

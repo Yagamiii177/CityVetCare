@@ -11,41 +11,52 @@ class Incident {
     try {
       let query = `
         SELECT 
-          i.*,
-          ct.team_name as catcher_team_name,
-          s.scheduled_date,
-          s.scheduled_time,
-          s.status as schedule_status
-        FROM incidents i
-        LEFT JOIN schedules s ON i.id = s.incident_id AND s.status != 'cancelled'
-        LEFT JOIN catcher_teams ct ON s.catcher_team_id = ct.id
+          ir.report_id as id,
+          ir.report_type,
+          ir.description,
+          ir.incident_date,
+          ir.status,
+          ir.reported_at as created_at,
+          r.full_name as reporter_name,
+          r.contact_number as reporter_contact,
+          l.address_text as location,
+          l.latitude,
+          l.longitude,
+          p.animal_type,
+          p.pet_color,
+          p.pet_breed,
+          p.pet_gender,
+          p.pet_size
+        FROM incident_report ir
+        JOIN reporter r ON ir.reporter_id = r.reporter_id
+        JOIN incident_location l ON ir.location_id = l.location_id
+        LEFT JOIN incident_pet p ON ir.report_id = p.report_id
         WHERE 1=1
       `;
       
       const params = [];
       
       if (filters.status) {
-        query += ' AND i.status = ?';
+        query += ' AND ir.status = ?';
         params.push(filters.status);
       }
       
-      if (filters.incident_type) {
-        query += ' AND i.incident_type = ?';
-        params.push(filters.incident_type);
+      if (filters.incident_type || filters.report_type) {
+        query += ' AND ir.report_type = ?';
+        params.push(filters.incident_type || filters.report_type);
       }
       
       if (filters.search) {
         query += ` AND (
-          i.title LIKE ? OR 
-          i.description LIKE ? OR 
-          i.location LIKE ? OR 
-          i.reporter_name LIKE ?
+          ir.description LIKE ? OR 
+          p.animal_type LIKE ? OR 
+          r.contact_number LIKE ?
         )`;
         const searchTerm = `%${filters.search}%`;
-        params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+        params.push(searchTerm, searchTerm, searchTerm);
       }
       
-      query += ' ORDER BY i.created_at DESC';
+      query += ' ORDER BY ir.reported_at DESC';
       
       if (filters.limit) {
         query += ' LIMIT ? OFFSET ?';
@@ -54,10 +65,16 @@ class Incident {
       
       const [rows] = await pool.execute(query, params);
       
-      return rows.map(row => ({
-        ...row,
-        images: row.images ? JSON.parse(row.images) : []
-      }));
+      // Get images for each report
+      for (let row of rows) {
+        const [images] = await pool.execute(
+          'SELECT image_path FROM report_image WHERE report_id = ?',
+          [row.id]
+        );
+        row.images = images.map(img => img.image_path);
+      }
+      
+      return rows;
     } catch (error) {
       logger.error('Failed to get all incidents', error);
       throw error;
@@ -71,15 +88,27 @@ class Incident {
     try {
       const query = `
         SELECT 
-          i.*,
-          ct.team_name as catcher_team_name,
-          s.scheduled_date,
-          s.scheduled_time,
-          s.status as schedule_status
-        FROM incidents i
-        LEFT JOIN schedules s ON i.id = s.incident_id AND s.status != 'cancelled'
-        LEFT JOIN catcher_teams ct ON s.catcher_team_id = ct.id
-        WHERE i.id = ?
+          ir.report_id as id,
+          ir.report_type,
+          ir.description,
+          ir.incident_date,
+          ir.status,
+          ir.reported_at as created_at,
+          r.full_name as reporter_name,
+          r.contact_number as reporter_contact,
+          l.address_text as location,
+          l.latitude,
+          l.longitude,
+          p.animal_type,
+          p.pet_color,
+          p.pet_breed,
+          p.pet_gender,
+          p.pet_size
+        FROM incident_report ir
+        JOIN reporter r ON ir.reporter_id = r.reporter_id
+        JOIN incident_location l ON ir.location_id = l.location_id
+        LEFT JOIN incident_pet p ON ir.report_id = p.report_id
+        WHERE ir.report_id = ?
       `;
       
       const [rows] = await pool.execute(query, [id]);
@@ -89,10 +118,15 @@ class Incident {
       }
       
       const incident = rows[0];
-      return {
-        ...incident,
-        images: incident.images ? JSON.parse(incident.images) : []
-      };
+      
+      // Get images
+      const [images] = await pool.execute(
+        'SELECT image_path FROM report_image WHERE report_id = ?',
+        [id]
+      );
+      incident.images = images.map(img => img.image_path);
+      
+      return incident;
     } catch (error) {
       logger.error('Failed to get incident by ID', error);
       throw error;
@@ -100,45 +134,120 @@ class Incident {
   }
 
   /**
-   * Create new incident
+   * Create new incident with normalized structure
    */
   static async create(data) {
+    const connection = await pool.getConnection();
+    
     try {
-      const query = `
-        INSERT INTO incidents (
-          title, description, location, latitude, longitude,
-          status, incident_type, animal_type,
-          pet_breed, pet_color, pet_gender, pet_size,
-          reporter_name, reporter_contact, reporter_address,
-          images, incident_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
+      await connection.beginTransaction();
       
-      const params = [
-        data.title || 'Incident Report',
-        data.description,
-        data.location,
-        data.latitude || null,
-        data.longitude || null,
-        data.status || 'pending',
-        data.incident_type || 'incident',
-        data.animal_type || null,
-        data.pet_breed || null,
-        data.pet_color || null,
-        data.pet_gender || null,
-        data.pet_size || null,
-        data.reporter_name,
-        data.reporter_contact,
-        data.reporter_address || null,
-        data.images ? JSON.stringify(data.images) : null,
-        data.incident_date || new Date().toISOString().slice(0, 19).replace('T', ' ')
-      ];
+      logger.debug('Creating incident with data:', data);
       
-      const [result] = await pool.execute(query, params);
-      return result.insertId;
+      // 1. Create or get reporter
+      let reporterId;
+      if (data.reporter_contact) {
+        // Check if reporter exists
+        const [existingReporter] = await connection.execute(
+          'SELECT reporter_id FROM reporter WHERE contact_number = ?',
+          [data.reporter_contact]
+        );
+        
+        if (existingReporter.length > 0) {
+          reporterId = existingReporter[0].reporter_id;
+        } else {
+          // Create new reporter
+          const [reporterResult] = await connection.execute(
+            'INSERT INTO reporter (full_name, contact_number) VALUES (?, ?)',
+            [data.reporter_name || 'Mobile User', data.reporter_contact]
+          );
+          reporterId = reporterResult.insertId;
+        }
+      } else {
+        throw new Error('Reporter contact number is required');
+      }
+      
+      // 2. Create location
+      const [locationResult] = await connection.execute(
+        'INSERT INTO incident_location (address_text, latitude, longitude) VALUES (?, ?, ?)',
+        [
+          data.location || `${data.latitude},${data.longitude}`,
+          data.latitude || 0,
+          data.longitude || 0
+        ]
+      );
+      const locationId = locationResult.insertId;
+      
+      // 3. Create incident report
+      const reportType = data.incident_type === 'incident' ? 'bite' : data.incident_type || 'stray';
+      const incidentDate = data.incident_date || new Date().toISOString().slice(0, 19).replace('T', ' ');
+      
+      const [reportResult] = await connection.execute(
+        `INSERT INTO incident_report (
+          reporter_id, location_id, report_type, description, incident_date, status
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          reporterId,
+          locationId,
+          reportType,
+          data.description || null,
+          incidentDate,
+          data.status || 'Pending'
+        ]
+      );
+      const reportId = reportResult.insertId;
+      
+      // 4. Create pet record if animal data provided
+      if (data.animal_type) {
+        await connection.execute(
+          `INSERT INTO incident_pet (
+            report_id, animal_type, pet_color, pet_breed, pet_gender, pet_size
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            reportId,
+            data.animal_type === 'dog' ? 'Dog' : data.animal_type === 'cat' ? 'Cat' : 'Other',
+            data.pet_color || null,
+            data.pet_breed || null,
+            data.pet_gender ? data.pet_gender.charAt(0).toUpperCase() + data.pet_gender.slice(1) : 'Unknown',
+            data.pet_size ? data.pet_size.charAt(0).toUpperCase() + data.pet_size.slice(1) : 'Medium'
+          ]
+        );
+      }
+      
+      // 5. Store images if provided
+      let imageArray = [];
+      if (data.images) {
+        if (Array.isArray(data.images)) {
+          imageArray = data.images;
+        } else if (typeof data.images === 'string') {
+          try {
+            imageArray = JSON.parse(data.images);
+          } catch (e) {
+            logger.warn('Failed to parse images string, treating as single image');
+            imageArray = [data.images];
+          }
+        }
+      }
+      
+      if (imageArray.length > 0) {
+        for (const imagePath of imageArray) {
+          await connection.execute(
+            'INSERT INTO report_image (report_id, image_path) VALUES (?, ?)',
+            [reportId, imagePath]
+          );
+        }
+      }
+      
+      await connection.commit();
+      logger.info(`Incident created successfully with ID: ${reportId}`);
+      
+      return reportId;
     } catch (error) {
+      await connection.rollback();
       logger.error('Failed to create incident', error);
       throw error;
+    } finally {
+      connection.release();
     }
   }
 
@@ -150,55 +259,17 @@ class Incident {
       const fields = [];
       const params = [];
       
-      if (data.title !== undefined) {
-        fields.push('title = ?');
-        params.push(data.title);
-      }
       if (data.description !== undefined) {
         fields.push('description = ?');
         params.push(data.description);
       }
-      if (data.location !== undefined) {
-        fields.push('location = ?');
-        params.push(data.location);
-      }
-      if (data.latitude !== undefined) {
-        fields.push('latitude = ?');
-        params.push(data.latitude);
-      }
-      if (data.longitude !== undefined) {
-        fields.push('longitude = ?');
-        params.push(data.longitude);
-      }
       if (data.status !== undefined) {
         fields.push('status = ?');
         params.push(data.status);
-        
-        // If resolved, set resolved_at
-        if (data.status === 'resolved') {
-          fields.push('resolved_at = ?');
-          params.push(new Date().toISOString().slice(0, 19).replace('T', ' '));
-        }
       }
-      if (data.incident_type !== undefined) {
-        fields.push('incident_type = ?');
-        params.push(data.incident_type);
-      }
-      if (data.animal_type !== undefined) {
-        fields.push('animal_type = ?');
-        params.push(data.animal_type);
-      }
-      if (data.assigned_catcher_id !== undefined) {
-        fields.push('assigned_catcher_id = ?');
-        params.push(data.assigned_catcher_id);
-      }
-      if (data.assigned_staff_name !== undefined) {
-        fields.push('assigned_staff_name = ?');
-        params.push(data.assigned_staff_name);
-      }
-      if (data.images !== undefined) {
-        fields.push('images = ?');
-        params.push(JSON.stringify(data.images));
+      if (data.report_type !== undefined) {
+        fields.push('report_type = ?');
+        params.push(data.report_type);
       }
       
       if (fields.length === 0) {
@@ -206,7 +277,7 @@ class Incident {
       }
       
       params.push(id);
-      const query = `UPDATE incidents SET ${fields.join(', ')} WHERE id = ?`;
+      const query = `UPDATE incident_report SET ${fields.join(', ')} WHERE report_id = ?`;
       
       const [result] = await pool.execute(query, params);
       return result.affectedRows > 0;
@@ -221,7 +292,7 @@ class Incident {
    */
   static async delete(id) {
     try {
-      const [result] = await pool.execute('DELETE FROM incidents WHERE id = ?', [id]);
+      const [result] = await pool.execute('DELETE FROM incident_report WHERE report_id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error) {
       logger.error('Failed to delete incident', error);
@@ -236,31 +307,41 @@ class Incident {
     try {
       const query = `
         SELECT 
-          status,
-          COUNT(*) as count
-        FROM incidents
-        GROUP BY status
+          COUNT(*) as total,
+          COUNT(CASE WHEN \`status\` = 'Pending' THEN 1 END) as pending,
+          COUNT(CASE WHEN \`status\` = 'Verified' THEN 1 END) as verified,
+          COUNT(CASE WHEN \`status\` = 'In Progress' THEN 1 END) as in_progress,
+          COUNT(CASE WHEN \`status\` = 'Resolved' THEN 1 END) as resolved,
+          COUNT(CASE WHEN \`status\` = 'Rejected' THEN 1 END) as rejected,
+          COUNT(CASE WHEN \`status\` = 'Scheduled' THEN 1 END) as scheduled,
+          COUNT(CASE WHEN \`status\` = 'Assigned' THEN 1 END) as assigned,
+          COUNT(CASE WHEN report_type = 'bite' THEN 1 END) as bite_incidents,
+          COUNT(CASE WHEN report_type = 'stray' THEN 1 END) as stray_incidents,
+          COUNT(CASE WHEN report_type = 'lost' THEN 1 END) as lost_incidents,
+          COUNT(CASE WHEN priority = 'urgent' THEN 1 END) as urgent,
+          COUNT(CASE WHEN priority = 'high' THEN 1 END) as \`high_priority\`
+        FROM incident_report
       `;
       
       const [rows] = await pool.execute(query);
       
-      const counts = {
-        pending: 0,
-        verified: 0,
-        in_progress: 0,
-        assigned: 0,
-        scheduled: 0,
-        resolved: 0,
-        cancelled: 0,
-        total: 0
+      const result = rows[0];
+      
+      return {
+        total: parseInt(result.total) || 0,
+        pending: parseInt(result.pending) || 0,
+        verified: parseInt(result.verified) || 0,
+        in_progress: parseInt(result.in_progress) || 0,
+        resolved: parseInt(result.resolved) || 0,
+        rejected: parseInt(result.rejected) || 0,
+        scheduled: parseInt(result.scheduled) || 0,
+        assigned: parseInt(result.assigned) || 0,
+        bite_incidents: parseInt(result.bite_incidents) || 0,
+        stray_incidents: parseInt(result.stray_incidents) || 0,
+        lost_incidents: parseInt(result.lost_incidents) || 0,
+        urgent: parseInt(result.urgent) || 0,
+        high_priority: parseInt(result.high_priority) || 0
       };
-      
-      rows.forEach(row => {
-        counts[row.status] = parseInt(row.count);
-        counts.total += parseInt(row.count);
-      });
-      
-      return counts;
     } catch (error) {
       logger.error('Failed to get counts by status', error);
       throw error;
