@@ -10,6 +10,7 @@ import validateEnv from "./utils/validateEnv.js";
 // Import routes
 import authRouter from "./routes/auth.js";
 import healthRouter from "./routes/health.js";
+import strayAnimalsRouter from "./routes/strayAnimals.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -83,6 +84,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/stray-animals", strayAnimalsRouter);
 
 // 404 handler
 app.use((req, res) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/StrayAnimalManagement/Drawer";
 import {
@@ -10,6 +10,7 @@ import {
 import RegisterAnimalModal from "../../components/StrayAnimalManagement/CaptureAnimalPage/RegisterAnimalModal";
 import ObservationProfile from "../../components/StrayAnimalManagement/CaptureAnimalPage/ObservationProfile";
 import EditObservation from "../../components/StrayAnimalManagement/CaptureAnimalPage/AddObservation";
+import { apiService } from "../../utils/api";
 
 const CaptureAnimalPage = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -25,6 +26,10 @@ const CaptureAnimalPage = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showDropdown, setShowDropdown] = useState(null);
+  const [capturedAnimals, setCapturedAnimals] = useState([]);
+  const [observationAnimals, setObservationAnimals] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Breed options by species
   const breedOptions = {
@@ -64,191 +69,57 @@ const CaptureAnimalPage = () => {
     ],
   };
 
-  const [capturedAnimals, setCapturedAnimals] = useState([
-    {
-      id: 1,
-      species: "Dog",
-      breed: "Golden Retriever",
-      sex: "Male",
-      marking: "Solid Color",
-      hasTag: "yes",
-      tagNumber: "985000123456789",
-      captureDate: "2023-05-15",
-      locationCaptured: "Downtown Area",
-      notes: "Friendly and well-behaved",
-      images: {},
-    },
-    {
-      id: 2,
-      species: "Cat",
-      breed: "Siamese",
-      sex: "Female",
-      marking: "Points (Siamese pattern)",
-      hasTag: "no",
-      tagNumber: "",
-      captureDate: "2023-05-18",
-      locationCaptured: "Residential Area",
-      notes: "Leg injury, requires treatment",
-      images: {},
-    },
-    {
-      id: 3,
-      species: "Dog",
-      breed: "German Shepherd",
-      sex: "Male",
-      marking: "Bi-color",
-      hasTag: "yes",
-      tagNumber: "960451230987654",
-      captureDate: "2023-05-20",
-      locationCaptured: "City Park",
-      notes: "Very energetic, needs exercise",
-      images: {},
-    },
-    {
-      id: 4,
-      species: "Dog",
-      breed: "Golden Retriever",
-      sex: "Male",
-      marking: "Solid Color",
-      hasTag: "yes",
-      tagNumber: "985000123456789",
-      captureDate: "2023-05-15",
-      locationCaptured: "Downtown Area",
-      notes: "Friendly and well-behaved",
-      images: {},
-    },
-    {
-      id: 5,
-      species: "Dog",
-      breed: "Golden Retriever",
-      sex: "Male",
-      marking: "Solid Color",
-      hasTag: "yes",
-      tagNumber: "985000123456789",
-      captureDate: "2023-05-15",
-      locationCaptured: "Downtown Area",
-      notes: "Friendly and well-behaved",
-      images: {},
-    },
-    {
-      id: 6,
-      species: "Dog",
-      breed: "Golden Retriever",
-      sex: "Male",
-      marking: "Solid Color",
-      hasTag: "yes",
-      tagNumber: "985000123456789",
-      captureDate: "2023-05-15",
-      locationCaptured: "Downtown Area",
-      notes: "Friendly and well-behaved",
-      images: {},
-    },
-    {
-      id: 7,
-      species: "Dog",
-      breed: "Golden Retriever",
-      sex: "Male",
-      marking: "Solid Color",
-      hasTag: "yes",
-      tagNumber: "985000123456789",
-      captureDate: "2023-05-15",
-      locationCaptured: "Downtown Area",
-      notes: "Friendly and well-behaved",
-      images: {},
-    },
-    {
-      id: 8,
-      species: "Dog",
-      breed: "Golden Retriever",
-      sex: "Male",
-      marking: "Solid Color",
-      hasTag: "yes",
-      tagNumber: "985000123456789",
-      captureDate: "2023-05-15",
-      locationCaptured: "Downtown Area",
-      notes: "Friendly and well-behaved",
-      images: {},
-    },
-    {
-      id: 102,
-      species: "Cat",
-      breed: "Persian",
-      sex: "Female",
-      marking: "Solid Color",
-      hasTag: "no",
-      tagNumber: "",
-      captureDate: "2023-05-22",
-      locationCaptured: "Downtown",
-      notes: "Underweight, needs nutritional support",
-      observationNotes: "Underweight, needs nutritional support",
-      dateObserved: "2023-05-22",
-      images: {},
-    },
-    {
-      id: 102,
-      species: "Cat",
-      breed: "Persian",
-      sex: "Female",
-      marking: "Solid Color",
-      hasTag: "no",
-      tagNumber: "",
-      captureDate: "2023-05-22",
-      locationCaptured: "Downtown",
-      notes: "Underweight, needs nutritional support",
-      observationNotes: "Underweight, needs nutritional support",
-      dateObserved: "2023-05-22",
-      images: {},
-    },
-  ]);
+  const normalizeAnimal = (animal) => {
+    const fallbackName = animal?.name
+      ? animal.name
+      : animal?.id
+      ? `Stray #${animal.id}`
+      : "Stray Animal";
 
-  const [observationAnimals, setObservationAnimals] = useState([
-    {
-      id: 101,
-      species: "Dog",
-      breed: "Labrador",
-      sex: "Male",
-      marking: "Solid Color",
-      hasTag: "yes",
-      tagNumber: "101",
-      captureDate: "2023-05-20",
-      locationCaptured: "Park Area",
-      notes: "Limping on right paw, needs monitoring",
-      observationNotes: "Limping on right paw, needs monitoring",
-      dateObserved: "2023-05-20",
-      images: {},
-    },
-    {
-      id: 102,
-      species: "Cat",
-      breed: "Persian",
-      sex: "Female",
-      marking: "Solid Color",
-      hasTag: "no",
-      tagNumber: "",
-      captureDate: "2023-05-22",
-      locationCaptured: "Downtown",
-      notes: "Underweight, needs nutritional support",
-      observationNotes: "Underweight, needs nutritional support",
-      dateObserved: "2023-05-22",
-      images: {},
-    },
-  ]);
+    return {
+      ...animal,
+      pastObservations: animal?.pastObservations || [],
+      name: fallbackName,
+      gender: animal?.gender || animal?.sex || "Unknown",
+      location: animal?.location || animal?.locationCaptured || "",
+      dateCaptured: animal?.captureDate || animal?.dateCaptured || null,
+    };
+  };
 
-  const [adoptionList, setAdoptionList] = useState([
-    {
-      id: 201,
-      species: "Dog",
-      breed: "German Shepherd",
-      sex: "Male",
-      marking: "Bi-color",
-      hasTag: "yes",
-      tagNumber: "003",
-      captureDate: "2023-05-20",
-      locationCaptured: "City Park",
-      notes: "Very energetic, needs active family",
-      dateAddedToAdoption: "2023-05-25",
-    },
-  ]);
+  const applyNormalization = (list = []) =>
+    list.map((item) => normalizeAnimal(item));
+
+  const formatToday = () => new Date().toISOString().split("T")[0];
+
+  const unwrapData = (response) => response?.data?.data ?? response?.data ?? [];
+
+  const handleApiError = (message, apiError) => {
+    console.error(message, apiError);
+    setError(message);
+  };
+
+  const loadAnimals = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const [capturedRes, observationRes] = await Promise.all([
+        apiService.strayAnimals.list({ status: "captured" }),
+        apiService.strayAnimals.list({ status: "observation" }),
+      ]);
+
+      setCapturedAnimals(applyNormalization(unwrapData(capturedRes)));
+      setObservationAnimals(applyNormalization(unwrapData(observationRes)));
+    } catch (apiError) {
+      handleApiError("Unable to load animals", apiError);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAnimals();
+  }, []);
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
@@ -271,103 +142,176 @@ const CaptureAnimalPage = () => {
     setSearchTerm("");
   };
 
-  const handleRegisterAnimal = (formData) => {
-    const commonData = {
-      id:
-        Math.max(
-          ...capturedAnimals.map((a) => a.id),
-          ...observationAnimals.map((a) => a.id),
-          0
-        ) + 1,
-      species: formData.species,
-      breed: formData.breed,
-      sex: formData.sex,
-      marking: formData.marking,
-      hasTag: formData.hasTag,
-      tagNumber: formData.tagNumber || "",
-      captureDate: formData.captureDate,
-      locationCaptured: formData.locationCaptured,
-      notes: formData.notes || "",
-      images: formData.images,
-    };
+  const handleRegisterAnimal = async (formData) => {
+    setError(null);
+    try {
+      setIsLoading(true);
+      const payload = {
+        species: formData.species,
+        breed: formData.breed,
+        sex: formData.sex,
+        marking: formData.marking,
+        hasTag: formData.hasTag === "yes" || formData.hasTag === true,
+        tagNumber: formData.tagNumber || "",
+        captureDate: formData.captureDate,
+        locationCaptured: formData.locationCaptured,
+        notes: formData.notes || "",
+        status: formData.status === "Observation" ? "observation" : "captured",
+        observationNotes:
+          formData.status === "Observation"
+            ? formData.notes || ""
+            : formData.observationNotes || "",
+        dateObserved:
+          formData.status === "Observation"
+            ? formData.captureDate
+            : formData.dateObserved,
+      };
 
-    if (formData.status === "Observation") {
-      const newObservationAnimal = {
-        ...commonData,
-        observationNotes: formData.notes || "No notes provided",
-        dateObserved: formData.captureDate,
-      };
-      setObservationAnimals([...observationAnimals, newObservationAnimal]);
-    } else {
-      const newCapturedAnimal = {
-        ...commonData,
-      };
-      setCapturedAnimals([...capturedAnimals, newCapturedAnimal]);
+      const response = await apiService.strayAnimals.create(payload);
+      const createdAnimal = normalizeAnimal(unwrapData(response));
+
+      if (createdAnimal.status === "observation") {
+        setObservationAnimals((prev) => [...prev, createdAnimal]);
+      } else {
+        setCapturedAnimals((prev) => [...prev, createdAnimal]);
+      }
+
+      setIsRegisterModalOpen(false);
+    } catch (apiError) {
+      handleApiError("Unable to register animal", apiError);
+    } finally {
+      setIsLoading(false);
     }
-    setIsRegisterModalOpen(false);
   };
 
   const handleRowClick = (animal) => {
-    setSelectedAnimal(animal);
+    setSelectedAnimal(normalizeAnimal(animal));
     setIsProfileOpen(true);
   };
 
-  const handleSaveObservation = (updatedAnimal) => {
-    setObservationAnimals(
-      observationAnimals.map((animal) =>
-        animal.id === updatedAnimal.id ? updatedAnimal : animal
-      )
-    );
-  };
+  const handleSaveObservation = async (updatedAnimal) => {
+    setError(null);
+    try {
+      const payload = {
+        observationNotes:
+          updatedAnimal.observationNotes || updatedAnimal.notes || "",
+        pastObservations: updatedAnimal.pastObservations || [],
+        status: "observation",
+        dateObserved: updatedAnimal.dateObserved || formatToday(),
+        notes: updatedAnimal.notes || "",
+      };
 
-  const handleSaveAnimal = (updatedAnimal) => {
-    if (activeTab === "captured") {
-      setCapturedAnimals((prev) =>
-        prev.map((animal) =>
-          animal.id === updatedAnimal.id ? updatedAnimal : animal
-        )
+      const response = await apiService.strayAnimals.update(
+        updatedAnimal.id,
+        payload
       );
-    } else {
+
+      const saved = normalizeAnimal(unwrapData(response));
       setObservationAnimals((prev) =>
-        prev.map((animal) =>
-          animal.id === updatedAnimal.id ? updatedAnimal : animal
-        )
+        prev.map((animal) => (animal.id === saved.id ? saved : animal))
       );
+      setSelectedAnimal(saved);
+    } catch (apiError) {
+      handleApiError("Unable to save observation", apiError);
     }
   };
 
-  const handleSendToObservation = (animal) => {
-    const updatedAnimal = {
-      ...animal,
-      observationNotes: animal.notes || "No notes provided",
-      dateObserved: new Date().toISOString().split("T")[0],
-    };
+  const handleSaveAnimal = async (updatedAnimal) => {
+    setError(null);
+    try {
+      const payload = {
+        species: updatedAnimal.species,
+        breed: updatedAnimal.breed,
+        sex: updatedAnimal.sex || updatedAnimal.gender,
+        marking: updatedAnimal.marking,
+        hasTag: updatedAnimal.hasTag === "yes" || updatedAnimal.hasTag === true,
+        tagNumber: updatedAnimal.tagNumber || "",
+        captureDate: updatedAnimal.captureDate || updatedAnimal.dateCaptured,
+        locationCaptured:
+          updatedAnimal.locationCaptured || updatedAnimal.location || "",
+        notes: updatedAnimal.notes || updatedAnimal.observationNotes || "",
+        observationNotes:
+          updatedAnimal.observationNotes || updatedAnimal.notes || "",
+        status: updatedAnimal.status || activeTab,
+        pastObservations: updatedAnimal.pastObservations || [],
+      };
 
-    setCapturedAnimals(capturedAnimals.filter((a) => a.id !== animal.id));
-    setObservationAnimals([...observationAnimals, updatedAnimal]);
-    setShowDropdown(null);
+      const response = await apiService.strayAnimals.update(
+        updatedAnimal.id,
+        payload
+      );
+
+      const saved = normalizeAnimal(unwrapData(response));
+
+      if ((saved.status || activeTab) === "captured") {
+        setCapturedAnimals((prev) =>
+          prev.map((animal) => (animal.id === saved.id ? saved : animal))
+        );
+      } else {
+        setObservationAnimals((prev) =>
+          prev.map((animal) => (animal.id === saved.id ? saved : animal))
+        );
+      }
+
+      setSelectedAnimal(saved);
+    } catch (apiError) {
+      handleApiError("Unable to save animal", apiError);
+    }
   };
 
-  const handleSendToCaptured = (animal) => {
-    const updatedAnimal = {
-      ...animal,
-      notes: animal.observationNotes || "No notes provided",
-    };
+  const handleSendToObservation = async (animal) => {
+    setError(null);
+    try {
+      const response = await apiService.strayAnimals.updateStatus(animal.id, {
+        status: "observation",
+        observationNotes: animal.notes || "No notes provided",
+        dateObserved: formatToday(),
+      });
 
-    setObservationAnimals(observationAnimals.filter((a) => a.id !== animal.id));
-    setCapturedAnimals([...capturedAnimals, updatedAnimal]);
-    setShowDropdown(null);
+      const updated = normalizeAnimal(unwrapData(response));
+      setCapturedAnimals((prev) => prev.filter((a) => a.id !== animal.id));
+      setObservationAnimals((prev) => [...prev, updated]);
+    } catch (apiError) {
+      handleApiError("Unable to move to observation", apiError);
+    } finally {
+      setShowDropdown(null);
+    }
   };
 
-  const handleSendToAdoption = (animal) => {
-    const updatedAnimal = {
-      ...animal,
-      dateAddedToAdoption: new Date().toISOString().split("T")[0],
-    };
+  const handleSendToCaptured = async (animal) => {
+    setError(null);
+    try {
+      const response = await apiService.strayAnimals.updateStatus(animal.id, {
+        status: "captured",
+        notes: animal.observationNotes || "No notes provided",
+        observationNotes: animal.observationNotes || "",
+      });
 
-    setCapturedAnimals(capturedAnimals.filter((a) => a.id !== animal.id));
-    setAdoptionList([...adoptionList, updatedAnimal]);
-    setShowDropdown(null);
+      const updated = normalizeAnimal(unwrapData(response));
+      setObservationAnimals((prev) => prev.filter((a) => a.id !== animal.id));
+      setCapturedAnimals((prev) => [...prev, updated]);
+    } catch (apiError) {
+      handleApiError("Unable to move to captured", apiError);
+    } finally {
+      setShowDropdown(null);
+    }
+  };
+
+  const handleSendToAdoption = async (animal) => {
+    setError(null);
+    try {
+      const response = await apiService.strayAnimals.updateStatus(animal.id, {
+        status: "adoption",
+        dateAddedToAdoption: formatToday(),
+      });
+
+      unwrapData(response);
+      setCapturedAnimals((prev) => prev.filter((a) => a.id !== animal.id));
+    } catch (apiError) {
+      handleApiError("Unable to move to adoption list", apiError);
+    } finally {
+      setShowDropdown(null);
+    }
   };
 
   const filteredAnimals =
@@ -600,6 +544,14 @@ const CaptureAnimalPage = () => {
             </div>
           </div>
 
+          {error && (
+            <div className="px-6 -mt-2 pb-4">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            </div>
+          )}
+
           {/* Table Container - Fixed height with proper scrolling */}
           <div className="flex-1 px-6 pb-8 overflow-hidden mb-15">
             <div className="bg-white rounded-lg shadow-sm border border-[#E8E8E8] h-full flex flex-col">
@@ -648,7 +600,16 @@ const CaptureAnimalPage = () => {
               <div className="flex-1 overflow-auto">
                 <table className="min-w-full divide-y divide-[#E8E8E8]">
                   <tbody className="bg-white divide-y divide-[#E8E8E8]">
-                    {filteredAnimals.length > 0 ? (
+                    {isLoading ? (
+                      <tr>
+                        <td
+                          colSpan="9"
+                          className="px-6 py-4 text-center text-sm text-gray-500"
+                        >
+                          Loading animals...
+                        </td>
+                      </tr>
+                    ) : filteredAnimals.length > 0 ? (
                       filteredAnimals.map((animal) => (
                         <tr
                           key={animal.id}
@@ -663,13 +624,13 @@ const CaptureAnimalPage = () => {
                             <div className="text-gray-500">{animal.breed}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {animal.sex}
+                            {animal.sex || animal.gender}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                             {animal.marking}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {animal.hasTag === "yes" ? (
+                            {animal.hasTag ? (
                               <span className="text-orange-800 font-medium px-3 py-1 rounded-full text-xs">
                                 {animal.tagNumber}
                               </span>
@@ -680,11 +641,11 @@ const CaptureAnimalPage = () => {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {animal.locationCaptured}
+                            {animal.locationCaptured || animal.location}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                             {activeTab === "captured"
-                              ? animal.captureDate
+                              ? animal.captureDate || animal.dateCaptured
                               : animal.dateObserved}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
@@ -760,7 +721,9 @@ const CaptureAnimalPage = () => {
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setSelectedAnimal(animal);
+                                              setSelectedAnimal(
+                                                normalizeAnimal(animal)
+                                              );
                                               setIsEditModalOpen(true);
                                               setShowDropdown(null);
                                             }}
