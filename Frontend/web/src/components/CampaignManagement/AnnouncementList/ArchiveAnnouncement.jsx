@@ -6,24 +6,6 @@ import {
   ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
 
-// Mock API service - replace with actual API calls
-const archiveAnnouncementAPI = async (id) => {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      // Simulate random success/failure for testing
-      const success = Math.random() > 0.2; // 80% success rate
-      if (success) {
-        resolve({
-          success: true,
-          message: "Announcement archived successfully",
-        });
-      } else {
-        reject(new Error("Failed to archive announcement. Please try again."));
-      }
-    }, 800);
-  });
-};
-
 const ArchiveAnnouncement = ({ announcement, onClose, onConfirm }) => {
   const [isArchiving, setIsArchiving] = useState(false);
   const [error, setError] = useState(null);
@@ -36,18 +18,12 @@ const ArchiveAnnouncement = ({ announcement, onClose, onConfirm }) => {
     setError(null);
 
     try {
-      // API call to archive announcement
-      await archiveAnnouncementAPI(announcement.id);
-
-      // Success state
+      await onConfirm(announcement.id);
       setSuccess(true);
 
-      // Wait a moment to show success message before closing
       setTimeout(() => {
-        // Call parent callback with the archived ID
-        onConfirm(announcement.id);
         onClose();
-      }, 1000);
+      }, 800);
     } catch (err) {
       console.error("Archive error:", err);
       setError(err.message || "Failed to archive announcement");

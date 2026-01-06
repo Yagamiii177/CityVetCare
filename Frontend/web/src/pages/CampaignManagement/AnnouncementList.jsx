@@ -1,16 +1,9 @@
-import { useState, useEffect } from "react";
-import { Header } from "../../components/Header";
-import { Drawer } from "../../components/CampaignManagement/Drawer";
-import NewAnnouncement from "../../components/CampaignManagement/AnnouncementList/NewAnnouncement";
-import ViewAnnouncement from "../../components/CampaignManagement/AnnouncementList/ViewAnnouncement";
-import EditAnnouncement from "../../components/CampaignManagement/AnnouncementList/EditAnnouncement";
-import ArchiveAnnouncement from "../../components/CampaignManagement/AnnouncementList/ArchiveAnnouncement";
+import { useEffect, useMemo, useState } from "react";
 import {
   EyeIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
   PlusIcon,
-  DocumentArrowDownIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
   ClockIcon,
@@ -22,73 +15,65 @@ import {
   ArchiveBoxArrowDownIcon,
   PencilIcon,
   XMarkIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
+import { Header } from "../../components/Header";
+import { Drawer } from "../../components/CampaignManagement/Drawer";
+import NewAnnouncement from "../../components/CampaignManagement/AnnouncementList/NewAnnouncement";
+import ViewAnnouncement from "../../components/CampaignManagement/AnnouncementList/ViewAnnouncement";
+import EditAnnouncement from "../../components/CampaignManagement/AnnouncementList/EditAnnouncement";
+import ArchiveAnnouncement from "../../components/CampaignManagement/AnnouncementList/ArchiveAnnouncement";
+import {
+  announcementService,
+  CATEGORY_LABELS,
+} from "../../components/CampaignManagement/AnnouncementList/announcementService";
 
-// API Service Functions (replace with actual API calls)
-const announcementAPI = {
-  fetchAnnouncements: async () => {
-    // Replace with actual API call
-    return [
-      {
-        id: 1,
-        title: "Vaccination Guidelines Update for 2025",
-        category: "health",
-        categoryName: "Health Advisory",
-        author: "Dr. Maria Santos",
-        publishDate: "2025-11-15",
-        status: "Published",
-        priority: "High",
-        views: 245,
-        description: "Updated vaccination guidelines for all domestic pets.",
-        attachments: [
-          { id: 1, name: "guidelines.pdf", size: 2048, type: "pdf" },
-          { id: 2, name: "vaccine_schedule.jpg", size: 1024, type: "image" },
-        ],
-        lastUpdated: "2025-11-15T10:30:00Z",
-        isArchived: false,
-      },
-      {
-        id: 2,
-        title: "Old Policy from 2024",
-        category: "policy",
-        categoryName: "Policy Update",
-        author: "City Administration",
-        publishDate: "2024-03-10",
-        status: "Archived",
-        priority: "Medium",
-        views: 120,
-        description: "Previous policy that has been superseded.",
-        attachments: [],
-        lastUpdated: "2024-03-10T14:20:00Z",
-        isArchived: true,
-      },
-      // ... other announcements
-    ];
-  },
+const categoryList = [
+  { id: "all", name: "All Announcements", icon: MegaphoneIcon },
+  { id: "health", name: "Health Advisory", icon: ExclamationTriangleIcon },
+  { id: "policy", name: "Policy Update", icon: DocumentTextIcon },
+  { id: "events", name: "Events", icon: CalendarDaysIcon },
+  { id: "general", name: "General Info", icon: TagIcon },
+  { id: "draft", name: "Drafts", icon: ClockIcon },
+  { id: "archive", name: "Archived", icon: ArchiveBoxIcon },
+];
 
-  createAnnouncement: async (data) => {
-    // Replace with actual API call
-    console.log("Creating announcement:", data);
-    return { success: true, data };
-  },
+const getPriorityBadge = (priority) => {
+  const styles = {
+    High: "bg-red-50 text-red-700 border border-red-200",
+    Medium: "bg-yellow-50 text-yellow-700 border border-yellow-200",
+    Low: "bg-green-50 text-green-700 border border-green-200",
+  };
+  return (
+    <span
+      className={`px-2 py-0.5 rounded text-xs font-medium ${
+        styles[priority] || styles.Medium
+      }`}
+    >
+      {priority}
+    </span>
+  );
+};
 
-  updateAnnouncement: async (id, data) => {
-    // Replace with actual API call
-    console.log(`Updating announcement ${id}:`, data);
-    return { success: true, data };
-  },
+const getStatusBadge = (status, isArchived) => {
+  const styles = {
+    Published: "bg-green-50 text-green-700 border border-green-200",
+    Scheduled: "bg-blue-50 text-blue-700 border border-blue-200",
+    Draft: "bg-yellow-50 text-yellow-700 border border-yellow-200",
+    Archived: "bg-gray-50 text-gray-700 border border-gray-200",
+  };
 
-  archiveAnnouncement: async (id) => {
-    // Replace with actual API call
-    console.log(`Archiving announcement ${id}`);
-    return { success: true };
-  },
+  const displayStatus = isArchived ? "Archived" : status;
 
-  restoreAnnouncement: async (id) => {
-    // Replace with actual API call
-    console.log(`Restoring announcement ${id}`);
-    return { success: true };
-  },
+  return (
+    <span
+      className={`px-2 py-0.5 rounded text-xs font-medium ${
+        styles[displayStatus] || styles.Draft
+      }`}
+    >
+      {displayStatus}
+    </span>
+  );
 };
 
 const AnnouncementManagement = () => {
@@ -98,12 +83,11 @@ const AnnouncementManagement = () => {
   const [archivingAnnouncement, setArchivingAnnouncement] = useState(null);
   const [isNewAnnouncementOpen, setIsNewAnnouncementOpen] = useState(false);
 
-  // Data states
   const [announcements, setAnnouncements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date");
@@ -111,7 +95,6 @@ const AnnouncementManagement = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [activeCategory, setActiveCategory] = useState("all");
 
-  // Fetch announcements on component mount
   useEffect(() => {
     fetchAnnouncements();
   }, []);
@@ -120,229 +103,208 @@ const AnnouncementManagement = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await announcementAPI.fetchAnnouncements();
+      const data = await announcementService.list();
       setAnnouncements(data);
     } catch (err) {
-      setError("Failed to load announcements");
       console.error("Error fetching announcements:", err);
+      setError("Failed to load announcements");
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
-  // Categories for sidebar (could also be fetched from backend)
-  const categories = [
-    { id: "all", name: "All Announcements", icon: MegaphoneIcon },
-    { id: "health", name: "Health Advisory", icon: ExclamationTriangleIcon },
-    { id: "policy", name: "Policy Update", icon: DocumentTextIcon },
-    { id: "events", name: "Events", icon: CalendarDaysIcon },
-    { id: "general", name: "General Info", icon: TagIcon },
-    { id: "draft", name: "Drafts", icon: ClockIcon },
-    { id: "archive", name: "Archived", icon: ArchiveBoxIcon },
-  ];
-
-  // Calculate counts dynamically
-  const categoryCounts = {
-    all: announcements.length,
-    health: announcements.filter(
-      (a) => a.category === "health" && !a.isArchived
-    ).length,
-    policy: announcements.filter(
-      (a) => a.category === "policy" && !a.isArchived
-    ).length,
-    events: announcements.filter(
-      (a) => a.category === "events" && !a.isArchived
-    ).length,
-    general: announcements.filter(
-      (a) => a.category === "general" && !a.isArchived
-    ).length,
-    draft: announcements.filter((a) => a.status === "Draft" && !a.isArchived)
-      .length,
-    archive: announcements.filter(
-      (a) => a.isArchived || a.status === "Archived"
-    ).length,
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchAnnouncements();
   };
 
-  const statusCounts = {
-    all: announcements.filter((a) => !a.isArchived).length,
-    Published: announcements.filter(
-      (a) => a.status === "Published" && !a.isArchived
-    ).length,
-    Scheduled: announcements.filter(
-      (a) => a.status === "Scheduled" && !a.isArchived
-    ).length,
-    Draft: announcements.filter((a) => a.status === "Draft" && !a.isArchived)
-      .length,
-    Archived: announcements.filter(
-      (a) => a.isArchived || a.status === "Archived"
-    ).length,
-  };
+  const categoryCounts = useMemo(() => {
+    const baseCounts = {
+      all: 0,
+      health: 0,
+      policy: 0,
+      events: 0,
+      general: 0,
+      draft: 0,
+      archive: 0,
+    };
 
-  // Filter and sort logic
-  const filteredAnnouncements = announcements
-    .filter((announcement) => {
-      const matchesSearch =
-        announcement.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        announcement.description
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        announcement.author.toLowerCase().includes(searchTerm.toLowerCase());
+    announcements.forEach((a) => {
+      const category = a.category || "general";
+      const status = a.status || "Draft";
+      const isArchived = a.isArchived || status === "Archived";
 
-      const matchesStatus =
-        statusFilter === "all" || announcement.status === statusFilter;
+      if (!isArchived) {
+        baseCounts.all += 1;
+        if (baseCounts[category] !== undefined) {
+          baseCounts[category] += 1;
+        }
+        if (status === "Draft") {
+          baseCounts.draft += 1;
+        }
+      } else {
+        baseCounts.archive += 1;
+      }
+    });
 
-      const matchesCategory = (() => {
-        if (activeCategory === "all") {
-          return !announcement.isArchived; // Show non-archived for "all"
-        } else if (activeCategory === "archive") {
-          return announcement.isArchived || announcement.status === "Archived";
-        } else {
+    return baseCounts;
+  }, [announcements]);
+
+  const statusCounts = useMemo(() => {
+    const counts = {
+      all: 0,
+      Published: 0,
+      Scheduled: 0,
+      Draft: 0,
+      Archived: 0,
+    };
+
+    announcements.forEach((a) => {
+      const status = a.isArchived ? "Archived" : a.status || "Draft";
+      if (!a.isArchived) {
+        counts.all += 1;
+      }
+      if (counts[status] !== undefined) {
+        counts[status] += 1;
+      }
+    });
+
+    return counts;
+  }, [announcements]);
+
+  const filteredAnnouncements = useMemo(() => {
+    return announcements
+      .filter((announcement) => {
+        const matchesSearch = [
+          announcement.title,
+          announcement.description,
+          announcement.author,
+        ]
+          .filter(Boolean)
+          .some((value) =>
+            value.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+
+        const matchesStatus =
+          statusFilter === "all" ||
+          (announcement.isArchived && statusFilter === "Archived") ||
+          announcement.status === statusFilter;
+
+        const matchesCategory = (() => {
+          if (activeCategory === "all") {
+            return !announcement.isArchived;
+          }
+          if (activeCategory === "archive") {
+            return (
+              announcement.isArchived || announcement.status === "Archived"
+            );
+          }
+          if (activeCategory === "draft") {
+            return announcement.status === "Draft" && !announcement.isArchived;
+          }
           return (
             announcement.category === activeCategory && !announcement.isArchived
           );
-        }
-      })();
+        })();
 
-      return matchesSearch && matchesStatus && matchesCategory;
-    })
-    .sort((a, b) => {
-      let aValue, bValue;
+        return matchesSearch && matchesStatus && matchesCategory;
+      })
+      .sort((a, b) => {
+        const getSortValue = (item) => {
+          switch (sortBy) {
+            case "date": {
+              const dateValue =
+                item.publishDate || item.createdAt || item.lastUpdated;
+              return dateValue ? new Date(dateValue).getTime() : 0;
+            }
+            case "priority": {
+              const order = { High: 3, Medium: 2, Low: 1 };
+              return order[item.priority] || 0;
+            }
+            case "views":
+              return item.views || 0;
+            case "createdAt": {
+              const created = item.createdAt || item.publishDate;
+              return created ? new Date(created).getTime() : 0;
+            }
+            default:
+              return 0;
+          }
+        };
 
-      switch (sortBy) {
-        case "date":
-          aValue = new Date(a.publishDate || a.createdAt);
-          bValue = new Date(b.publishDate || b.createdAt);
-          break;
-        case "priority":
-          const priorityOrder = { High: 3, Medium: 2, Low: 1 };
-          aValue = priorityOrder[a.priority] || 0;
-          bValue = priorityOrder[b.priority] || 0;
-          break;
-        case "views":
-          aValue = a.views || 0;
-          bValue = b.views || 0;
-          break;
-        default:
-          aValue = a[sortBy];
-          bValue = b[sortBy];
-      }
-
-      return sortOrder === "desc" ? bValue - aValue : aValue - bValue;
-    });
-
-  const getPriorityBadge = (priority) => {
-    const styles = {
-      High: "bg-red-50 text-red-700 border border-red-200",
-      Medium: "bg-yellow-50 text-yellow-700 border border-yellow-200",
-      Low: "bg-green-50 text-green-700 border border-green-200",
-    };
-    return (
-      <span
-        className={`px-2 py-0.5 rounded text-xs font-medium ${
-          styles[priority] || styles.Medium
-        }`}
-      >
-        {priority}
-      </span>
-    );
-  };
-
-  const getStatusBadge = (status, isArchived) => {
-    const styles = {
-      Published: "bg-green-50 text-green-700 border border-green-200",
-      Scheduled: "bg-blue-50 text-blue-700 border border-blue-200",
-      Draft: "bg-yellow-50 text-yellow-700 border border-yellow-200",
-      Archived: "bg-gray-50 text-gray-700 border border-gray-200",
-    };
-
-    const displayStatus = isArchived ? "Archived" : status;
-
-    return (
-      <span
-        className={`px-2 py-0.5 rounded text-xs font-medium ${
-          styles[displayStatus] || styles.Draft
-        }`}
-      >
-        {displayStatus}
-      </span>
-    );
-  };
+        const aValue = getSortValue(a);
+        const bValue = getSortValue(b);
+        return sortOrder === "desc" ? bValue - aValue : aValue - bValue;
+      });
+  }, [
+    announcements,
+    searchTerm,
+    statusFilter,
+    activeCategory,
+    sortBy,
+    sortOrder,
+  ]);
 
   const handleCreateAnnouncement = async (newAnnouncement) => {
     try {
-      const response = await announcementAPI.createAnnouncement(
-        newAnnouncement
-      );
-      if (response.success) {
-        // Update local state
-        setAnnouncements((prev) => [response.data, ...prev]);
-        setIsNewAnnouncementOpen(false);
-      }
+      const created = await announcementService.create(newAnnouncement);
+      setAnnouncements((prev) => [created, ...prev]);
+      setIsNewAnnouncementOpen(false);
+      return created;
     } catch (err) {
       console.error("Error creating announcement:", err);
-      alert("Failed to create announcement");
+      throw new Error("Failed to create announcement");
     }
   };
 
   const handleSaveEdit = async (updatedAnnouncement) => {
     try {
-      const response = await announcementAPI.updateAnnouncement(
+      const updated = await announcementService.update(
         updatedAnnouncement.id,
         updatedAnnouncement
       );
-      if (response.success) {
-        // Update local state
-        setAnnouncements((prev) =>
-          prev.map((a) => (a.id === updatedAnnouncement.id ? response.data : a))
-        );
-        setEditingAnnouncement(null);
-      }
+      setAnnouncements((prev) =>
+        prev.map((a) => (a.id === updated.id ? updated : a))
+      );
+      setEditingAnnouncement(null);
+      return updated;
     } catch (err) {
       console.error("Error updating announcement:", err);
-      alert("Failed to update announcement");
+      throw new Error("Failed to update announcement");
     }
   };
 
   const handleArchiveAnnouncement = async (announcementId) => {
     try {
-      const response = await announcementAPI.archiveAnnouncement(
-        announcementId
+      const archived = await announcementService.archive(announcementId);
+      setAnnouncements((prev) =>
+        prev.map((a) =>
+          a.id === announcementId
+            ? { ...a, ...archived, isArchived: true, status: "Archived" }
+            : a
+        )
       );
-      if (response.success) {
-        // Update local state - mark as archived
-        setAnnouncements((prev) =>
-          prev.map((a) =>
-            a.id === announcementId
-              ? { ...a, isArchived: true, status: "Archived" }
-              : a
-          )
-        );
-        setArchivingAnnouncement(null);
-      }
+      setArchivingAnnouncement(null);
     } catch (err) {
       console.error("Error archiving announcement:", err);
-      alert("Failed to archive announcement");
+      throw new Error("Failed to archive announcement");
     }
   };
 
   const handleRestoreAnnouncement = async (announcementId) => {
     try {
-      const response = await announcementAPI.restoreAnnouncement(
-        announcementId
+      const restored = await announcementService.restore(announcementId);
+      setAnnouncements((prev) =>
+        prev.map((a) =>
+          a.id === announcementId
+            ? { ...a, ...restored, isArchived: false, status: "Draft" }
+            : a
+        )
       );
-      if (response.success) {
-        // Update local state - restore from archive
-        setAnnouncements((prev) =>
-          prev.map((a) =>
-            a.id === announcementId
-              ? { ...a, isArchived: false, status: "Draft" } // Or whatever the original status was
-              : a
-          )
-        );
-      }
     } catch (err) {
       console.error("Error restoring announcement:", err);
-      alert("Failed to restore announcement");
+      setError("Failed to restore announcement");
     }
   };
 
@@ -378,7 +340,6 @@ const AnnouncementManagement = () => {
         }`}
       >
         <div className="p-6">
-          {/* Header Section */}
           <div className="mb-6">
             <div className="flex justify-between items-center">
               <div>
@@ -389,25 +350,38 @@ const AnnouncementManagement = () => {
                   Create and manage public announcements
                 </p>
               </div>
-              <button
-                onClick={() => setIsNewAnnouncementOpen(true)}
-                className="flex items-center gap-2 text-sm bg-[#FA8630] text-white px-4 py-2 rounded-lg hover:bg-[#E87928] transition-colors"
-              >
-                <PlusIcon className="h-4 w-4" />
-                New Announcement
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleRefresh}
+                  className="flex items-center gap-2 text-sm border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={isRefreshing || isLoading}
+                >
+                  <ArrowPathIcon
+                    className={`h-4 w-4 ${
+                      isRefreshing || isLoading ? "animate-spin" : ""
+                    }`}
+                  />
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setIsNewAnnouncementOpen(true)}
+                  className="flex items-center gap-2 text-sm bg-[#FA8630] text-white px-4 py-2 rounded-lg hover:bg-[#E87928] transition-colors"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  New Announcement
+                </button>
+              </div>
             </div>
           </div>
 
           <div className="flex gap-6">
-            {/* Sidebar Categories */}
             <div className="w-64 flex-shrink-0">
               <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h2 className="text-sm font-medium text-gray-700 mb-3">
                   Categories
                 </h2>
                 <div className="space-y-1">
-                  {categories.map((category) => {
+                  {categoryList.map((category) => {
                     const Icon = category.icon;
                     return (
                       <button
@@ -432,7 +406,6 @@ const AnnouncementManagement = () => {
                 </div>
               </div>
 
-              {/* Quick Stats */}
               <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
                 <h2 className="text-sm font-medium text-gray-700 mb-3">
                   Overview
@@ -453,14 +426,10 @@ const AnnouncementManagement = () => {
               </div>
             </div>
 
-            {/* Main Content */}
             <div className="flex-1">
-              {/* Search and Filters */}
               <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
                 <div className="flex flex-col lg:flex-row gap-3">
                   <div className="flex-1 max-w-md relative">
-                    {" "}
-                    {/* Changed to max-w-md */}
                     <MagnifyingGlassIcon className="h-4 w-4 absolute left-3 top-2.5 text-gray-400" />
                     <input
                       type="text"
@@ -542,7 +511,6 @@ const AnnouncementManagement = () => {
                 )}
               </div>
 
-              {/* Announcements List */}
               <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <div className="p-4 border-b border-gray-200">
                   <div className="flex justify-between items-center">
@@ -620,7 +588,8 @@ const AnnouncementManagement = () => {
                                 </h3>
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className="text-xs text-gray-500">
-                                    {announcement.categoryName}
+                                    {CATEGORY_LABELS[announcement.category] ||
+                                      announcement.categoryName}
                                   </span>
                                   <span className="text-xs text-gray-400">
                                     •
@@ -646,7 +615,8 @@ const AnnouncementManagement = () => {
                                   : "text-gray-600"
                               }`}
                             >
-                              {announcement.description}
+                              {announcement.description ||
+                                "No description provided."}
                             </p>
 
                             <div className="flex items-center justify-between text-xs text-gray-500">
@@ -654,7 +624,8 @@ const AnnouncementManagement = () => {
                                 <span className="flex items-center gap-1">
                                   <CalendarDaysIcon className="h-3 w-3" />
                                   {announcement.publishDate ||
-                                    announcement.createdAt}
+                                    announcement.createdAt ||
+                                    "N/A"}
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <EyeIcon className="h-3 w-3" />
@@ -752,7 +723,6 @@ const AnnouncementManagement = () => {
         </div>
       </main>
 
-      {/* Modals */}
       <NewAnnouncement
         isOpen={isNewAnnouncementOpen}
         onClose={() => setIsNewAnnouncementOpen(false)}

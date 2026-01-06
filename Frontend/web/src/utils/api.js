@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 
 /**
  * API Configuration
@@ -7,23 +7,25 @@ import axios from 'axios';
 
 // Base API URL - Must be set in .env file
 if (!import.meta.env.VITE_API_URL) {
-  throw new Error('VITE_API_URL environment variable is not set. Please check your .env file.');
+  throw new Error(
+    "VITE_API_URL environment variable is not set. Please check your .env file."
+  );
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL.trim();
 
-const isDevelopment = import.meta.env.MODE === 'development';
+const isDevelopment = import.meta.env.MODE === "development";
 
 // Only log in development mode
 if (isDevelopment) {
-  console.log('🔗 API Base URL:', API_BASE_URL);
+  console.log("🔗 API Base URL:", API_BASE_URL);
 }
 
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
   timeout: 15000, // 15 seconds
   withCredentials: false,
@@ -34,9 +36,9 @@ api.interceptors.request.use(
   (config) => {
     // Only log in development mode
     if (isDevelopment) {
-      console.log('📤 API Request:', config.method.toUpperCase(), config.url);
+      console.log("📤 API Request:", config.method.toUpperCase(), config.url);
     }
-    const token = localStorage.getItem('auth_token');
+    const token = localStorage.getItem("auth_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -44,7 +46,7 @@ api.interceptors.request.use(
   },
   (error) => {
     if (isDevelopment) {
-      console.error('❌ Request Setup Error:', error);
+      console.error("❌ Request Setup Error:", error);
     }
     return Promise.reject(error);
   }
@@ -54,25 +56,25 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     if (isDevelopment) {
-      console.log('✅ API Response:', response.config.url, response.status);
+      console.log("✅ API Response:", response.config.url, response.status);
     }
     return response;
   },
   (error) => {
     // Log errors only in development
     if (isDevelopment) {
-      console.error('API Error:', {
+      console.error("API Error:", {
         url: error.config?.url,
         status: error.response?.status,
-        message: error.message
+        message: error.message,
       });
     }
-    
+
     if (error.response) {
       // Server responded with error status
       switch (error.response.status) {
         case 401:
-          localStorage.removeItem('auth_token');
+          localStorage.removeItem("auth_token");
           break;
         case 403:
         case 404:
@@ -89,70 +91,80 @@ api.interceptors.response.use(
 export const apiService = {
   // Incidents
   incidents: {
-    getAll: (filters = {}) => api.get('/incidents', { params: filters }),
+    getAll: (filters = {}) => api.get("/incidents", { params: filters }),
     getById: (id) => api.get(`/incidents/${id}`),
-    create: (data) => api.post('/incidents', data),
+    create: (data) => api.post("/incidents", data),
     update: (id, data) => api.put(`/incidents/${id}`, data),
     delete: (id) => api.delete(`/incidents/${id}`),
-    getStatusCounts: () => api.get('/incidents/status-counts'),
+    getStatusCounts: () => api.get("/incidents/status-counts"),
     uploadImages: (files) => {
       const formData = new FormData();
-      files.forEach(file => {
-        formData.append('images', file);
+      files.forEach((file) => {
+        formData.append("images", file);
       });
-      return api.post('/incidents/upload-images', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      return api.post("/incidents/upload-images", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
     },
   },
 
   // Catcher Teams
   catchers: {
-    getAll: (filters = {}) => api.get('/catchers', { params: filters }),
+    getAll: (filters = {}) => api.get("/catchers", { params: filters }),
     getById: (id) => api.get(`/catchers/${id}`),
-    create: (data) => api.post('/catchers', data),
+    create: (data) => api.post("/catchers", data),
     update: (id, data) => api.put(`/catchers/${id}`, data),
     delete: (id) => api.delete(`/catchers/${id}`),
   },
 
   // Schedules
   schedules: {
-    getAll: (filters = {}) => api.get('/schedules', { params: filters }),
+    getAll: (filters = {}) => api.get("/schedules", { params: filters }),
     getById: (id) => api.get(`/schedules/${id}`),
-    create: (data) => api.post('/schedules', data),
+    create: (data) => api.post("/schedules", data),
     update: (id, data) => api.put(`/schedules/${id}`, data),
     delete: (id) => api.delete(`/schedules/${id}`),
   },
 
   // Patrol Staff
   patrolStaff: {
-    getAll: (filters = {}) => api.get('/patrol-staff', { params: filters }),
+    getAll: (filters = {}) => api.get("/patrol-staff", { params: filters }),
     getById: (id) => api.get(`/patrol-staff/${id}`),
-    create: (data) => api.post('/patrol-staff', data),
+    create: (data) => api.post("/patrol-staff", data),
     update: (id, data) => api.put(`/patrol-staff/${id}`, data),
     delete: (id) => api.delete(`/patrol-staff/${id}`),
   },
 
   // Patrol Schedules
   patrolSchedules: {
-    getAll: (filters = {}) => api.get('/patrol-schedules', { params: filters }),
+    getAll: (filters = {}) => api.get("/patrol-schedules", { params: filters }),
     getById: (id) => api.get(`/patrol-schedules/${id}`),
-    create: (data) => api.post('/patrol-schedules', data),
+    create: (data) => api.post("/patrol-schedules", data),
     update: (id, data) => api.put(`/patrol-schedules/${id}`, data),
     delete: (id) => api.delete(`/patrol-schedules/${id}`),
   },
 
+  // Stray Animals
+  strayAnimals: {
+    list: (filters = {}) => api.get("/stray-animals", { params: filters }),
+    getById: (id) => api.get(`/stray-animals/${id}`),
+    create: (data) => api.post("/stray-animals", data),
+    update: (id, data) => api.put(`/stray-animals/${id}`, data),
+    updateStatus: (id, data) => api.put(`/stray-animals/${id}/status`, data),
+  },
+
   // Dashboard
   dashboard: {
-    getStats: () => api.get('/dashboard'),
+    getStats: () => api.get("/dashboard"),
   },
 
   // Authentication
   auth: {
-    login: (username, password) => api.post('/auth/login', { username, password }),
-    register: (userData) => api.post('/auth/register', userData),
-    logout: () => api.post('/auth/logout'),
-    verify: () => api.get('/auth'),
+    login: (username, password) =>
+      api.post("/auth/login", { username, password }),
+    register: (userData) => api.post("/auth/register", userData),
+    logout: () => api.post("/auth/logout"),
+    verify: () => api.get("/auth"),
   },
 };
 
@@ -165,18 +177,18 @@ export default api;
  * @returns {string} Full image URL
  */
 export const getImageUrl = (imagePath) => {
-  if (!imagePath) return '';
-  
+  if (!imagePath) return "";
+
   // If already a full URL, return as is
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
     return imagePath;
   }
-  
+
   // Remove /api from base URL for static file serving
   // API_BASE_URL is like "http://localhost:3000/api"
   // But images are served at "http://localhost:3000/uploads"
-  const baseUrl = API_BASE_URL.replace('/api', '');
-  
+  const baseUrl = API_BASE_URL.replace("/api", "");
+
   // If it's a relative path, prepend the base URL
-  return `${baseUrl}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+  return `${baseUrl}${imagePath.startsWith("/") ? "" : "/"}${imagePath}`;
 };

@@ -9,51 +9,7 @@ import {
   CalendarDaysIcon,
   ClockIcon,
 } from "@heroicons/react/24/outline";
-
-// Mock API service - replace with actual API calls
-const fetchAnnouncementDetails = async (id) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        id,
-        title: "Vaccination Guidelines Update for 2025",
-        author: "Dr. Maria Santos",
-        content: "Updated vaccination guidelines for all domestic pets.",
-        priority: "High",
-        status: "Published",
-        category: "health",
-        attachments: [
-          {
-            id: 1,
-            name: "guidelines.pdf",
-            size: 2048000,
-            url: "/uploads/guidelines.pdf",
-            type: "pdf",
-          },
-        ],
-        publishDate: "2025-11-15",
-        publishTime: "14:30",
-        audience: "public",
-        createdAt: "2025-11-15T10:30:00Z",
-      });
-    }, 500);
-  });
-};
-
-const uploadFile = async (file) => {
-  // Mock file upload
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        id: Date.now(),
-        name: file.name,
-        size: file.size,
-        url: URL.createObjectURL(file),
-        type: file.type.split("/")[1] || "file",
-      });
-    }, 300);
-  });
-};
+import { announcementService } from "./announcementService";
 
 const EditAnnouncement = ({ announcement, onClose, onSave }) => {
   const [formData, setFormData] = useState(null);
@@ -83,7 +39,7 @@ const EditAnnouncement = ({ announcement, onClose, onSave }) => {
         typeof announcement === "number" ||
         !announcement.content
       ) {
-        announcementData = await fetchAnnouncementDetails(
+        announcementData = await announcementService.get(
           typeof announcement === "object" ? announcement.id : announcement
         );
       } else {
@@ -134,27 +90,9 @@ const EditAnnouncement = ({ announcement, onClose, onSave }) => {
       return;
     }
 
-    // Add to uploading queue
     setUploadingFiles((prev) => [...prev, ...files]);
-
-    try {
-      // Upload each file
-      const uploadPromises = files.map(async (file) => {
-        const uploadedFile = await uploadFile(file);
-        return uploadedFile;
-      });
-
-      const uploadedFiles = await Promise.all(uploadPromises);
-
-      // Add to new files list
-      setNewFiles((prev) => [...prev, ...uploadedFiles]);
-    } catch (err) {
-      console.error("Error uploading files:", err);
-      alert("Failed to upload some files");
-    } finally {
-      // Remove from uploading queue
-      setUploadingFiles((prev) => prev.filter((f) => !files.includes(f)));
-    }
+    setNewFiles((prev) => [...prev, ...files]);
+    setUploadingFiles((prev) => prev.filter((f) => !files.includes(f)));
   };
 
   const handleRemoveExistingAttachment = (attachmentId) => {
@@ -223,8 +161,8 @@ const EditAnnouncement = ({ announcement, onClose, onSave }) => {
         status: formData.status,
         category: formData.category,
         audience: formData.audience,
+        attachments: newFiles,
         removedAttachmentIds,
-        newAttachments: newFiles,
       };
 
       // Add schedule data if applicable
@@ -240,30 +178,11 @@ const EditAnnouncement = ({ announcement, onClose, onSave }) => {
         });
       }
 
-      // Mock API call - replace with actual
-      console.log("Submitting data:", submitData);
-
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Create updated announcement object for parent component
-      const updatedAnnouncement = {
-        ...formData,
-        description: formData.content,
-        attachments: [
-          ...formData.attachments.filter(
-            (att) => !removedAttachmentIds.includes(att.id)
-          ),
-          ...newFiles,
-        ],
-        lastUpdated: new Date().toISOString(),
-      };
-
-      onSave(updatedAnnouncement);
+      await onSave(submitData);
       onClose();
     } catch (err) {
       console.error("Error updating announcement:", err);
-      setError("Failed to save changes. Please try again.");
+      setError(err?.message || "Failed to save changes. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

@@ -20,43 +20,59 @@ const LoginScreen = ({ navigation }) => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [secureText, setSecureText] = useState(true);
-  
-  const { login, isAuthenticated } = useAuth();
+  const [userType, setUserType] = useState("pet_owner"); // admin or pet_owner
+
+  const { login, isAuthenticated, user } = useAuth();
 
   // Navigate if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      navigation.replace("Main");
+    if (isAuthenticated && user) {
+      // Check user type and navigate accordingly
+      if (user.userType === "admin") {
+        navigation.replace("AnimalLoggerMain");
+      } else {
+        navigation.replace("Main");
+      }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   const handleLogin = async () => {
     // Validation
     if (!username.trim()) {
-      Alert.alert("Validation Error", "Please enter your username");
+      Alert.alert(
+        "Validation Error",
+        `Please enter your ${userType === "admin" ? "username" : "email"}`
+      );
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert("Validation Error", "Password must be at least 6 characters");
+    if (password.length < 4) {
+      Alert.alert("Validation Error", "Password must be at least 4 characters");
       return;
     }
 
     setLoading(true);
 
     try {
-      console.log('Attempting login for:', username);
-      const result = await login(username.trim(), password);
-      
-      console.log('Login result:', result);
-      
+      console.log(`Attempting ${userType} login for:`, username);
+      const result = await login(username.trim(), password, userType);
+
+      console.log("Login result:", result);
+
       if (result.success) {
         // Navigation handled by AuthContext and useEffect
-        Alert.alert("Success", `Welcome back, ${result.user.full_name}!`);
+        if (userType === "admin") {
+          // Redirect veterinarian to Animal Logger
+          navigation.replace("AnimalLoggerMain");
+        } else {
+          // Pet owners go to main app
+          navigation.replace("Main");
+        }
       } else {
         Alert.alert(
-          "Login Failed", 
-          result.error || "Invalid credentials. Please check your username and password."
+          "Login Failed",
+          result.error ||
+            "Invalid credentials. Please check your username and password."
         );
       }
     } catch (error) {
@@ -94,24 +110,77 @@ const LoginScreen = ({ navigation }) => {
           />
 
           <Text style={styles.title}>Welcome to CityVetCare</Text>
-          <Text style={styles.subtitle}>Sign in to report incidents</Text>
 
-          {/* Username Input */}
+          {/* Login as Label */}
+          <View style={styles.loginAsContainer}>
+            <Ionicons name="log-in-outline" size={18} color="#FA8630" />
+            <Text style={styles.loginAsLabel}>Login as:</Text>
+          </View>
+
+          {/* User Type Selection */}
+          <View style={styles.userTypeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.userTypeButton,
+                userType === "pet_owner" && styles.userTypeButtonActive,
+              ]}
+              onPress={() => setUserType("pet_owner")}
+            >
+              <Ionicons
+                name="person-circle-outline"
+                size={20}
+                color={userType === "pet_owner" ? "#fff" : "#666"}
+              />
+              <Text
+                style={[
+                  styles.userTypeText,
+                  userType === "pet_owner" && styles.userTypeTextActive,
+                ]}
+              >
+                Pet Owner
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.userTypeButton,
+                userType === "admin" && styles.userTypeButtonActive,
+              ]}
+              onPress={() => setUserType("admin")}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={20}
+                color={userType === "admin" ? "#fff" : "#666"}
+              />
+              <Text
+                style={[
+                  styles.userTypeText,
+                  userType === "admin" && styles.userTypeTextActive,
+                ]}
+              >
+                Veterinarian
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Username/Email Input */}
           <View style={styles.inputContainer}>
             <Ionicons
-              name="person-outline"
+              name={userType === "admin" ? "person-outline" : "mail-outline"}
               size={20}
               color="#666"
               style={styles.inputIcon}
             />
             <TextInput
               style={styles.input}
-              placeholder="Username"
+              placeholder={userType === "admin" ? "Username" : "Email"}
               placeholderTextColor="#999"
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType={userType === "admin" ? "default" : "email-address"}
             />
           </View>
 
@@ -156,6 +225,19 @@ const LoginScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
+          {/* Emergency Report Button */}
+          <TouchableOpacity
+            onPress={handleEmergencyReport}
+            style={styles.emergencyButton}
+          >
+            <MaterialCommunityIcons
+              name="alert-circle"
+              size={24}
+              color="#fff"
+            />
+            <Text style={styles.emergencyButtonText}>Report Without Login</Text>
+          </TouchableOpacity>
+
           {/* Register Link */}
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>Don't have an account? </Text>
@@ -163,15 +245,6 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.signupLink}>Register</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Emergency Report Button */}
-          <TouchableOpacity 
-            onPress={handleEmergencyReport} 
-            style={styles.emergencyButton}
-          >
-            <MaterialCommunityIcons name="alert-circle" size={24} color="#fff" />
-            <Text style={styles.emergencyButtonText}>Emergency Report</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -202,14 +275,56 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     color: "#1a1a1a",
-    marginBottom: 10,
+    marginBottom: 30,
     textAlign: "center",
+  },
+  loginAsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 15,
+    paddingHorizontal: 4,
+  },
+  loginAsLabel: {
+    fontSize: 16,
+    color: "#333",
+    marginLeft: 8,
+    fontWeight: "600",
   },
   subtitle: {
     fontSize: 16,
     color: "#666",
     textAlign: "center",
-    marginBottom: 40,
+    marginBottom: 30,
+  },
+  userTypeContainer: {
+    flexDirection: "row",
+    marginBottom: 20,
+    gap: 12,
+  },
+  userTypeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#ddd",
+  },
+  userTypeButtonActive: {
+    backgroundColor: "#FA8630",
+    borderColor: "#FA8630",
+  },
+  userTypeText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#666",
+  },
+  userTypeTextActive: {
+    color: "#fff",
   },
   inputContainer: {
     flexDirection: "row",
@@ -275,7 +390,7 @@ const styles = StyleSheet.create({
   },
   emergencyButton: {
     backgroundColor: "#dc3545",
-    paddingVertical: 15,
+    paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",
     marginTop: 20,
@@ -287,10 +402,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     gap: 10,
+    opacity: 0.85,
   },
   emergencyButtonText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
   },
 });

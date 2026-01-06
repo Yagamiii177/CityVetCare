@@ -7,55 +7,7 @@ import {
   DocumentTextIcon,
   ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
-
-// Mock API service - replace with actual API calls
-const fetchAnnouncementDetails = async (id) => {
-  // Replace with actual API call
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        id,
-        title: "Vaccination Guidelines Update for 2025",
-        category: "health",
-        categoryName: "Health Advisory",
-        author: "Dr. Maria Santos",
-        publishDate: "2025-11-15",
-        status: "Published",
-        priority: "High",
-        views: 245,
-        description:
-          "Updated vaccination guidelines for all domestic pets. New requirements take effect January 1, 2026.",
-        attachments: [
-          {
-            id: 1,
-            name: "vaccination_guidelines.pdf",
-            size: 2048000,
-            url: "/uploads/guidelines.pdf",
-            type: "pdf",
-          },
-          {
-            id: 2,
-            name: "vaccine_schedule.jpg",
-            size: 1024000,
-            url: "/uploads/schedule.jpg",
-            type: "image",
-          },
-          {
-            id: 3,
-            name: "pet_safety_tips.docx",
-            size: 512000,
-            url: "/uploads/tips.docx",
-            type: "document",
-          },
-        ],
-        createdAt: "2025-11-15T10:30:00Z",
-        updatedAt: "2025-11-15T14:45:00Z",
-        audience: "public",
-        scheduledFor: null,
-      });
-    }, 500);
-  });
-};
+import { announcementService } from "./announcementService";
 
 const ViewAnnouncement = ({ announcement, onClose }) => {
   const [announcementDetails, setAnnouncementDetails] = useState(null);
@@ -76,11 +28,17 @@ const ViewAnnouncement = ({ announcement, onClose }) => {
     }
 
     // Otherwise, fetch details by ID
-    if (announcement?.id) {
+    if (
+      announcement?.id ||
+      typeof announcement === "string" ||
+      typeof announcement === "number"
+    ) {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await fetchAnnouncementDetails(announcement.id);
+        const idToFetch =
+          typeof announcement === "object" ? announcement.id : announcement;
+        const data = await announcementService.get(idToFetch);
         setAnnouncementDetails(data);
       } catch (err) {
         console.error("Error loading announcement details:", err);

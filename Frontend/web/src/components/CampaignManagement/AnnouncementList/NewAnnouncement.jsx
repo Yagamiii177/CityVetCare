@@ -21,7 +21,7 @@ const NewAnnouncement = ({ isOpen, onClose, onCreate }) => {
     content: "",
     publishDate: "",
     publishTime: "",
-    status: "draft",
+    status: "Draft",
     attachments: [],
     audience: "public",
   });
@@ -127,9 +127,14 @@ const NewAnnouncement = ({ isOpen, onClose, onCreate }) => {
 
   const handlePublishOptionSelect = (optionId) => {
     setSelectedPublishOption(optionId);
+    const statusMap = {
+      draft: "Draft",
+      schedule: "Scheduled",
+      publish: "Published",
+    };
     setFormData((prev) => ({
       ...prev,
-      status: optionId,
+      status: statusMap[optionId] || "Draft",
     }));
   };
 
@@ -190,39 +195,37 @@ const NewAnnouncement = ({ isOpen, onClose, onCreate }) => {
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      const newAnnouncement = {
-        id: Date.now(),
-        ...formData,
-        createdAt: new Date().toISOString(),
-        author: formData.author,
-        views: 0,
-        // Format dates for display
-        publishDate:
-          selectedPublishOption === "schedule"
-            ? formData.publishDate
-            : new Date().toISOString().split("T")[0],
-        publishTime:
-          selectedPublishOption === "schedule"
-            ? formData.publishTime
-            : new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-        status:
-          selectedPublishOption === "draft"
-            ? "Draft"
-            : selectedPublishOption === "schedule"
-            ? "Scheduled"
-            : "Published",
-        statusType: selectedPublishOption,
-      };
+    const statusForSave =
+      selectedPublishOption === "draft"
+        ? "Draft"
+        : selectedPublishOption === "schedule"
+        ? "Scheduled"
+        : "Published";
 
-      onCreate(newAnnouncement);
-      setIsSubmitting(false);
+    const payload = {
+      ...formData,
+      status: statusForSave,
+      publishDate:
+        selectedPublishOption === "schedule"
+          ? formData.publishDate
+          : formData.publishDate || new Date().toISOString().split("T")[0],
+      publishTime:
+        selectedPublishOption === "schedule"
+          ? formData.publishTime
+          : formData.publishTime ||
+            new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+      scheduledFor:
+        selectedPublishOption === "schedule"
+          ? `${formData.publishDate}T${formData.publishTime}`
+          : undefined,
+    };
 
-      // Show success notification
+    try {
+      await onCreate(payload);
+
       showNotification(
         selectedPublishOption === "draft"
           ? "Announcement saved as draft"
@@ -232,11 +235,9 @@ const NewAnnouncement = ({ isOpen, onClose, onCreate }) => {
         "success"
       );
 
-      // Auto close after showing success message
       setTimeout(() => {
         onClose();
 
-        // Reset form
         setFormData({
           title: "",
           category: "general",
@@ -245,14 +246,22 @@ const NewAnnouncement = ({ isOpen, onClose, onCreate }) => {
           content: "",
           publishDate: "",
           publishTime: "",
-          status: "draft",
+          status: "Draft",
           attachments: [],
           audience: "public",
         });
         setSelectedPublishOption("draft");
         setStep(1);
-      }, 1500);
-    }, 1000);
+      }, 800);
+    } catch (err) {
+      console.error("Error creating announcement:", err);
+      showNotification(
+        err?.message || "Failed to create announcement",
+        "error"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const nextStep = () => {
