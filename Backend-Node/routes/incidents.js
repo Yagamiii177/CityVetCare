@@ -1,0 +1,312 @@
+import express from 'express';
+import Incident from '../models/Incident.js';
+import Logger from '../utils/logger.js';
+import { upload } from '../config/multer.js';
+
+const router = express.Router();
+const logger = new Logger('INCIDENTS');
+
+/**
+ * GET /api/incidents
+ * Get all incidents with optional filters, search, and pagination
+ * Query params: page, limit, search, status, incident_type
+ */
+router.get('/', async (req, res) => {
+  try {
+    // Pagination params - strictly limit to 10 per page
+    const page = parseInt(req.query.page) || 1;
+    const limit = 10; // Fixed at 10 records per page
+    const offset = (page - 1) * limit;
+
+    // Search and filter params
+    const filters = {
+      status: req.query.status,
+      incident_type: req.query.incident_type,
+      search: req.query.search, // This will search across multiple fields
+      limit: limit,
+      offset: offset
+    };
+
+    logger.debug('Fetching incidents with filters', filters);
+
+    const incidents = await Incident.getAll(filters);
+    
+    // Get total count for pagination
+    const allIncidents = await Incident.getAll({ 
+      status: req.query.status,
+      incident_type: req.query.incident_type,
+      search: req.query.search
+    });
+    const total = allIncidents.length;
+    const totalPages = Math.ceil(total / limit);
+    
+    res.json({
+      success: true,
+      records: incidents,
+      pagination: {
+        page: page,
+        limit: limit,
+        total: total,
+        totalPages: totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      },
+      message: incidents.length === 0 ? 'No incidents found' : undefined
+    });
+  } catch (error) {
+    logger.error('Failed to fetch incidents', error);
+    res.status(500).json({ 
+      success: false,
+      error: true,
+      message: 'Failed to fetch incidents',
+      details: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/incidents/status-counts
+ * Get count of incidents by status
+ */
+router.get('/status-counts', async (req, res) => {
+  try {
+    const counts = await Incident.getCountsByStatus();
+    
+    res.json({
+      success: true,
+      data: counts
+    });
+  } catch (error) {
+    logger.error('Failed to get status counts', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get status counts'
+    });
+  }
+});
+
+/**
+ * GET /api/incidents/:id
+ * Get single incident by ID
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const incident = await Incident.getById(req.params.id);
+    
+    if (!incident) {
+      return res.status(404).json({ 
+        error: true,
+        message: 'Incident not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      data: incident
+    });
+  } catch (error) {
+    logger.error('Failed to fetch incident', error);
+    res.status(500).json({ 
+      error: true,
+      message: 'Failed to fetch incident',
+      details: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/incidents/upload-images
+ * Upload images for incident report
+ * This endpoint should be called BEFORE creating the incident to get image URLs
+ */
+router.post('/upload-images', (req, res) => {
+  upload.array('images', 10)(req, res, (err) => {
+    if (err) {
+      // Handle multer errors
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        logger.error('File too large', { limit: '10MB' });
+        return res.status(400).json({
+          success: false,
+          error: true,
+          message: 'Image file is too large. Maximum size is 10MB per image.',
+          code: 'FILE_TOO_LARGE'
+        });
+      }
+      
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({
+          success: false,
+          error: true,
+          message: 'Too many images. Maximum is 10 images per report.',
+          code: 'TOO_MANY_FILES'
+        });
+      }
+
+      logger.error('Upload error', err);
+      return res.status(500).json({
+        success: false,
+        error: true,
+        message: err.message || 'Failed to upload images',
+        details: err.toString()
+      });
+    }
+
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: true,
+          message: 'No images uploaded'
+        });
+      }
+
+      // Generate URLs for uploaded images
+      const imageUrls = req.files.map(file => {
+        return `/uploads/incident-images/${file.filename}`;
+      });
+
+      logger.success('Images uploaded successfully', { count: imageUrls.length });
+
+      res.json({
+        success: true,
+        message: 'Images uploaded successfully',
+        images: imageUrls,
+        count: imageUrls.length
+      });
+    } catch (error) {
+      logger.error('Failed to process uploaded images', error);
+      res.status(500).json({
+        success: false,
+        error: true,
+        message: 'Failed to process uploaded images',
+        details: error.message
+      });
+    }
+  });
+});
+
+/**
+ * POST /api/incidents
+ * Create new incident
+ */
+router.post('/', async (req, res) => {
+  try {
+    logger.debug('Creating new incident', req.body);
+    
+    // Clean incident_type - convert empty string to null, then default to 'incident'
+    let incidentType = req.body.incident_type || req.body.reportType || null;
+    if (incidentType === '') incidentType = null;
+    if (!incidentType) incidentType = 'incident';
+    
+    // Generate title from incident_type if not provided
+    let title = req.body.title;
+    if (!title && incidentType) {
+      if (incidentType === 'incident') {
+        title = 'Incident/Bite Report';
+      } else if (incidentType === 'stray') {
+        title = 'Stray Animal Report';
+      } else if (incidentType === 'lost') {
+        title = 'Lost Pet Report';
+      } else {
+        title = 'Animal Report';
+      }
+    }
+
+    // Validate required fields
+    if (!title) {
+      return res.status(400).json({ 
+        error: true,
+        message: 'Title or incident_type is required' 
+      });
+    }
+
+    // Add title and cleaned incident_type to request body
+    const incidentData = {
+      ...req.body,
+      title: title,
+      incident_type: incidentType
+    };
+
+    const incident = await Incident.create(incidentData);
+    
+    logger.success('Incident created successfully', { id: incident.id });
+    
+    res.status(201).json({
+      success: true,
+      message: 'Incident created successfully',
+      id: incident.id,
+      data: incident
+    });
+  } catch (error) {
+    logger.error('Failed to create incident', error);
+    res.status(500).json({ 
+      error: true,
+      success: false,
+      message: 'Failed to create incident',
+      details: error.message 
+    });
+  }
+});
+
+/**
+ * PUT /api/incidents/:id
+ * Update incident
+ */
+router.put('/:id', async (req, res) => {
+  try {
+    logger.debug('Updating incident', { id: req.params.id, data: req.body });
+    const updated = await Incident.update(req.params.id, req.body);
+    
+    if (!updated) {
+      return res.status(404).json({ 
+        error: true,
+        message: 'Incident not found or no changes made' 
+      });
+    }
+
+    logger.success('Incident updated successfully', { id: req.params.id });
+    res.json({ 
+      success: true,
+      message: 'Incident updated successfully',
+      id: req.params.id
+    });
+  } catch (error) {
+    logger.error('Failed to update incident', error);
+    res.status(500).json({ 
+      error: true,
+      message: 'Failed to update incident',
+      details: error.message 
+    });
+  }
+});
+
+/**
+ * DELETE /api/incidents/:id
+ * Delete incident
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const deleted = await Incident.delete(req.params.id);
+    
+    if (!deleted) {
+      return res.status(404).json({ 
+        error: true,
+        message: 'Incident not found' 
+      });
+    }
+
+    res.json({ 
+      message: 'Incident deleted successfully',
+      id: req.params.id
+    });
+  } catch (error) {
+    logger.error('Failed to delete incident', error);
+    res.status(500).json({ 
+      error: true,
+      message: 'Failed to delete incident',
+      details: error.message 
+    });
+  }
+});
+
+export default router;

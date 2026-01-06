@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
+import { ConfirmModal, NotificationModal, InputModal } from "../../components/ReportManagement/Modal";
+import { apiService, getImageUrl } from "../../utils/api";
 import {
   EyeIcon,
   XMarkIcon,
@@ -23,109 +25,113 @@ const PendingVerification = () => {
   const [filterType, setFilterType] = useState("all");
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [reportSchedules, setReportSchedules] = useState([]); // Store schedules for selected report
+  
+  // Modal states
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'info' });
+  const [rejectModal, setRejectModal] = useState({ isOpen: false, reportId: null });
+  const [rejectReason, setRejectReason] = useState('');
+  const [notificationModal, setNotificationModal] = useState({ isOpen: false, title: '', message: '', type: 'success' });
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
-  // Enhanced sample data
-  const sampleReports = [
-    {
-      id: 1,
-      reporter: "John Doe",
-      reporterContact: "09123456789",
-      reporterAddress: "Purok 4, Barangay San Juan",
-      type: "Bite Incident",
-      address: "Purok 4, Barangay San Juan",
-      date: "2025-11-15",
-      time: "14:30",
-      status: "Pending",
-      priority: "High",
-      description: "Resident reported a bite incident involving a stray dog near the market.",
-      animalType: "Stray Dog",
-      animalCount: 1,
-      injuries: "Minor bite on left leg",
-      submittedBy: "Walk-in",
-      submissionDate: "2025-11-15 14:25",
-      verificationNotes: "",
-    },
-    {
-      id: 2,
-      reporter: "Maria Santos",
-      reporterContact: "09198765432",
-      reporterAddress: "Purok 2, Barangay San Jose",
-      type: "Stray Animal",
-      address: "Purok 2, Barangay San Jose",
-      date: "2025-11-16",
-      time: "09:15",
-      status: "Pending",
-      priority: "Medium",
-      description: "Multiple stray cats reported roaming near the school premises.",
-      animalType: "Cat",
-      animalCount: 5,
-      injuries: "None",
-      submittedBy: "Online Portal",
-      submissionDate: "2025-11-16 09:10",
-      verificationNotes: "",
-    },
-    {
-      id: 3,
-      reporter: "Carlos Mendoza",
-      reporterContact: "09151234567",
-      reporterAddress: "Barangay Del Rosario",
-      type: "Rabies Suspected",
-      address: "Barangay Del Rosario",
-      date: "2025-11-18",
-      time: "16:45",
-      status: "Pending",
-      priority: "Critical",
-      description: "Resident suspected rabies after attack by unknown stray dog.",
-      animalType: "Dog",
-      animalCount: 1,
-      injuries: "Multiple bites on arms",
-      submittedBy: "Walk-in",
-      submissionDate: "2025-11-18 16:40",
-      verificationNotes: "",
-    },
-    {
-      id: 4,
-      reporter: "Anna Lopez",
-      reporterContact: "09159876543",
-      reporterAddress: "Purok 3, Barangay San Isidro",
-      type: "Animal Nuisance",
-      address: "Purok 3, Barangay San Isidro",
-      date: "2025-11-17",
-      time: "11:20",
-      status: "Pending",
-      priority: "Low",
-      description: "Stray dogs creating noise and garbage disturbance.",
-      animalType: "Dog",
-      animalCount: 3,
-      injuries: "None",
-      submittedBy: "Mobile App",
-      submissionDate: "2025-11-17 11:15",
-      verificationNotes: "",
-    },
-  ];
-
-  // Simulate API call
+  // Fetch pending reports from backend
   useEffect(() => {
-    const fetchPendingReports = async () => {
-      try {
-        setLoading(true);
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setReports(sampleReports);
-      } catch (error) {
-        console.error("Error fetching reports:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchPendingReports();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter pending reports
-  const pendingReports = reports.filter((r) => r.status === "Pending");
+  const fetchPendingReports = async () => {
+    try {
+      setLoading(true);
+      // Fetch all incidents and filter for pending/pending_verification on frontend
+      const response = await apiService.incidents.getAll();
+      
+      // Filter for pending verification reports (accept both 'pending' and 'pending_verification')
+      const pendingReports = response.data.records.filter(incident => {
+        const status = incident.status.toLowerCase();
+        return status === 'pending' || status === 'pending_verification';
+      });
+      
+      // Transform backend data to frontend format with new mobile fields
+      const transformedReports = pendingReports.map(incident => ({
+        id: incident.id,
+        reporter: incident.reporter_name,
+        reporterContact: incident.reporter_contact,
+        reporterAddress: incident.location,
+        type: incident.title,
+        address: incident.location,
+        date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
+        time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
+        status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
+        description: incident.description,
+        images: incident.images || [], // Add images field
+        // NEW: Use database fields directly from mobile form
+        reportType: incident.incident_type ? (incident.incident_type === 'incident' ? 'Incident/Bite Report' : incident.incident_type === 'stray' ? 'Stray Animal Report' : 'Lost Pet Report') : 'Animal Report',
+        animalType: incident.animal_type ? (incident.animal_type.charAt(0).toUpperCase() + incident.animal_type.slice(1)) : extractAnimalType(incident.description),
+        petBreed: incident.pet_breed || 'Not specified',
+        petColor: incident.pet_color || 'Not specified',
+        petGender: incident.pet_gender ? (incident.pet_gender.charAt(0).toUpperCase() + incident.pet_gender.slice(1)) : 'Unknown',
+        petSize: incident.pet_size ? (incident.pet_size.charAt(0).toUpperCase() + incident.pet_size.slice(1)) : 'Unknown',
+        animalCount: extractAnimalCount(incident.description),
+        injuries: extractInjuries(incident.description),
+        submittedBy: "System",
+        submissionDate: incident.created_at,
+        verificationNotes: "",
+      }));
+
+      setReports(transformedReports);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching pending reports:", error);
+      setReports([]);
+      setLoading(false);
+    }
+  };
+
+  // Helper functions to extract data from description
+  const extractAnimalType = (description) => {
+    if (!description) return "Unknown";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('dog')) return 'Dog';
+    if (lowerDesc.includes('cat')) return 'Cat';
+    return 'Unknown';
+  };
+
+  const extractAnimalCount = (description) => {
+    if (!description) return 1;
+    const match = description.match(/(\d+)\s*(animal|dog|cat)/i);
+    return match ? parseInt(match[1]) : 1;
+  };
+
+  const extractInjuries = (description) => {
+    if (!description) return "None";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('bite') || lowerDesc.includes('injury') || lowerDesc.includes('wound')) {
+      return description;
+    }
+    return "None";
+  };
+
+  // Fetch schedules for a specific incident
+  const fetchReportSchedules = async (incidentId) => {
+    try {
+      const response = await apiService.patrolSchedules.getAll();
+      const incidentSchedules = response.data.records.filter(
+        schedule => schedule.incident_id === incidentId
+      );
+      setReportSchedules(incidentSchedules);
+    } catch (err) {
+      console.error("Error fetching schedules:", err);
+      setReportSchedules([]);
+    }
+  };
+
+  // Filter pending reports (already filtered from backend, but keep for consistency)
+  const pendingReports = reports.filter((r) => {
+    const status = r.status.toLowerCase().replace(' ', '_');
+    return status === 'pending' || status === 'pending_verification';
+  });
 
   // Search and type filter
   const filteredReports = pendingReports.filter((r) => {
@@ -140,69 +146,143 @@ const PendingVerification = () => {
     return matchesSearch && matchesType;
   });
 
-  // Handle Verify
-  const handleVerify = async (id) => {
+  // Handle Verify - Update status to 'verified' in backend
+  const handleVerify = (id) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Approve Report',
+      message: `Are you sure you want to approve report #${id}? This will move it to verified status and make it available for patrol scheduling.`,
+      type: 'success',
+      onConfirm: () => confirmApproval(id)
+    });
+  };
+
+  const confirmApproval = async (id) => {
+    setConfirmModal({ ...confirmModal, isOpen: false });
+    
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const report = reports.find(r => r.id === id);
+      if (!report) return;
+
+      // First, fetch the complete incident data from backend
+      const incidentResponse = await apiService.incidents.getById(id);
+      const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
+
+      // Update status in backend with all required fields including mobile fields
+      await apiService.incidents.update(id, {
+        title: incident.title,
+        description: incident.description,
+        location: incident.location,
+        latitude: incident.latitude,
+        longitude: incident.longitude,
+        status: 'verified',
+        assigned_catcher_id: incident.assigned_catcher_id,
+        // Include mobile report fields
+        incident_type: incident.incident_type,
+        pet_color: incident.pet_color,
+        pet_breed: incident.pet_breed,
+        animal_type: incident.animal_type,
+        pet_gender: incident.pet_gender,
+        pet_size: incident.pet_size,
+      });
       
-      setReports(reports.map(report => 
-        report.id === id 
-          ? { ...report, status: "Verified", verificationNotes: "Report verified by staff" }
-          : report
-      ));
+      // Refresh the list
+      await fetchPendingReports();
       
       if (selectedReport?.id === id) {
         setSelectedReport(null);
       }
       
-      alert(`Report #${id} has been verified successfully!`);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Success!',
+        message: `Report #${id} has been approved successfully! It will now appear in All Incident Reports and Incident Monitoring.`,
+        type: 'success'
+      });
     } catch (error) {
-      alert(`Error verifying report: ${error.message}`);
+      console.error("Error approving report:", error);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Error',
+        message: `Failed to approve report: ${error.response?.data?.message || error.message}`,
+        type: 'error'
+      });
     }
   };
 
-  // Handle Reject
-  const handleReject = async (id) => {
-    const reason = prompt("Please enter rejection reason:");
-    if (reason) {
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        setReports(reports.map(report => 
-          report.id === id 
-            ? { ...report, status: "Rejected", verificationNotes: `Rejected: ${reason}` }
-            : report
-        ));
-        
-        if (selectedReport?.id === id) {
-          setSelectedReport(null);
-        }
-        
-        alert(`Report #${id} has been rejected.`);
-      } catch (error) {
-        alert(`Error rejecting report: ${error.message}`);
+  // Handle Reject - Update status to 'rejected' in backend
+  const handleReject = (id) => {
+    setRejectReason('');
+    setRejectModal({ isOpen: true, reportId: id });
+  };
+
+  const confirmRejection = async () => {
+    const id = rejectModal.reportId;
+    const reason = rejectReason.trim();
+    
+    if (!reason) {
+      setNotificationModal({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Please enter a rejection reason.',
+        type: 'warning'
+      });
+      return;
+    }
+    
+    setRejectModal({ isOpen: false, reportId: null });
+
+    try {
+      const report = reports.find(r => r.id === id);
+      if (!report) return;
+
+      // First, fetch the complete incident data from backend
+      const incidentResponse = await apiService.incidents.getById(id);
+      const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
+
+      // Update status in backend with rejection note and all required fields including mobile fields
+      await apiService.incidents.update(id, {
+        title: incident.title,
+        description: `${incident.description}\n\n[REJECTED: ${reason}]`,
+        location: incident.location,
+        latitude: incident.latitude,
+        longitude: incident.longitude,
+        status: 'rejected',
+        assigned_catcher_id: incident.assigned_catcher_id,
+        // Include mobile report fields
+        incident_type: incident.incident_type,
+        pet_color: incident.pet_color,
+        pet_breed: incident.pet_breed,
+        animal_type: incident.animal_type,
+        pet_gender: incident.pet_gender,
+        pet_size: incident.pet_size,
+      });
+      
+      // Refresh the list
+      await fetchPendingReports();
+      
+      if (selectedReport?.id === id) {
+        setSelectedReport(null);
       }
+      
+      setNotificationModal({
+        isOpen: true,
+        title: 'Report Rejected',
+        message: `Report #${id} has been rejected and moved to Report History.`,
+        type: 'info'
+      });
+    } catch (error) {
+      console.error("Error rejecting report:", error);
+      setNotificationModal({
+        isOpen: true,
+        title: 'Error',
+        message: `Failed to reject report: ${error.response?.data?.message || error.message}`,
+        type: 'error'
+      });
     }
   };
 
-  // Get priority badge
-  const getPriorityBadge = (priority) => {
-    const styles = {
-      Critical: "bg-red-100 text-red-800 border border-red-200",
-      High: "bg-orange-100 text-orange-800 border border-orange-200",
-      Medium: "bg-yellow-100 text-yellow-800 border border-yellow-200",
-      Low: "bg-green-100 text-green-800 border border-green-200",
-    };
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[priority]}`}>
-        {priority}
-      </span>
-    );
-  };
-
-  // Stats
+  // Get status badge
   const stats = {
     total: pendingReports.length,
     bite: pendingReports.filter(r => r.type === "Bite Incident").length,
@@ -374,9 +454,6 @@ const PendingVerification = () => {
                           Date & Time
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                          Priority
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
@@ -402,7 +479,7 @@ const PendingVerification = () => {
                               <div>
                                 <p className="text-sm font-medium text-gray-900">{report.type}</p>
                                 <p className="text-xs text-gray-500">
-                                  {report.animalType} • {report.animalCount} animal(s)
+                                  {report.animalType}{report.petBreed && report.petBreed !== 'Not specified' ? ` • ${report.petBreed}` : ''}{report.petColor && report.petColor !== 'Not specified' ? ` • ${report.petColor}` : ''}
                                 </p>
                               </div>
                             </td>
@@ -416,30 +493,30 @@ const PendingVerification = () => {
                               </div>
                             </td>
                             <td className="px-6 py-4">
-                              {getPriorityBadge(report.priority)}
-                            </td>
-                            <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => setSelectedReport(report)}
-                                  className="text-[#FA8630] hover:text-[#E87928] p-1 rounded hover:bg-[#FA8630]/10 transition-colors"
+                                  onClick={() => { setSelectedReport(report); fetchReportSchedules(report.id); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-[#FA8630] hover:bg-[#E87928] rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
                                   title="View Details"
                                 >
-                                  <EyeIcon className="h-5 w-5" />
+                                  <EyeIcon className="h-4 w-4" />
+                                  <span>View</span>
                                 </button>
                                 <button
                                   onClick={() => handleVerify(report.id)}
-                                  className="text-green-600 hover:text-green-700 p-1 rounded hover:bg-green-100 transition-colors"
-                                  title="Verify Report"
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                                  title="Approve Report"
                                 >
-                                  <CheckCircleIcon className="h-5 w-5" />
+                                  <CheckCircleIcon className="h-4 w-4" />
+                                  <span>Approve</span>
                                 </button>
                                 <button
                                   onClick={() => handleReject(report.id)}
-                                  className="text-red-500 hover:text-red-600 p-1 rounded hover:bg-red-100 transition-colors"
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
                                   title="Reject Report"
                                 >
-                                  <XCircleIcon className="h-5 w-5" />
+                                  <XCircleIcon className="h-4 w-4" />
+                                  <span>Reject</span>
                                 </button>
                               </div>
                             </td>
@@ -447,7 +524,7 @@ const PendingVerification = () => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="px-6 py-8 text-center">
+                          <td colSpan={6} className="px-6 py-8 text-center">
                             <div className="text-gray-500">
                               <CheckCircleIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                               <p>No pending reports found</p>
@@ -463,137 +540,346 @@ const PendingVerification = () => {
             )}
           </div>
 
-          {/* Detailed Modal */}
+          {/* Enhanced Detail Modal - Matching MonitoringIncidents */}
           {selectedReport && (
-            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-              <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg relative">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-y-auto">
+              <div className="bg-white w-full max-w-4xl my-8 rounded-xl shadow-2xl relative animate-fadeIn">
+                {/* Close Button - Fixed at top */}
                 <button
-                  className="absolute right-4 top-4 z-10 p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                  className="absolute right-4 top-4 z-10 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 transition-colors border border-gray-200"
                   onClick={() => setSelectedReport(null)}
+                  aria-label="Close modal"
                 >
-                  <XMarkIcon className="h-6 w-6 text-gray-500 hover:text-gray-700" />
+                  <XMarkIcon className="h-5 w-5 text-gray-700" />
                 </button>
 
-                <div className="p-6">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 rounded-full bg-[#FA8630]/10">
-                      <ExclamationTriangleIcon className="h-6 w-6 text-[#FA8630]" />
+                {/* Scrollable Content */}
+                <div className="max-h-[85vh] overflow-y-auto">
+                  <div className="p-8 space-y-6">
+                    {/* Header Section */}
+                    <div className="border-b border-gray-200 pb-4">
+                      <div className="flex items-start justify-between pr-12">
+                        <div>
+                          <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedReport.type}</h2>
+                          <p className="text-gray-500">Report ID: #{selectedReport.id}</p>
+                          <span className="inline-block mt-2 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+                            Pending Verification
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-800">
-                        Report #{selectedReport.id} - Verification Required
-                      </h2>
-                      <p className="text-gray-600">{selectedReport.type}</p>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Reporter Information */}
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-gray-800 border-b pb-2">Reporter Information</h3>
+                    {/* Images Section */}
+                    {selectedReport.images && selectedReport.images.length > 0 && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                          <svg className="h-5 w-5 text-[#FA8630]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          Report Images ({selectedReport.images.length})
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          {selectedReport.images.map((image, index) => (
+                            <div key={index} className="relative group">
+                              <img
+                                src={getImageUrl(image)}
+                                alt={`Report ${index + 1}`}
+                                className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 hover:border-[#FA8630] transition-all cursor-pointer shadow-sm"
+                                onClick={() => window.open(getImageUrl(image), '_blank')}
+                                onError={(e) => {
+                                  e.target.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                <span className="text-white text-sm font-medium">Click to enlarge</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Main Content Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Reporter Information */}
+                      <div className="bg-gradient-to-br from-blue-50 to-white p-5 rounded-xl border border-blue-100 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                          <UserIcon className="h-5 w-5 text-blue-600" />
+                          Reporter Information
+                        </h3>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Reporter Name
+                            </label>
+                            <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="text-gray-900 font-medium">{selectedReport.reporter}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Contact Number
+                            </label>
+                            <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                              <PhoneIcon className="h-4 w-4 text-gray-400" />
+                              <span className="text-gray-900 font-medium">{selectedReport.reporterContact}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Reporter Address
+                            </label>
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="text-gray-900 font-medium">{selectedReport.reporterAddress}</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Date
+                              </label>
+                              <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                                <CalendarDaysIcon className="h-4 w-4 text-gray-400" />
+                                <span className="text-gray-900 font-medium text-sm">{selectedReport.date}</span>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                Time
+                              </label>
+                              <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                <span className="text-gray-900 font-medium text-sm">{selectedReport.time}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Incident Information */}
+                      <div className="bg-gradient-to-br from-orange-50 to-white p-5 rounded-xl border border-orange-100 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                          <ExclamationTriangleIcon className="h-5 w-5 text-[#FA8630]" />
+                          Incident Information
+                        </h3>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Report Type
+                            </label>
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="text-gray-900 font-medium">{selectedReport.reportType || 'Animal Report'}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Incident Type
+                            </label>
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="text-gray-900 font-medium">{selectedReport.type}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Current Status
+                            </label>
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
+                                {selectedReport.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Animal Details Section */}
+                    <div className="bg-gradient-to-br from-green-50 to-white p-5 rounded-xl border border-green-100 shadow-sm">
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Animal Details
+                      </h3>
                       
-                      <div className="flex items-center gap-3">
-                        <UserIcon className="h-5 w-5 text-gray-400" />
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{selectedReport.reporter}</p>
-                          <p className="text-xs text-gray-500">Reporter</p>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Animal Type
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.animalType || 'Unknown'}</span>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-3">
-                        <PhoneIcon className="h-5 w-5 text-gray-400" />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{selectedReport.reporterContact}</p>
-                          <p className="text-xs text-gray-500">Contact Number</p>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Breed
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.petBreed}</span>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-3">
-                        <MapPinIcon className="h-5 w-5 text-gray-400" />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{selectedReport.reporterAddress}</p>
-                          <p className="text-xs text-gray-500">Reporter Address</p>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Color
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.petColor}</span>
+                          </div>
                         </div>
-                      </div>
 
-                      <div>
-                        <p className="text-xs text-gray-500">Submitted Via</p>
-                        <p className="text-sm font-medium text-gray-900">{selectedReport.submittedBy}</p>
-                      </div>
-                    </div>
-
-                    {/* Incident Details */}
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-gray-800 border-b pb-2">Incident Details</h3>
-                      
-                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <p className="text-xs text-gray-500">Priority</p>
-                          <div className="mt-1">{getPriorityBadge(selectedReport.priority)}</div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Gender
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.petGender}</span>
+                          </div>
                         </div>
+
                         <div>
-                          <p className="text-xs text-gray-500">Animal Type</p>
-                          <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalType}</p>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Size
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.petSize}</span>
+                          </div>
                         </div>
-                      </div>
 
-                      <div>
-                        <p className="text-xs text-gray-500">Animal Count</p>
-                        <p className="text-sm font-medium text-gray-900 mt-1">{selectedReport.animalCount} animal(s)</p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-gray-500">Injuries Reported</p>
-                        <p className="text-sm font-medium text-gray-900 mt-1">
-                          {selectedReport.injuries || "None reported"}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {selectedReport.date} at {selectedReport.time}
-                          </p>
-                          <p className="text-xs text-gray-500">Incident Date & Time</p>
+                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                            Count
+                          </label>
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <span className="text-gray-900 font-medium">{selectedReport.animalCount || 1} animal(s)</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Location and Description */}
-                  <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Incident Location</h3>
-                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">
-                        {selectedReport.address}
-                      </p>
+                    {/* Location Section */}
+                    <div className="space-y-3">
+                      <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <MapPinIcon className="h-5 w-5 text-red-600" />
+                        Location Details
+                      </h3>
+                      <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <MapPinIcon className="h-5 w-5 text-red-500 mt-1 flex-shrink-0" />
+                        <div>
+                          <p className="text-gray-900 font-medium">{selectedReport.address}</p>
+                        </div>
+                      </div>
                     </div>
 
-                    <div>
-                      <h3 className="font-semibold text-gray-800 border-b pb-2 mb-3">Description</h3>
-                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">
-                        {selectedReport.description}
-                      </p>
+                    {/* Description Section */}
+                    <div className="space-y-3">
+                      <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <svg className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Incident Description
+                      </h3>
+                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-gray-800 leading-relaxed">{selectedReport.description}</p>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 mt-6 pt-6 border-t border-gray-200">
-                    <button
-                      onClick={() => handleVerify(selectedReport.id)}
-                      className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
-                    >
-                      <CheckCircleIcon className="h-5 w-5" />
-                      Verify Report
-                    </button>
-                    <button
-                      onClick={() => handleReject(selectedReport.id)}
-                      className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2"
-                    >
-                      <XCircleIcon className="h-5 w-5" />
-                      Reject Report
-                    </button>
+                    {/* Injuries Section */}
+                    {selectedReport.injuries && selectedReport.injuries !== "None" && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                          <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
+                          Injuries/Concerns
+                        </h3>
+                        <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                          <p className="text-gray-800 leading-relaxed">{selectedReport.injuries}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Patrol Schedule Table */}
+                    {reportSchedules.length > 0 && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                          <ClockIcon className="h-5 w-5 text-blue-600" />
+                          Patrol Schedule History
+                        </h3>
+                        <div className="overflow-hidden rounded-lg border border-gray-300">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Assigned Staff</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Schedule Date</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Created</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 bg-white">
+                              {reportSchedules.map((schedule) => (
+                                <tr key={schedule.id}>
+                                  <td className="px-4 py-3 text-gray-800">
+                                    {schedule.assigned_staff_names || "No staff assigned"}
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-800">
+                                    {schedule.schedule_date ? new Date(schedule.schedule_date).toLocaleString() : "N/A"}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      schedule.status === 'completed' ? 'bg-green-100 text-green-800 border border-green-200' :
+                                      schedule.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                                      'bg-blue-100 text-blue-800 border border-blue-200'
+                                    }`}>
+                                      {schedule.status.replace('_', ' ').toUpperCase()}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-800">
+                                    {new Date(schedule.created_at).toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-4 border-t border-gray-200">
+                      <button
+                        onClick={() => handleVerify(selectedReport.id)}
+                        className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <CheckCircleIcon className="h-5 w-5" />
+                        Approve Report
+                      </button>
+                      <button
+                        onClick={() => handleReject(selectedReport.id)}
+                        className="flex-1 bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <XCircleIcon className="h-5 w-5" />
+                        Reject Report
+                      </button>
+                      <button
+                        onClick={() => setSelectedReport(null)}
+                        className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium shadow-sm"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -601,6 +887,41 @@ const PendingVerification = () => {
           )}
         </div>
       </main>
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
+
+      {/* Reject Modal with Input */}
+      <InputModal
+        isOpen={rejectModal.isOpen}
+        title="Reject Report"
+        message={`Please provide a reason for rejecting report #${rejectModal.reportId}:`}
+        placeholder="Enter rejection reason..."
+        value={rejectReason}
+        onChange={(e) => setRejectReason(e.target.value)}
+        onConfirm={confirmRejection}
+        onCancel={() => {
+          setRejectModal({ isOpen: false, reportId: null });
+          setRejectReason('');
+        }}
+        type="error"
+      />
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notificationModal.isOpen}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        type={notificationModal.type}
+        onClose={() => setNotificationModal({ ...notificationModal, isOpen: false })}
+      />
     </div>
   );
 };

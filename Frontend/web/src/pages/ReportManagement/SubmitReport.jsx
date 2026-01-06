@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
+import { NotificationModal } from "../../components/ReportManagement/Modal";
+import { apiService } from "../../utils/api";
 import {
   PlusCircleIcon,
   MagnifyingGlassIcon,
@@ -17,32 +19,16 @@ const SubmitIncidentReportPage = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("form"); // "form" or "reports"
-
-  // Reports data
-  const [reports, setReports] = useState([
-    {
-      id: "RPT-001",
-      type: "Animal Bite",
-      location: "Purok 4, Barangay San Juan",
-      date: "2025-11-20",
-      time: "14:30",
-      reporterName: "Juan Dela Cruz",
-      reporterContact: "09123456789",
-      reporterAddress: "Purok 4, Barangay San Juan",
-      details: "Dog bite incident near the market. Victim sustained minor injuries on left leg.",
-      animalType: "Stray Dog",
-      animalCount: 1,
-      injuries: "Minor bite wounds on left leg",
-      severity: "Low",
-      status: "Pending",
-      assignedTo: "",
-      followUpRequired: true,
-    },
-  ]);
+  const [reports, setReports] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  
+  // Modal state
+  const [notificationModal, setNotificationModal] = useState({ isOpen: false, title: '', message: '', type: 'success' });
 
   // Form data
   const [formData, setFormData] = useState({
     type: "",
+    reportType: "", // Maps to incident_type in backend
     location: "",
     reporterName: "",
     reporterContact: "",
@@ -57,63 +43,220 @@ const SubmitIncidentReportPage = () => {
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
+  // Fetch reports from backend
+  useEffect(() => {
+    if (activeTab === "reports") {
+      fetchReports();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const fetchReports = async () => {
+    try {
+      const response = await apiService.incidents.getAll();
+      const transformedReports = response.data.records.map(incident => {
+        // Format report type from database
+        const formatReportType = (type) => {
+          // Handle empty strings and null/undefined
+          if (!type || type === '') return 'Incident/Bite Report';
+          if (type === 'incident') return 'Incident/Bite Report';
+          if (type === 'stray') return 'Stray Animal Report';
+          if (type === 'lost') return 'Lost Pet Report';
+          return incident.title || 'Animal Report';
+        };
+        
+        return {
+          id: `RPT-${incident.id.toString().padStart(3, '0')}`,
+          type: formatReportType(incident.incident_type),
+          location: incident.location,
+          date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
+          time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
+          reporterName: incident.reporter_name,
+          reporterContact: incident.reporter_contact,
+          reporterAddress: incident.location,
+          details: incident.description,
+          animalType: incident.animal_type || extractAnimalType(incident.description),
+          animalCount: 1,
+          injuries: extractInjuries(incident.description),
+          severity: incident.priority ? incident.priority.charAt(0).toUpperCase() + incident.priority.slice(1) : 'Low',
+          status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
+          assignedTo: incident.catcher_team_name || "",
+          followUpRequired: true,
+          reportType: incident.incident_type, // Keep the raw value for reference
+        };
+      });
+      setReports(transformedReports);
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+    }
+  };
+
+  // Test API connection
+  const testConnection = async () => {
+    try {
+      const response = await apiService.incidents.getAll();
+      setNotificationModal({
+        isOpen: true,
+        title: 'Connection Success',
+        message: `API Connection Test SUCCESS!\n\nTotal incidents: ${response.data?.total || 0}\n\nBackend is connected and working!`,
+        type: 'success'
+      });
+    } catch (error) {
+      setNotificationModal({
+        isOpen: true,
+        title: 'Connection Failed',
+        message: `API Connection Test FAILED\n\nError: ${error.message}\n\nCheck console (F12) for details.`,
+        type: 'error'
+      });
+      console.error("Connection test failed:", error);
+    }
+  };
+
+  const extractAnimalType = (description) => {
+    if (!description) return "Unknown";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('dog')) return 'Dog';
+    if (lowerDesc.includes('cat')) return 'Cat';
+    return 'Unknown';
+  };
+
+  const extractInjuries = (description) => {
+    if (!description) return "None";
+    const lowerDesc = description.toLowerCase();
+    if (lowerDesc.includes('bite') || lowerDesc.includes('injury') || lowerDesc.includes('wound')) {
+      return description;
+    }
+    return "None";
+  };
+
   // Handle form change
   const handleChange = (e) => {
     const { name, value, type } = e.target;
-    setFormData({ 
-      ...formData, 
-      [name]: type === 'checkbox' ? e.target.checked : value 
-    });
+    
+    // Map incident type to reportType for backend
+    if (name === 'type') {
+      let mappedReportType = 'incident';
+      if (value === 'Stray Animal Report') {
+        mappedReportType = 'stray';
+      } else if (value.includes('Lost') || value.includes('Missing')) {
+        mappedReportType = 'lost';
+      }
+      setFormData({ 
+        ...formData, 
+        [name]: value,
+        reportType: mappedReportType
+      });
+    } else {
+      setFormData({ 
+        ...formData, 
+        [name]: type === 'checkbox' ? e.target.checked : value 
+      });
+    }
   };
 
-  // Generate report ID
-  const generateReportId = () => {
-    const count = reports.length + 1;
-    return `RPT-${count.toString().padStart(3, '0')}`;
-  };
 
-  // Submit handler
-  const handleSubmit = (e) => {
+
+  // Submit handler with improved error handling
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.type || !formData.location || !formData.reporterName || !formData.reporterContact || !formData.details) {
+      setNotificationModal({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Please fill in all required fields:\n- Incident Type\n- Location\n- Reporter Name\n- Contact Number\n- Incident Details',
+        type: 'warning'
+      });
+      return;
+    }
+    
+    try {
+      setSubmitting(true);
+      
+      // Prepare data for backend
+      const incidentData = {
+        title: formData.type,
+        description: `${formData.details}${formData.injuries ? '\n\nInjuries: ' + formData.injuries : ''}${formData.animalType ? '\nAnimal Type: ' + formData.animalType : ''}${formData.animalCount > 1 ? '\nAnimal Count: ' + formData.animalCount : ''}`,
+        location: formData.location,
+        status: 'pending',
+        priority: formData.severity.toLowerCase(),
+        reporter_name: formData.reporterName,
+        reporter_contact: formData.reporterContact,
+        incident_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        incident_type: formData.reportType || 'incident', // Add report type
+        animal_type: formData.animalType ? formData.animalType.toLowerCase() : null,
+      };
 
-    const newReport = {
-      id: generateReportId(),
-      type: formData.type,
-      location: formData.location,
-      date: new Date().toISOString().split("T")[0],
-      time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-      reporterName: formData.reporterName,
-      reporterContact: formData.reporterContact,
-      reporterAddress: formData.reporterAddress,
-      details: formData.details,
-      animalType: formData.animalType,
-      animalCount: parseInt(formData.animalCount),
-      injuries: formData.injuries,
-      severity: formData.severity,
-      status: "Pending",
-      assignedTo: "",
-      followUpRequired: formData.followUpRequired,
-    };
+      console.log("📤 Submitting incident report...");
+      console.log("Data:", incidentData);
 
-    setReports([newReport, ...reports]);
+      // Submit to backend
+      const response = await apiService.incidents.create(incidentData);
+      console.log("✅ SUCCESS! Response:", response.data);
 
-    // Reset form
-    setFormData({
-      type: "",
-      location: "",
-      reporterName: "",
-      reporterContact: "",
-      reporterAddress: "",
-      details: "",
-      animalType: "",
-      animalCount: 1,
-      injuries: "",
-      severity: "Low",
-      followUpRequired: true,
-    });
+      // Reset form
+      setFormData({
+        type: "",
+        reportType: "",
+        location: "",
+        reporterName: "",
+        reporterContact: "",
+        reporterAddress: "",
+        details: "",
+        animalType: "",
+        animalCount: 1,
+        injuries: "",
+        severity: "Low",
+        followUpRequired: true,
+      });
 
-    // Show success message
-    alert("Incident report submitted successfully!");
+      // Show success message
+      setNotificationModal({
+        isOpen: true,
+        title: 'Success!',
+        message: `Incident report submitted successfully!\n\nReport ID: ${response.data.id || 'Created'}\n\nThe report will now appear in all admin tables.`,
+        type: 'success'
+      });
+      
+      // Refresh reports and switch to reports tab
+      await fetchReports();
+      setActiveTab("reports");
+      
+      setSubmitting(false);
+    } catch (error) {
+      console.error("❌ SUBMISSION FAILED:");
+      console.error("Full error:", error);
+      
+      // Detailed error message for user
+      let errorMsg = "❌ Failed to submit report\n\n";
+      
+      if (error.response) {
+        // Server responded with error
+        errorMsg += `Server Error (${error.response.status})\n`;
+        errorMsg += `Details: ${error.response.data?.message || JSON.stringify(error.response.data)}\n\n`;
+        errorMsg += `API URL: ${error.config?.url}`;
+      } else if (error.request) {
+        // Request made but no response
+        errorMsg += "No response from server.\n\n";
+        errorMsg += "Please check:\n";
+        errorMsg += "1. Backend server is running (Node.js on port 3000)\n";
+        errorMsg += "2. Check VITE_API_URL in .env file\n";
+        errorMsg += "3. Check browser console (F12) for details";
+      } else {
+        // Something else went wrong
+        errorMsg += `Error: ${error.message}\n\n`;
+        errorMsg += "Check console (F12) for more details.";
+      }
+      
+      setNotificationModal({
+        isOpen: true,
+        title: 'Submission Failed',
+        message: errorMsg,
+        type: 'error'
+      });
+      setSubmitting(false);
+    }
   };
 
   // Filtering
@@ -175,27 +318,36 @@ const SubmitIncidentReportPage = () => {
           {/* Header with Tabs */}
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-800">Submit Walk-in Incident Report</h1>
-            <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => setActiveTab("form")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === "form"
-                    ? "bg-[#FA8630] text-white"
-                    : "text-gray-600 hover:text-gray-800"
-                }`}
+                type="button"
+                onClick={testConnection}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium transition-colors"
               >
-                New Report
+                🧪 Test API
               </button>
-              <button
-                onClick={() => setActiveTab("reports")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === "reports"
-                    ? "bg-[#FA8630] text-white"
-                    : "text-gray-600 hover:text-gray-800"
-                }`}
-              >
-                View Reports ({reports.length})
-              </button>
+              <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+                <button
+                  onClick={() => setActiveTab("form")}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === "form"
+                      ? "bg-[#FA8630] text-white"
+                      : "text-gray-600 hover:text-gray-800"
+                  }`}
+                >
+                  New Report
+                </button>
+                <button
+                  onClick={() => setActiveTab("reports")}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === "reports"
+                      ? "bg-[#FA8630] text-white"
+                      : "text-gray-600 hover:text-gray-800"
+                  }`}
+                >
+                  View Reports ({reports.length})
+                </button>
+              </div>
             </div>
           </div>
 
@@ -226,11 +378,11 @@ const SubmitIncidentReportPage = () => {
                       className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
                     >
                       <option value="">Select incident type</option>
-                      <option value="Animal Bite">Animal Bite</option>
-                      <option value="Rabies Suspected">Rabies Suspected</option>
+                      <option value="Animal Bite">Incident/Bite Report</option>
                       <option value="Stray Animal Report">Stray Animal Report</option>
+                      <option value="Lost Pet Report">Lost Pet Report</option>
                       <option value="Animal Nuisance">Animal Nuisance</option>
-                      <option value="Animal Attack">Animal Attack</option>
+                      <option value="Rabies Suspected">Rabies Suspected</option>
                       <option value="Other">Other</option>
                     </select>
                   </div>
@@ -417,16 +569,18 @@ const SubmitIncidentReportPage = () => {
               <div className="flex gap-4 pt-4 border-t border-gray-200">
                 <button
                   type="submit"
-                  className="bg-[#FA8630] text-white px-6 py-3 rounded-lg hover:bg-[#E87928] transition-colors font-medium flex items-center gap-2"
+                  disabled={submitting}
+                  className="bg-[#FA8630] text-white px-6 py-3 rounded-lg hover:bg-[#E87928] transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <PlusCircleIcon className="h-5 w-5" />
-                  Submit Incident Report
+                  {submitting ? 'Submitting...' : 'Submit Incident Report'}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setFormData({
                       type: "",
+                      reportType: "",
                       location: "",
                       reporterName: "",
                       reporterContact: "",
@@ -538,6 +692,15 @@ const SubmitIncidentReportPage = () => {
 
         </div>
       </main>
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notificationModal.isOpen}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        type={notificationModal.type}
+        onClose={() => setNotificationModal({ ...notificationModal, isOpen: false })}
+      />
     </div>
   );
 };

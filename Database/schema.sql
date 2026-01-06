@@ -10,12 +10,17 @@ CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    contact_number VARCHAR(20) NOT NULL,
+    address TEXT,
     role ENUM('admin', 'user', 'catcher', 'veterinarian') DEFAULT 'user',
+    status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_username (username),
-    INDEX idx_email (email)
+    INDEX idx_email (email),
+    INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Catcher Teams Table
@@ -41,20 +46,26 @@ CREATE TABLE IF NOT EXISTS incidents (
     location VARCHAR(255) NOT NULL,
     latitude DECIMAL(10, 8),
     longitude DECIMAL(11, 8),
-    status ENUM('pending', 'in_progress', 'resolved', 'cancelled') DEFAULT 'pending',
-    priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
+    status ENUM('pending', 'verified', 'in_progress', 'resolved', 'rejected', 'cancelled') DEFAULT 'pending',
     reporter_name VARCHAR(100),
     reporter_contact VARCHAR(20),
     incident_date DATETIME NOT NULL,
     images JSON,
     assigned_catcher_id INT,
+    -- Mobile report fields
+    incident_type ENUM('incident', 'stray', 'lost') DEFAULT 'incident' COMMENT 'Type of report: incident/bite, stray animal, lost pet',
+    pet_color VARCHAR(100) COMMENT 'Color of the pet/animal',
+    pet_breed VARCHAR(100) COMMENT 'Breed of the pet/animal',
+    animal_type ENUM('dog', 'cat', 'other') COMMENT 'Type of animal',
+    pet_gender ENUM('male', 'female', 'unknown') COMMENT 'Gender of the pet/animal',
+    pet_size ENUM('small', 'medium', 'large') COMMENT 'Size of the pet/animal',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (assigned_catcher_id) REFERENCES catcher_teams(id) ON DELETE SET NULL,
     INDEX idx_status (status),
-    INDEX idx_priority (priority),
     INDEX idx_incident_date (incident_date),
-    INDEX idx_assigned_catcher (assigned_catcher_id)
+    INDEX idx_assigned_catcher (assigned_catcher_id),
+    INDEX idx_incident_type (incident_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Schedules Table
@@ -159,8 +170,9 @@ CREATE TABLE IF NOT EXISTS campaigns (
 -- Insert Sample Data
 
 -- Sample Admin User (password: admin123)
-INSERT INTO users (username, email, password_hash, role) VALUES
-('admin', 'admin@cityvetcare.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin');
+-- Note: Use create-test-users.js to create users with proper bcrypt hashing
+-- INSERT INTO users (username, email, password, full_name, contact_number, address, role, status) VALUES
+-- ('admin', 'admin@cityvetcare.com', '[bcrypt_hash]', 'System Administrator', '09171234567', 'City Hall', 'admin', 'active');
 
 -- Sample Catcher Teams
 INSERT INTO catcher_teams (team_name, leader_name, contact_number, email, status, members_count) VALUES
@@ -169,10 +181,10 @@ INSERT INTO catcher_teams (team_name, leader_name, contact_number, email, status
 ('Charlie Team', 'Mike Johnson', '09191234567', 'charlie@cityvetcare.com', 'active', 3);
 
 -- Sample Incidents
-INSERT INTO incidents (title, description, location, latitude, longitude, status, priority, reporter_name, reporter_contact, incident_date, assigned_catcher_id) VALUES
-('Stray dog near school', 'Large dog wandering near elementary school gates', 'Main Street Elementary School', 14.5995, 120.9842, 'pending', 'high', 'Maria Cruz', '09171111111', NOW(), 1),
-('Injured cat found', 'Cat with visible injuries found in parking lot', 'SM City Parking Area', 14.5501, 121.0489, 'in_progress', 'urgent', 'Pedro Santos', '09182222222', NOW(), 2),
-('Multiple dogs reported', 'Pack of 3-4 dogs in residential area', 'Barangay San Jose', 14.6091, 121.0223, 'pending', 'medium', 'Anonymous', '', NOW(), NULL);
+INSERT INTO incidents (title, description, location, latitude, longitude, status, reporter_name, reporter_contact, incident_date, assigned_catcher_id, incident_type, animal_type, pet_color, pet_size) VALUES
+('Stray dog near school', 'Large dog wandering near elementary school gates', 'Main Street Elementary School', 14.5995, 120.9842, 'pending', 'Maria Cruz', '09171111111', NOW(), 1, 'stray', 'dog', 'Brown', 'large'),
+('Injured cat found', 'Cat with visible injuries found in parking lot', 'SM City Parking Area', 14.5501, 121.0489, 'in_progress', 'Pedro Santos', '09182222222', NOW(), 2, 'incident', 'cat', 'White', 'small'),
+('Multiple dogs reported', 'Pack of 3-4 dogs in residential area', 'Barangay San Jose', 14.6091, 121.0223, 'pending', 'Anonymous', '', NOW(), NULL, 'stray', 'dog', 'Mixed', 'medium');
 
 -- Sample Schedules
 INSERT INTO schedules (catcher_team_id, incident_id, scheduled_date, scheduled_time, end_time, status, notes) VALUES

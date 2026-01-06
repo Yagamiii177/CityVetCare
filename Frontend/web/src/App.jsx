@@ -14,7 +14,6 @@ import CapturedAnimals from "./pages/StrayAnimalManagement/CaptureAnimals";
 import RedemptionRequest from "./pages/StrayAnimalManagement/RedemptionRequest";
 import StatisticsLogs from "./pages/StrayAnimalManagement/StatisticsLogs";
 import AllIncidentReport from "./pages/ReportManagement/AllIncidentReport";
-import SubmitReport from "./pages/ReportManagement/SubmitReport";
 import PendingVerification from "./pages/ReportManagement/PendingVerification";
 import ReportHistory from "./pages/ReportManagement/ReportHistory";
 import IncidentMonitoring from "./pages/ReportManagement/MonitoringIncidents";
@@ -45,7 +44,6 @@ function App() {
         {/* REPORT MANAGEMENT ROUTES */}
         <Route path="/report-dashboard" element={<ReportDashboard />} />
         <Route path="/all-incident-report" element={<AllIncidentReport />} />
-        <Route path="/submit-report" element={<SubmitReport />} />
         <Route path="/pending-verification" element={<PendingVerification />} />
         <Route path="/report-history" element={<ReportHistory />} />
         <Route path="/monitoring-incidents" element={<IncidentMonitoring />} />
