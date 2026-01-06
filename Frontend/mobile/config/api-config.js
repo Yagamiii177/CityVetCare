@@ -30,7 +30,7 @@ import { Platform } from "react-native";
 const getApiBaseUrl = () => {
   // 🔥 FOR PHYSICAL DEVICE (iPhone/Android): Use PC's IP address
   // Make sure your phone and PC are on the SAME WiFi network!
-  return "http://192.168.1.9:3000/api";
+  return "http://192.168.0.108:3000/api";
 
   // UNCOMMENT FOR EMULATOR/SIMULATOR TESTING:
   // For Android Emulator:

@@ -10,6 +10,10 @@ import validateEnv from "./utils/validateEnv.js";
 // Import routes
 import authRouter from "./routes/auth.js";
 import healthRouter from "./routes/health.js";
+import incidentsRouter from "./routes/incidents.js";
+import catchersRouter from "./routes/catchers.js";
+import dashboardRouter from "./routes/dashboard.js";
+import schedulesRouter from "./routes/schedules.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -73,16 +77,24 @@ app.get("/", (req, res) => {
     message: "CityVetCare API",
     version: "3.0.0",
     platform: "Node.js/Express",
-    description: "Simplified authentication system for City Vet Care",
+    description: "Complete report management system for City Vet Care",
     endpoints: {
       "/api/health": "Health check",
       "/api/auth": "Authentication (login, create account)",
+      "/api/incidents": "Incident report management",
+      "/api/catchers": "Catcher team management",
+      "/api/dashboard": "Dashboard statistics",
+      "/api/schedules": "Patrol scheduling",
     },
   });
 });
 
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/incidents", incidentsRouter);
+app.use("/api/catchers", catchersRouter);
+app.use("/api/dashboard", dashboardRouter);
+app.use("/api/schedules", schedulesRouter);
 
 // 404 handler
 app.use((req, res) => {
