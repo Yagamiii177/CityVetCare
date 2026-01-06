@@ -10,12 +10,17 @@ CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    contact_number VARCHAR(20) NOT NULL,
+    address TEXT,
     role ENUM('admin', 'user', 'catcher', 'veterinarian') DEFAULT 'user',
+    status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_username (username),
-    INDEX idx_email (email)
+    INDEX idx_email (email),
+    INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Catcher Teams Table
@@ -165,8 +170,9 @@ CREATE TABLE IF NOT EXISTS campaigns (
 -- Insert Sample Data
 
 -- Sample Admin User (password: admin123)
-INSERT INTO users (username, email, password_hash, role) VALUES
-('admin', 'admin@cityvetcare.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin');
+-- Note: Use create-test-users.js to create users with proper bcrypt hashing
+-- INSERT INTO users (username, email, password, full_name, contact_number, address, role, status) VALUES
+-- ('admin', 'admin@cityvetcare.com', '[bcrypt_hash]', 'System Administrator', '09171234567', 'City Hall', 'admin', 'active');
 
 -- Sample Catcher Teams
 INSERT INTO catcher_teams (team_name, leader_name, contact_number, email, status, members_count) VALUES
