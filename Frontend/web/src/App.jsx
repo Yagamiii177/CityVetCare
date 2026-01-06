@@ -4,6 +4,9 @@ import Landing from "./pages/Landing";
 import VaccinationDashboard from "./pages/VaccinationManagement/Dashboard";
 import ReportDashboard from "./pages/ReportManagement/Dashboard";
 import CampaignDashboard from "./pages/CampaignManagement/Dashboard";
+import AnnouncementList from "./pages/CampaignManagement/AnnouncementList";
+import ReadingMaterial from "./pages/CampaignManagement/ReadingMaterial";
+import ClinicDashboard from "./pages/ClinicRegistration/Dashboard";
 import StrayDashboard from "./pages/StrayAnimalManagement/Dashboard";
 import AddStray from "./pages/StrayAnimalManagement/AddStray";
 import AdoptionList from "./pages/StrayAnimalManagement/AdoptionList";
@@ -13,7 +16,7 @@ import StatisticsLogs from "./pages/StrayAnimalManagement/StatisticsLogs";
 import AllIncidentReport from "./pages/ReportManagement/AllIncidentReport";
 import SubmitReport from "./pages/ReportManagement/SubmitReport";
 import PendingVerification from "./pages/ReportManagement/PendingVerification";
-import ReportHistory from "./pages/ReportManagement/ReportHistory";   
+import ReportHistory from "./pages/ReportManagement/ReportHistory";
 import IncidentMonitoring from "./pages/ReportManagement/MonitoringIncidents";
 import CatcherSchedule from "./pages/ReportManagement/CatcherSchedule";
 
@@ -48,9 +51,13 @@ function App() {
         <Route path="/monitoring-incidents" element={<IncidentMonitoring />} />
         <Route path="/catcher-schedule" element={<CatcherSchedule />} />
 
-
         {/*CAMPAIGN MANAGEMENT ROUTES */}
         <Route path="/campaign-dashboard" element={<CampaignDashboard />} />
+        <Route path="/announcement" element={<AnnouncementList />} />
+        <Route path="/reading-material" element={<ReadingMaterial />} />
+
+        {/* CLINIC MANAGEMENT ROUTES */}
+        <Route path="/clinic-dashboard" element={<ClinicDashboard />} />
       </Routes>
     </Router>
   );
