@@ -1,66 +1,103 @@
-import React, { useState } from "react";
-import { View, StyleSheet, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  Text,
+} from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
 import AdoptionCard from "../../components/StrayAnimalManagement/AdoptionCard";
 import SearchBar from "../../components/StrayAnimalManagement/SearchBar";
+import api from "../../services/api";
 
 const AdoptionScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [likedPets, setLikedPets] = useState({});
   const [filter, setFilter] = useState(null);
+  const [pets, setPets] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const pets = [
-    {
-      id: "1",
-      name: "Max",
-      breed: "Aspen",
-      sex: "Male",
-      age: "2 years",
-      type: "dog",
-      color: "Brown",
-      markings: "White patch",
-      capturedDate: "2025-05-01",
-      capturedLocation: "Naga City Park",
-      notes: "Very friendly and active.",
-      imageUrls: [
-        "https://static.vecteezy.com/system/resources/previews/008/951/892/non_2x/cute-puppy-pomeranian-mixed-breed-pekingese-dog-run-on-the-grass-with-happiness-photo.jpg",
-        "https://images.unsplash.com/photo-1611003228941-98852ba62227?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDEwfHx8ZW58MHx8fHx8",
-        "https://st3.depositphotos.com/14405618/37314/i/450/depositphotos_373148048-stock-photo-cute-puppies-pomeranian-mixed-breed.jpg",
-      ],
-    },
-    {
-      id: "2",
-      name: "Josh",
-      breed: "Siamese",
-      sex: "Female",
-      age: "5 years",
-      type: "cat",
-      color: "Brown",
-      markings: "White patch",
-      capturedDate: "2025-05-01",
-      capturedLocation: "Naga City Park",
-      notes: "Very friendly and active.",
-      imageUrls: [
-        "https://images.pexels.com/photos/2071882/pexels-photo-2071882.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500",
-      ],
-    },
-    {
-      id: "3",
-      name: "Shady",
-      breed: "Askal",
-      sex: "Male",
-      age: "7 years",
-      type: "dog",
-      color: "Brown",
-      markings: "White patch",
-      capturedDate: "2025-05-01",
-      capturedLocation: "Naga City Park",
-      notes: "Very friendly and active.",
-      imageUrls: [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Labrador_Retriever_portrait.jpg/1200px-Labrador_Retriever_portrait.jpg",
-      ],
-    },
-  ];
+  useEffect(() => {
+    loadAdoptionAnimals();
+  }, []);
+
+  const loadAdoptionAnimals = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await api.strayAnimals.listAdoption();
+      const animals = response?.data?.data || response?.data || [];
+
+      const normalizeImages = (images) => {
+        if (!images) return [];
+        if (Array.isArray(images)) return images.filter(Boolean);
+        if (typeof images === "string") {
+          try {
+            const parsed = JSON.parse(images);
+            if (Array.isArray(parsed)) return parsed.filter(Boolean);
+            if (parsed && typeof parsed === "object")
+              return Object.values(parsed).filter(Boolean);
+          } catch (e) {
+            return [];
+          }
+        }
+        if (typeof images === "object") {
+          return Object.values(images).filter(Boolean);
+        }
+        return [];
+      };
+
+      // Keep only animals marked for adoption
+      const adoptionOnly = animals.filter((animal) => {
+        const statusValue = (
+          animal.status ||
+          animal.animal_status ||
+          animal.adoption_status ||
+          ""
+        )
+          .toString()
+          .toLowerCase();
+
+        return statusValue === "adoption";
+      });
+
+      // Map backend data to mobile format
+      const mappedAnimals = adoptionOnly.map((animal) => ({
+        id: animal.id?.toString() || animal.animal_id?.toString(),
+        name: animal.name || `Stray #${animal.id}`,
+        breed: animal.breed || "Mixed Breed",
+        sex: animal.sex || animal.gender || "Unknown",
+        age: "Unknown", // Backend doesn't have age field
+        type: animal.species?.toLowerCase() || "dog",
+        status:
+          (
+            animal.status ||
+            animal.animal_status ||
+            animal.adoption_status ||
+            ""
+          )
+            .toString()
+            .toLowerCase() || "unknown",
+        color: animal.color || "",
+        markings: animal.markings || "",
+        capturedDate: animal.dateCaptured || animal.date_captured,
+        capturedLocation:
+          animal.locationCaptured || animal.location_captured || "",
+        notes: "",
+        imageUrls: normalizeImages(animal.images),
+        rfid: animal.rfid || null,
+      }));
+
+      setPets(mappedAnimals);
+    } catch (error) {
+      console.error("Failed to load adoption animals:", error);
+      setError("Failed to load adoption animals. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const toggleLike = (id) => {
     setLikedPets((prev) => ({
@@ -92,7 +129,7 @@ const AdoptionScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Pet Adoption" />
+      <ScreenHeader title="Pet Adoption" showBackButton />
 
       <View style={styles.searchBarContainer}>
         <SearchBar
@@ -103,22 +140,43 @@ const AdoptionScreen = ({ navigation }) => {
         />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={true}
-      >
-        <View style={styles.petsContainer}>
-          {filteredPets.map((pet) => (
-            <AdoptionCard
-              key={pet.id}
-              pet={pet}
-              liked={!!likedPets[pet.id]}
-              onLike={() => toggleLike(pet.id)}
-              onPress={() => navigation.navigate("AnimalProfile", { pet })}
-            />
-          ))}
+      {isLoading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#FA8630" />
+          <Text style={styles.loadingText}>Loading animals...</Text>
         </View>
-      </ScrollView>
+      ) : error ? (
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={true}
+        >
+          <View style={styles.petsContainer}>
+            {filteredPets.length > 0 ? (
+              filteredPets.map((pet) => (
+                <AdoptionCard
+                  key={pet.id}
+                  pet={pet}
+                  liked={!!likedPets[pet.id]}
+                  onLike={() => toggleLike(pet.id)}
+                  onPress={() => navigation.navigate("AnimalProfile", { pet })}
+                />
+              ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  {searchQuery || filter
+                    ? "No animals match your search"
+                    : "No animals available for adoption"}
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -137,6 +195,34 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    color: "#666",
+    fontSize: 14,
+  },
+  errorText: {
+    color: "#D32F2F",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  emptyContainer: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  emptyText: {
+    color: "#666",
+    fontSize: 16,
+    textAlign: "center",
   },
 });
 

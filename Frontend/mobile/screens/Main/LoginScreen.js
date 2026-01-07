@@ -29,7 +29,7 @@ const LoginScreen = ({ navigation }) => {
     if (isAuthenticated && user) {
       // Check user type and navigate accordingly
       if (user.userType === "admin") {
-        navigation.replace("AnimalLoggerMain");
+        navigation.replace("VetHome");
       } else {
         navigation.replace("Main");
       }
@@ -62,8 +62,8 @@ const LoginScreen = ({ navigation }) => {
       if (result.success) {
         // Navigation handled by AuthContext and useEffect
         if (userType === "admin") {
-          // Redirect veterinarian to Animal Logger
-          navigation.replace("AnimalLoggerMain");
+          // Redirect veterinarian to Vet Home
+          navigation.replace("VetHome");
         } else {
           // Pet owners go to main app
           navigation.replace("Main");

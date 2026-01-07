@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS pet_owner (
     contact_number VARCHAR(20) NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
+    pet_count INT NOT NULL DEFAULT 0,
     date_registered TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_email (email),
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS dog_catcher (
 CREATE TABLE IF NOT EXISTS pet (
     pet_id INT AUTO_INCREMENT PRIMARY KEY,
     owner_id INT NOT NULL,
+    rfid CHAR(9),
     name VARCHAR(100) NOT NULL,
     species VARCHAR(50) NOT NULL,
     breed VARCHAR(100),
@@ -53,6 +55,8 @@ CREATE TABLE IF NOT EXISTS pet (
     sex VARCHAR(20),
     photo TEXT,
     status VARCHAR(50),
+    capture_count INT NOT NULL DEFAULT 0,
+    redemption_count INT NOT NULL DEFAULT 0,
     date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_pet_owner FOREIGN KEY (owner_id) REFERENCES pet_owner(owner_id) ON DELETE CASCADE,
@@ -76,35 +80,60 @@ CREATE TABLE IF NOT EXISTS incident_report (
     INDEX idx_incident_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Stray Animals Table
 CREATE TABLE IF NOT EXISTS stray_animals (
     animal_id INT AUTO_INCREMENT PRIMARY KEY,
-    captured_by INT NULL,
-    species VARCHAR(50) NOT NULL,
+    rfid CHAR(9),
+    name VARCHAR(100),
     breed VARCHAR(100),
-    color VARCHAR(100),
+    species VARCHAR(50) NOT NULL,
     sex VARCHAR(20) DEFAULT 'Unknown',
-    marking VARCHAR(255),
-    has_tag TINYINT(1) NOT NULL DEFAULT 0,
-    tag_number VARCHAR(50),
-    capture_date DATE NOT NULL,
+    color VARCHAR(100),
+    markings VARCHAR(255),
+    sprayed_neutered TINYINT(1) NOT NULL DEFAULT 0,
+    captured_by VARCHAR(50),
+    date_captured DATE NOT NULL,
+    registration_date DATE NOT NULL,
     location_captured VARCHAR(255) NOT NULL,
-    location_found VARCHAR(255),
-    notes TEXT,
-    observation_notes TEXT,
-    status ENUM('captured', 'observation', 'adoption') NOT NULL DEFAULT 'captured',
-    date_observed DATE,
-    date_added_to_adoption DATE,
+    status ENUM('captured', 'adoption', 'euthanized') NOT NULL DEFAULT 'captured',
     images JSON,
-    past_observations JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_stray_catcher FOREIGN KEY (captured_by) REFERENCES dog_catcher(catcher_id) ON DELETE SET NULL,
-    INDEX idx_status (status),
+    INDEX idx_rfid (rfid),
     INDEX idx_species (species),
     INDEX idx_breed (breed),
-    INDEX idx_capture_date (capture_date),
+    INDEX idx_date_captured (date_captured),
     INDEX idx_location (location_captured),
-    INDEX idx_tag_number (tag_number)
+    INDEX idx_captured_by (captured_by),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Euthanized Animals Table (Historical records)
+CREATE TABLE IF NOT EXISTS euthanized_animals (
+    euthanized_id INT AUTO_INCREMENT PRIMARY KEY,
+    original_animal_id INT NOT NULL,
+    rfid CHAR(9),
+    name VARCHAR(100),
+    breed VARCHAR(100),
+    species VARCHAR(50) NOT NULL,
+    sex VARCHAR(20) DEFAULT 'Unknown',
+    color VARCHAR(100),
+    markings VARCHAR(255),
+    sprayed_neutered TINYINT(1) NOT NULL DEFAULT 0,
+    captured_by VARCHAR(50),
+    date_captured DATE NOT NULL,
+    date_euthanized DATETIME DEFAULT CURRENT_TIMESTAMP,
+    location_captured VARCHAR(255) NOT NULL,
+    reason TEXT,
+    performed_by INT NULL,
+    images JSON,
+    had_owner TINYINT(1) NOT NULL DEFAULT 0,
+    owner_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_euthanized_admin FOREIGN KEY (performed_by) REFERENCES administrator(admin_id) ON DELETE SET NULL,
+    INDEX idx_euthanized_date (date_euthanized),
+    INDEX idx_euthanized_species (species),
+    INDEX idx_euthanized_rfid (rfid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Adoption Request Table
@@ -117,7 +146,8 @@ CREATE TABLE IF NOT EXISTS adoption_request (
     CONSTRAINT fk_adoption_stray FOREIGN KEY (stray_id) REFERENCES stray_animals(animal_id) ON DELETE CASCADE,
     CONSTRAINT fk_adoption_adopter FOREIGN KEY (adopter_id) REFERENCES pet_owner(owner_id) ON DELETE CASCADE,
     INDEX idx_adoption_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Tracks adoption requests from pet owners for stray animals with adoption status';
 
 -- Redemption Request Table
 CREATE TABLE IF NOT EXISTS redemption_request (

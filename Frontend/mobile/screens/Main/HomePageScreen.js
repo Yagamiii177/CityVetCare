@@ -33,7 +33,7 @@ const HomePageScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header with Logo, Announcement Text, and Notification Button */}
+      {/* Header with Logo */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.logoButton}
@@ -45,26 +45,21 @@ const HomePageScreen = () => {
             resizeMode="contain"
           />
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.announcementHeaderContainer}
-          onPress={() => navigation.navigate("Announcements")}
-        >
-          <Text style={styles.announcementHeader}>Announcements</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.notificationButton}
-          onPress={() => navigation.navigate("Notifications")}
-        >
-          <Ionicons name="notifications-outline" size={33} color="#FD7E14" />
-        </TouchableOpacity>
+        <View style={{ flex: 2 }} />
+        {/* Right spacer to keep layout symmetrical */}
+        <View style={{ flex: 1 }} />
       </View>
 
       {/* Announcement Button - Now an image */}
+      <View style={styles.announcementHeaderRow}>
+        <TouchableOpacity onPress={() => navigation.navigate("Announcement")}>
+          <Text style={styles.announcementHeader}>Announcements</Text>
+        </TouchableOpacity>
+      </View>
+
       <TouchableOpacity
         style={styles.announcementButton}
-        onPress={() => navigation.navigate("AnnouncementScreen")}
+        onPress={() => navigation.navigate("Announcement")}
       >
         <Image
           source={iconImages.announcements}
@@ -151,17 +146,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   announcementHeaderContainer: {
-    flex: 2,
-    alignItems: "center",
-    right: 0,
-    left: 15,
-    top: 15,
+    display: "none",
   },
-  notificationButton: {
-    flex: 1,
-    alignItems: "flex-end",
-    padding: 10,
-  },
+
   logoImage: {
     width: isTablet ? 70 : 50,
     height: isTablet ? 70 : 50,
@@ -192,6 +179,15 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     borderRadius: 10, // Match the button's borderRadius
+  },
+  announcementHeaderRow: {
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  announcementHeader: {
+    fontSize: isTablet ? 18 : 16,
+    fontWeight: "700",
+    color: "#000",
   },
   buttonContainer: {
     flex: 1,

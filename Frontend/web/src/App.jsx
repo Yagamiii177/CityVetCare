@@ -10,9 +10,10 @@ import AdoptionList from "./pages/StrayAnimalManagement/AdoptionList";
 import CapturedAnimals from "./pages/StrayAnimalManagement/CaptureAnimals";
 import RedemptionRequest from "./pages/StrayAnimalManagement/RedemptionRequest";
 import StatisticsLogs from "./pages/StrayAnimalManagement/StatisticsLogs";
+import EuthanizedList from "./pages/StrayAnimalManagement/EuthanizedList";
 import AllIncidentReport from "./pages/ReportManagement/AllIncidentReport";
 import PendingVerification from "./pages/ReportManagement/PendingVerification";
-import ReportHistory from "./pages/ReportManagement/ReportHistory";   
+import ReportHistory from "./pages/ReportManagement/ReportHistory";
 import IncidentMonitoring from "./pages/ReportManagement/MonitoringIncidents";
 import CatcherSchedule from "./pages/ReportManagement/CatcherSchedule";
 
@@ -35,6 +36,7 @@ function App() {
         <Route path="/captured-animals" element={<CapturedAnimals />} />
         <Route path="/redemption-requests" element={<RedemptionRequest />} />
         <Route path="/adoption-list" element={<AdoptionList />} />
+        <Route path="/euthanized-list" element={<EuthanizedList />} />
         <Route path="/statistics-logs" element={<StatisticsLogs />} />
         <Route path="/add-stray" element={<AddStray />} />
 
@@ -45,7 +47,6 @@ function App() {
         <Route path="/report-history" element={<ReportHistory />} />
         <Route path="/monitoring-incidents" element={<IncidentMonitoring />} />
         <Route path="/catcher-schedule" element={<CatcherSchedule />} />
-
 
         {/*CAMPAIGN MANAGEMENT ROUTES */}
         <Route path="/campaign-dashboard" element={<CampaignDashboard />} />

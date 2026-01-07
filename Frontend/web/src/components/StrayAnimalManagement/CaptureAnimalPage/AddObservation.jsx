@@ -23,17 +23,8 @@ const AddObservation = ({ animal, onClose, onSave }) => {
 
     const updatedAnimal = {
       ...animal,
-      observationNotes: newObservation.notes,
-      status: newObservation.status,
-      dateObserved: newObservation.date,
-      pastObservations: [
-        ...(animal.pastObservations || []),
-        {
-          date: newObservation.date,
-          notes: newObservation.notes,
-          status: newObservation.status,
-        },
-      ],
+      notes: newObservation.notes,
+      status: animal.status || "captured",
     };
 
     onSave(updatedAnimal);
@@ -107,29 +98,13 @@ const AddObservation = ({ animal, onClose, onSave }) => {
             />
           </div>
 
-          {animal.pastObservations?.length > 0 && (
+          {animal.notes && (
             <div className="space-y-2">
               <h3 className="text-lg font-semibold text-gray-800">
-                Past Observations
+                Current Notes
               </h3>
-              <div className="space-y-2">
-                {animal.pastObservations
-                  .slice()
-                  .sort((a, b) => new Date(b.date) - new Date(a.date))
-                  .map((obs, index) => (
-                    <div
-                      key={index}
-                      className="border-l-4 border-[#FA8630] pl-4 py-2 bg-gray-50 rounded"
-                    >
-                      <p className="font-medium">
-                        {formatDateDisplay(obs.date)}
-                      </p>
-                      <p className="text-gray-700">{obs.notes}</p>
-                      <p className="text-sm text-gray-500">
-                        Status: {obs.status}
-                      </p>
-                    </div>
-                  ))}
+              <div className="border-l-4 border-[#FA8630] pl-4 py-2 bg-gray-50 rounded">
+                <p className="text-gray-700">{animal.notes}</p>
               </div>
             </div>
           )}

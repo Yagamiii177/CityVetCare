@@ -602,10 +602,93 @@ export const healthAPI = {
   },
 };
 
+/**
+ * Stray Animals API
+ */
+const strayAnimalsAPI = {
+  list: async (filters = {}) => {
+    const query = new URLSearchParams(filters).toString();
+    const url = query
+      ? `${API_ENDPOINTS.STRAY_ANIMALS.LIST}?${query}`
+      : API_ENDPOINTS.STRAY_ANIMALS.LIST;
+    return await apiRequest(url);
+  },
+
+  getById: async (id) => {
+    return await apiRequest(API_ENDPOINTS.STRAY_ANIMALS.DETAIL(id));
+  },
+
+  create: async (data) => {
+    return await apiRequest(API_ENDPOINTS.STRAY_ANIMALS.CREATE, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id, data) => {
+    return await apiRequest(API_ENDPOINTS.STRAY_ANIMALS.UPDATE(id), {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Get animals available for adoption (status = 'adoption')
+  listAdoption: async () => {
+    return await apiRequest(
+      `${API_ENDPOINTS.STRAY_ANIMALS.LIST}?status=adoption`
+    );
+  },
+};
+
+/**
+ * Adoption Requests API
+ */
+const adoptionRequestsAPI = {
+  create: async (data) => {
+    return await apiRequest("/api/adoption-requests", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  listByUser: async (ownerId) => {
+    return await apiRequest(`/api/adoption-requests?adopter_id=${ownerId}`);
+  },
+};
+
+/**
+ * Pet API
+ */
+const petsAPI = {
+  getByRfid: async (rfid) => {
+    return await apiRequest(API_ENDPOINTS.PETS.BY_RFID(rfid));
+  },
+};
+
+/**
+ * Redemption Requests API
+ */
+const redemptionRequestsAPI = {
+  create: async (data) => {
+    return await apiRequest("/api/redemption-requests", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  listByOwner: async (ownerId) => {
+    return await apiRequest(`/api/redemption-requests?owner_id=${ownerId}`);
+  },
+};
+
 export default {
   auth: authAPI,
   incidents: incidentsAPI,
   notifications: notificationsAPI,
   offline: offlineAPI,
   health: healthAPI,
+  strayAnimals: strayAnimalsAPI,
+  pets: petsAPI,
+  adoptionRequests: adoptionRequestsAPI,
+  redemptionRequests: redemptionRequestsAPI,
 };

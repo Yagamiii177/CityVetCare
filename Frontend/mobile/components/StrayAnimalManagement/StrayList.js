@@ -13,13 +13,16 @@ const StrayCard = ({ pet, onRedeem }) => {
   };
 
   const handleRedeemPress = () => {
-    if (pet.status === "Available") {
+    if (!isDisabled) {
       navigation.navigate("RedemptionForm", { pet });
     }
   };
 
   // Determine if redeem button should be disabled
-  const isDisabled = pet.status !== "Available";
+  const isDisabled =
+    pet.status &&
+    pet.status.toLowerCase() !== "captured" &&
+    pet.status.toLowerCase() !== "available";
 
   return (
     <View style={styles.cardContainer}>

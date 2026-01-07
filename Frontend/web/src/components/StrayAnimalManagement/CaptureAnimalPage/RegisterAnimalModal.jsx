@@ -40,6 +40,25 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
     ],
   };
 
+  // Color options
+  const colorOptions = [
+    "Black",
+    "White",
+    "Brown",
+    "Tan/Fawn",
+    "Cream",
+    "Gray/Silver",
+    "Orange/Ginger",
+    "Black & White",
+    "Brown & White",
+    "Brindle",
+    "Merle",
+    "Tabby/Striped",
+    "Tortoiseshell/Calico",
+    "Tri-color",
+    "Other",
+  ];
+
   // Marking options - alphabetically sorted
   const markingOptions = [
     "Bi-color",
@@ -65,15 +84,16 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
 
   const initialFormData = {
     id: generateSequentialId(),
+    rfid: "",
+    name: "",
     species: "Dog",
     breed: "",
     sex: "Male",
-    marking: "",
-    hasTag: "",
-    tagNumber: "",
-    captureDate: "",
+    color: "",
+    markings: "",
+    sprayedNeutered: false,
+    dateCaptured: "",
     locationCaptured: "",
-    notes: "",
     status: "Healthy",
     images: {
       front: null,
@@ -85,6 +105,23 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
   };
 
   const [formData, setFormData] = useState(initialFormData);
+  const [validationErrors, setValidationErrors] = useState({});
+
+  const validateForm = () => {
+    const errors = {};
+    if (!formData.name?.trim()) errors.name = "Name is required";
+    if (!formData.breed) errors.breed = "Breed is required";
+    if (!formData.species) errors.species = "Species is required";
+    if (!formData.sex) errors.sex = "Sex is required";
+    if (!formData.color) errors.color = "Color is required";
+    if (!formData.markings) errors.markings = "Markings are required";
+    if (!formData.dateCaptured)
+      errors.dateCaptured = "Date captured is required";
+    if (!formData.locationCaptured?.trim())
+      errors.locationCaptured = "Location captured is required";
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -96,6 +133,8 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
         [name]: value,
         breed: "", // Reset breed when species changes
       });
+    } else if (name === "sprayedNeutered") {
+      setFormData({ ...formData, [name]: value === "true" });
     } else {
       setFormData({ ...formData, [name]: value });
     }
@@ -136,17 +175,13 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
     );
   };
 
-  const handleAddToObservation = () => {
-    const observationData = {
-      ...formData,
-      status: "Observation",
-    };
-    onRegister(observationData);
-    onClose();
-  };
-
   const handleAddToList = () => {
-    onRegister(formData);
+    if (!validateForm()) return;
+    const payload = {
+      ...formData,
+      registrationDate: new Date().toISOString().split("T")[0],
+    };
+    onRegister(payload);
     onClose();
   };
 
@@ -282,7 +317,68 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
               </div>
             </div>
 
-            {/* Sex and Marking */}
+            {/* Name and Color */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+                <label className="block text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  className={`w-full border-2 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#FA8630] focus:border-[#FA8630] transition-all bg-white shadow-sm ${
+                    validationErrors.name ? "border-red-500" : "border-gray-200"
+                  }`}
+                  placeholder="Enter animal name"
+                />
+                {validationErrors.name && (
+                  <p className="text-red-500 text-sm mt-2">
+                    {validationErrors.name}
+                  </p>
+                )}
+              </div>
+
+              <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm relative">
+                <label className="block text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                  Color <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    name="color"
+                    value={formData.color}
+                    onChange={handleChange}
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#FA8630] focus:border-[#FA8630] transition-all bg-white shadow-sm appearance-none cursor-pointer pr-10"
+                    required
+                  >
+                    <option value="">Select color</option>
+                    {colorOptions.map((color) => (
+                      <option key={color} value={color}>
+                        {color}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                    <svg
+                      className="h-5 w-5 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sex and Markings */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
                 <label className="block text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">
@@ -324,12 +420,12 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
 
               <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm relative">
                 <label className="block text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
-                  Marking <span className="text-red-500">*</span>
+                  Markings <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <select
-                    name="marking"
-                    value={formData.marking}
+                    name="markings"
+                    value={formData.markings}
                     onChange={handleChange}
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#FA8630] focus:border-[#FA8630] transition-all bg-white shadow-sm appearance-none cursor-pointer pr-10"
                     required
@@ -360,72 +456,82 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
               </div>
             </div>
 
-            {/* Tag Information */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-              <label className="block text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">
-                Has Tag? <span className="text-red-500">*</span>
-              </label>
-              <div className="flex gap-6 mb-4">
-                <label className="flex items-center space-x-3 cursor-pointer group">
-                  <div className="relative">
-                    <input
-                      type="radio"
-                      name="hasTag"
-                      value="yes"
-                      checked={formData.hasTag === "yes"}
-                      onChange={handleChange}
-                      className="h-5 w-5 text-[#FA8630] focus:ring-2 focus:ring-[#FA8630] focus:ring-offset-2 border-gray-300"
-                    />
-                  </div>
-                  <span className="text-gray-700 group-hover:text-gray-900 font-medium transition-colors">
-                    Yes
-                  </span>
+            {/* RFID and Sprayed/Neutered */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+                <label className="block text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                  RFID <span className="text-gray-400">(optional)</span>
                 </label>
-                <label className="flex items-center space-x-3 cursor-pointer group">
-                  <div className="relative">
-                    <input
-                      type="radio"
-                      name="hasTag"
-                      value="no"
-                      checked={formData.hasTag === "no"}
-                      onChange={handleChange}
-                      className="h-5 w-5 text-[#FA8630] focus:ring-2 focus:ring-[#FA8630] focus:ring-offset-2 border-gray-300"
-                    />
-                  </div>
-                  <span className="text-gray-700 group-hover:text-gray-900 font-medium transition-colors">
-                    No
-                  </span>
-                </label>
+                <input
+                  type="text"
+                  name="rfid"
+                  value={formData.rfid}
+                  onChange={handleChange}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#FA8630] focus:border-[#FA8630] transition-all bg-white shadow-sm"
+                  placeholder="9-digit RFID code"
+                  maxLength="9"
+                />
               </div>
 
-              {formData.hasTag === "yes" && (
-                <div className="space-y-2 bg-orange-50 rounded-xl p-4 border border-orange-100">
-                  <label className="block text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                    Tag Number <span className="text-red-500">*</span>
+              <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+                <label className="block text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">
+                  Sprayed/Neutered? <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-6">
+                  <label className="flex items-center space-x-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="radio"
+                        name="sprayedNeutered"
+                        value={true}
+                        checked={formData.sprayedNeutered === true}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            sprayedNeutered: e.target.value === "true",
+                          })
+                        }
+                        className="h-5 w-5 text-[#FA8630] focus:ring-2 focus:ring-[#FA8630] focus:ring-offset-2 border-gray-300"
+                      />
+                    </div>
+                    <span className="text-gray-700 group-hover:text-gray-900 font-medium transition-colors">
+                      Yes
+                    </span>
                   </label>
-                  <input
-                    type="text"
-                    name="tagNumber"
-                    value={formData.tagNumber}
-                    onChange={handleChange}
-                    className="w-full border-2 border-orange-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#FA8630] focus:border-[#FA8630] transition-all bg-white shadow-sm"
-                    placeholder="Enter tag number"
-                    required
-                  />
+                  <label className="flex items-center space-x-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="radio"
+                        name="sprayedNeutered"
+                        value={false}
+                        checked={formData.sprayedNeutered === false}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            sprayedNeutered: e.target.value === "true",
+                          })
+                        }
+                        className="h-5 w-5 text-[#FA8630] focus:ring-2 focus:ring-[#FA8630] focus:ring-offset-2 border-gray-300"
+                      />
+                    </div>
+                    <span className="text-gray-700 group-hover:text-gray-900 font-medium transition-colors">
+                      No
+                    </span>
+                  </label>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Capture Date and Location */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
                 <label className="block text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
-                  Capture Date <span className="text-red-500">*</span>
+                  Date Captured <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
-                  name="captureDate"
-                  value={formData.captureDate}
+                  name="dateCaptured"
+                  value={formData.dateCaptured}
                   onChange={handleChange}
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#FA8630] focus:border-[#FA8630] transition-all bg-white shadow-sm"
                   required
@@ -456,21 +562,6 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
                   </button>
                 </div>
               </div>
-            </div>
-
-            {/* Notes */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-              <label className="block text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
-                Notes
-              </label>
-              <textarea
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                rows={4}
-                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#FA8630] focus:border-[#FA8630] transition-all bg-white shadow-sm resize-none"
-                placeholder="Any additional observations or notes about the animal..."
-              />
             </div>
 
             {/* Upload Images */}
@@ -551,13 +642,6 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
                 </button>
               </div>
               <div className="flex gap-3 w-full lg:w-auto order-1 lg:order-2">
-                <button
-                  type="button"
-                  onClick={handleAddToObservation}
-                  className="px-6 py-3 text-sm bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 rounded-xl text-gray-700 hover:from-gray-200 hover:to-gray-300 transition-all duration-200 font-semibold flex-1 lg:flex-none shadow-sm"
-                >
-                  Add to Observation
-                </button>
                 <button
                   type="button"
                   onClick={handleAddToList}

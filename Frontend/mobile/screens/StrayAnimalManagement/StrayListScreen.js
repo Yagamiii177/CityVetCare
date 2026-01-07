@@ -1,8 +1,15 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
 import BottomTabNavigator from "../../components/BottomNavigation";
 import StrayCard from "../../components/StrayAnimalManagement/StrayList";
 import StrayFilterBar from "../../components/StrayAnimalManagement/StrayListFilter";
+import api from "../../services/api";
 
 const isWithinDateRange = (dateString, range) => {
   const today = new Date();
@@ -27,81 +34,64 @@ const isWithinDateRange = (dateString, range) => {
 };
 
 const StrayListScreen = () => {
-  const [strayAnimals, setStrayAnimals] = useState([
-    {
-      id: "1",
-      name: "Alex",
-      breed: "Aspin",
-      sex: "Male",
-      color: "Brown",
-      markings: "White patch",
-      locationCaptured: "Pasig asdas",
-      imageUrls: [
-        "https://i.pinimg.com/736x/fd/a2/1d/fda21db0ec5eb0a84f36b095dff65cf7.jpg",
-        "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRQFebt5Q99HCSDJ26gpu1XEiMa15WdVcMv2j3dq1017_qBQfKqd5NxjTT9-UFHJhhn_yM&usqp=CAU",
-      ],
-      capturedDate: "2025-06-01",
-      status: "Available",
-      type: "dog",
-    },
-    {
-      id: "2",
-      name: "Steve",
-      breed: "Labrador",
-      sex: "Female",
-      color: "Brown",
-      markings: "White patch",
-      locationCaptured: "Quezon",
-      imageUrls: [
-        "https://images.aeonmedia.co/images/acd6897d-9849-4188-92c6-79dabcbcd518/essay-final-gettyimages-685469924.jpg?width=3840&quality=75&format=auto",
-      ],
-      capturedDate: "2025-05-12",
-      status: "Available",
-      type: "dog",
-    },
-    {
-      id: "3",
-      name: "Ram",
-      breed: "Aspin",
-      sex: "Male",
-      color: "Brown",
-      markings: "White patch",
-      locationCaptured: "Naga",
-      imageUrls: [
-        "https://a.storyblok.com/f/152976/4868x3244/a92f98e7cc/frame-8.png",
-      ],
-      capturedDate: "2025-05-01",
-      status: "Available",
-      type: "cat",
-    },
-  ]);
+  const [strayAnimals, setStrayAnimals] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState(null);
   const [dateFilter, setDateFilter] = useState(null);
 
-  const handleRedeem = (id) => {
-    Alert.alert(
-      "Confirm Redemption",
-      "Are you sure you want to redeem this animal?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Confirm",
-          onPress: () => {
-            setStrayAnimals((prevAnimals) =>
-              prevAnimals.map((animal) =>
-                animal.id === id ? { ...animal, status: "Redeemed" } : animal
-              )
-            );
-          },
-        },
-      ]
-    );
-  };
+  useEffect(() => {
+    const loadCaptured = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await api.strayAnimals.list({ status: "captured" });
+        const animals = response?.data?.data || response?.data || [];
+        const normalizeImages = (images) => {
+          if (!images) return [];
+          if (Array.isArray(images)) return images.filter(Boolean);
+          if (typeof images === "string") {
+            try {
+              const parsed = JSON.parse(images);
+              if (Array.isArray(parsed)) return parsed.filter(Boolean);
+              if (parsed && typeof parsed === "object")
+                return Object.values(parsed).filter(Boolean);
+            } catch (e) {
+              return [];
+            }
+          }
+          if (typeof images === "object") {
+            return Object.values(images).filter(Boolean);
+          }
+          return [];
+        };
+        const mapped = animals.map((animal) => ({
+          id: animal.id?.toString() || animal.animal_id?.toString(),
+          name: animal.name || `Stray #${animal.id}`,
+          breed: animal.breed || "Mixed Breed",
+          sex: (animal.sex || animal.gender || "Unknown").toString(),
+          color: animal.color || "",
+          markings: animal.markings || "",
+          locationCaptured:
+            animal.locationCaptured || animal.location_captured || "",
+          imageUrls: normalizeImages(animal.images),
+          capturedDate: animal.dateCaptured || animal.date_captured,
+          status: (animal.status || "captured").toString(),
+          type: animal.species?.toLowerCase() || "dog",
+          rfid: animal.rfid || null,
+        }));
+        setStrayAnimals(mapped);
+      } catch (e) {
+        setError("Failed to load captured animals");
+        setStrayAnimals([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadCaptured();
+  }, []);
 
   const handleSearchChange = (text) => {
     setSearchQuery(text);
@@ -116,7 +106,7 @@ const StrayListScreen = () => {
   };
 
   const filteredAnimals = strayAnimals.filter((animal) => {
-    if (animal.status !== "Available") return false;
+    if ((animal.status || "").toLowerCase() !== "captured") return false;
 
     // Search filter
     const matchesSearch =
@@ -157,13 +147,18 @@ const StrayListScreen = () => {
         style={styles.scrollContainer}
         contentContainerStyle={{ paddingTop: 5 }}
       >
-        {filteredAnimals.length > 0 ? (
+        {isLoading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#FA8630" />
+            <Text style={styles.loadingText}>Loading captured animals...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.centerContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : filteredAnimals.length > 0 ? (
           filteredAnimals.map((animal) => (
-            <StrayCard
-              key={animal.id}
-              pet={animal}
-              onRedeem={() => handleRedeem(animal.id)}
-            />
+            <StrayCard key={animal.id} pet={animal} />
           ))
         ) : (
           <View style={styles.emptyContainer}>
@@ -219,6 +214,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 20,
+  },
+  loadingText: { marginTop: 8, color: "#666" },
+  errorText: { color: "#D32F2F" },
   emptyText: {
     fontSize: 16,
     color: "#888",

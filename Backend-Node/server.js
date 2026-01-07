@@ -11,6 +11,11 @@ import validateEnv from "./utils/validateEnv.js";
 import authRouter from "./routes/auth.js";
 import healthRouter from "./routes/health.js";
 import strayAnimalsRouter from "./routes/strayAnimals.js";
+import petsRouter from "./routes/pets.js";
+import euthanizedAnimalsRouter from "./routes/euthanizedAnimals.js";
+import adoptionRequestsRouter from "./routes/adoptionRequests.js";
+import notificationsRouter from "./routes/notifications.js";
+import redemptionRequestsRouter from "./routes/redemptionRequests.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -56,8 +61,8 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
 // Serve uploaded files as static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -85,6 +90,24 @@ app.get("/", (req, res) => {
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/stray-animals", strayAnimalsRouter);
+app.use("/api/pets", petsRouter);
+app.use("/api/euthanized-animals", euthanizedAnimalsRouter);
+app.use("/api/adoption-requests", adoptionRequestsRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/redemption-requests", redemptionRequestsRouter);
+
+// Debug: Log registered routes
+if (process.env.NODE_ENV === "development") {
+  console.log("📡 Registered API routes:");
+  console.log("  - /api/health");
+  console.log("  - /api/auth");
+  console.log("  - /api/stray-animals");
+  console.log("  - /api/pets");
+  console.log("  - /api/euthanized-animals");
+  console.log("  - /api/adoption-requests");
+  console.log("  - /api/notifications");
+  console.log("  - /api/redemption-requests");
+}
 
 // 404 handler
 app.use((req, res) => {
