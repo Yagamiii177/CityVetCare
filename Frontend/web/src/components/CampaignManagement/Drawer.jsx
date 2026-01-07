@@ -24,24 +24,14 @@ export const Drawer = ({ isOpen, onItemClick, setIsDrawerOpen }) => {
       path: "/dashboard",
     },
     {
-      name: "Captured Animals",
+      name: "Announcements",
       icon: <ClipboardDocumentListIcon className="h-5 w-5 mr-3" />,
-      path: "/captured-animals",
+      path: "/announcement",
     },
     {
-      name: "Redemption Requests",
-      icon: <ArrowsRightLeftIcon className="h-5 w-5 mr-3" />,
-      path: "/redemption-requests",
-    },
-    {
-      name: "Adoption List",
-      icon: <HomeModernIcon className="h-5 w-5 mr-3" />,
-      path: "/adoption-list",
-    },
-    {
-      name: "Statistics & Logs",
+      name: "Reading Materials",
       icon: <DocumentTextIcon className="h-5 w-5 mr-3" />,
-      path: "/statistics-logs",
+      path: "/reading-material",
     },
   ];
 

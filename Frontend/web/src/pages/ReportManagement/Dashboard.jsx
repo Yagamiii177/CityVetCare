@@ -68,23 +68,27 @@ const IncidentDashboard = () => {
         ]);
         
         if (dashResponse.data) {
-          const data = dashResponse.data;
+          // Handle both old and new API response formats
+          const apiData = dashResponse.data.data || dashResponse.data;
+          const summary = apiData.summary || {};
+          const incidents = apiData.incidents || {};
           
           setDashboardData({
-            totalReports: data.summary?.total_incidents || 0,
-            resolvedReports: data.summary?.resolved_incidents || 0,
-            pendingReports: data.summary?.pending_incidents || 0,
-            reportsThisWeek: data.summary?.in_progress_incidents || 0,
+            totalReports: incidents.total_incidents || summary.total_incidents || 0,
+            resolvedReports: incidents.resolved || summary.resolved_incidents || 0,
+            pendingReports: incidents.pending || summary.pending_incidents || 0,
+            reportsThisWeek: incidents.in_progress || summary.in_progress_incidents || 0,
             scheduledPatrols: schedulesResponse.data?.records?.filter(s => s.status === 'scheduled').length || 0,
-            inProgressReports: data.summary?.in_progress_incidents || 0,
+            inProgressReports: incidents.in_progress || summary.in_progress_incidents || 0,
           });
           
           // Transform recent incidents
-          if (data.recent_incidents) {
-            const transformed = data.recent_incidents.map(incident => ({
-              id: incident.id,
-              action: incident.title,
-              time: new Date(incident.created_at).toLocaleDateString(),
+          const recentIncidentsData = apiData.recentIncidents || apiData.recent_incidents || [];
+          if (recentIncidentsData.length > 0) {
+            const transformed = recentIncidentsData.map(incident => ({
+              id: incident.id || incident.report_id,
+              action: incident.title || incident.report_type || 'Incident',
+              time: new Date(incident.created_at || incident.reported_at).toLocaleDateString(),
               status: incident.status,
               icon: <PlusIcon className="h-4 w-4 text-[#FA8630]" />,
             }));
@@ -138,8 +142,8 @@ const IncidentDashboard = () => {
       months.push({
         name: monthName,
         reports: monthIncidents.length,
-        resolved: monthIncidents.filter(i => i.status === 'resolved').length,
-        pending: monthIncidents.filter(i => i.status === 'pending' || i.status === 'pending_verification').length,
+        resolved: monthIncidents.filter(i => i.status?.toLowerCase() === 'resolved').length,
+        pending: monthIncidents.filter(i => ['pending', 'pending_verification'].includes(i.status?.toLowerCase())).length,
       });
     }
     
@@ -167,9 +171,11 @@ const IncidentDashboard = () => {
     const statuses = {};
     
     incidents.forEach(inc => {
-      const status = inc.status || 'pending';
-      const displayStatus = status.replace('_', ' ').charAt(0).toUpperCase() + 
-                           status.replace('_', ' ').slice(1);
+      const status = inc.status || 'Pending';
+      // Normalize status to Title Case for consistent display
+      const displayStatus = status.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
       statuses[displayStatus] = (statuses[displayStatus] || 0) + 1;
     });
 
@@ -484,9 +490,9 @@ const IncidentDashboard = () => {
                     </div>
                     <div>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        activity.status === 'resolved' ? 'bg-green-100 text-green-800' :
-                        activity.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                        activity.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        activity.status?.toLowerCase() === 'resolved' ? 'bg-green-100 text-green-800' :
+                        activity.status?.toLowerCase() === 'in progress' || activity.status?.toLowerCase() === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                        activity.status?.toLowerCase() === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {activity.status?.replace('_', ' ')}

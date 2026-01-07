@@ -46,18 +46,33 @@ const fetchWithError = async (url, options = {}) => {
       console.log('🔓 Request without authentication (emergency report)');
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), options.timeout || 60000); // 60 second default timeout
 
-    const data = await response.json();
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return data;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request timed out. Please check your internet connection and try again.');
+      }
+      throw fetchError;
     }
-
-    return data;
   } catch (error) {
     console.error('🚨 API Error:', error.message);
     throw new Error(error.message || 'Network request failed');
@@ -143,14 +158,32 @@ export const incidentService = {
       }
 
       // Upload images to the correct endpoint
-      const uploadUrl = `${API_ENDPOINTS.INCIDENTS.CREATE}/upload-images`;
+      const uploadUrl = `${API_ENDPOINTS.INCIDENTS.LIST}/upload-images`;
       console.log('📡 Upload URL:', uploadUrl);
 
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData,
-        headers, // Let React Native set Content-Type automatically
-      });
+      // Create AbortController for timeout (3 minutes for image uploads)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('⏱️ Image upload timeout after 180 seconds');
+        controller.abort();
+      }, 180000); // 180 seconds for image uploads
+
+      let response;
+      try {
+        response = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData,
+          headers, // Let React Native set Content-Type automatically
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Image upload timed out. Please check your internet connection and try again.');
+        }
+        throw fetchError;
+      }
 
       console.log('📥 Upload response status:', response.status);
 
@@ -215,9 +248,15 @@ export const incidentService = {
       }
 
       // Step 3: Format the incident date properly
-      const incidentDate = reportData.date 
-        ? new Date(reportData.date).toISOString().replace('T', ' ').split('.')[0]
-        : new Date().toISOString().replace('T', ' ').split('.')[0];
+      let incidentDate;
+      try {
+        // Handle both Date objects and ISO strings
+        const dateObj = typeof reportData.date === 'string' ? new Date(reportData.date) : reportData.date;
+        incidentDate = dateObj.toISOString().replace('T', ' ').split('.')[0];
+      } catch (e) {
+        console.warn('Date parsing failed, using current date');
+        incidentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
+      }
 
       // Step 4: Prepare the data for submission
       const payload = {
@@ -238,7 +277,7 @@ export const incidentService = {
         animal_type: reportData.animalType || null,
         pet_gender: reportData.petGender || null,
         pet_size: reportData.petSize || null,
-        images: JSON.stringify(imageUrls) // Store as JSON string
+        images: imageUrls // Send as array
       };
 
       console.log('📤 Submitting report to backend...', payload);

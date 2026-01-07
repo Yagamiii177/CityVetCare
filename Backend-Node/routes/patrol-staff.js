@@ -12,12 +12,14 @@ const logger = new Logger('PATROL-STAFF');
 router.get('/', async (req, res) => {
   try {
     const filters = {
-      availability: req.query.availability
+      availability: req.query.availability,
+      status: req.query.status
     };
 
     const staff = await PatrolStaff.getAll(filters);
     
     res.json({
+      success: true,
       records: staff,
       total: staff.length,
       message: staff.length === 0 ? 'No patrol staff found' : undefined
@@ -47,7 +49,10 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    res.json(staff);
+    res.json({
+      success: true,
+      data: staff
+    });
   } catch (error) {
     logger.error('Error fetching patrol staff', error);
     res.status(500).json({ 
@@ -64,18 +69,19 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, team_name, contact_number } = req.body;
 
-    if (!name) {
+    if (!name && !team_name) {
       return res.status(400).json({ 
         error: true,
-        message: 'Name is required' 
+        message: 'Name or team name is required' 
       });
     }
 
     const staff = await PatrolStaff.create(req.body);
     
     res.status(201).json({
+      success: true,
       message: 'Patrol staff created successfully',
       id: staff.id,
       data: staff
@@ -106,6 +112,7 @@ router.put('/:id', async (req, res) => {
     }
 
     res.json({ 
+      success: true,
       message: 'Patrol staff updated successfully',
       id: req.params.id
     });
@@ -135,6 +142,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     res.json({ 
+      success: true,
       message: 'Patrol staff deleted successfully',
       id: req.params.id
     });

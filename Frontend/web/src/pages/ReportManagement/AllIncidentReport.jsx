@@ -183,12 +183,13 @@ const IncidentReportingManagement = () => {
           Resolved: 0
         };
         
-        const data = response.data.data || [];
-        data.forEach(item => {
-          const status = item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ');
-          counts[status] = item.count || 0;
-          counts.all += item.count || 0;
-        });
+        const data = response.data.data || {};
+        // Handle object format {total: 3, pending: 3, verified: 0, ...}
+        counts.all = data.total || 0;
+        counts.Pending = data.pending || 0;
+        counts["In Progress"] = data.in_progress || data['in_progress'] || 0;
+        counts.Verified = data.verified || 0;
+        counts.Resolved = data.resolved || 0;
         
         if (isMountedRef.current) {
           setStatusCounts(counts);
@@ -211,10 +212,11 @@ const IncidentReportingManagement = () => {
       logger.debug('Fetching incidents', { currentPage, search: debouncedSearchTerm, status: statusFilter });
       
       // Build query parameters for server-side filtering
+      // Note: Backend expects status in Title Case with spaces (e.g., "In Progress")
       const params = {
         page: currentPage,
         search: debouncedSearchTerm || undefined,
-        status: statusFilter !== "all" ? statusFilter.toLowerCase().replace(' ', '_') : undefined
+        status: statusFilter !== "all" ? statusFilter : undefined  // Send status as-is (Title Case with spaces)
       };
       
       const response = await apiService.incidents.getAll(params);
@@ -298,6 +300,7 @@ const IncidentReportingManagement = () => {
       logger.debug('Updating status', { id: selectedReport.id, newStatus });
       
       // Prepare update data with all required fields
+      // Note: Backend expects status in Title Case with spaces (e.g., "In Progress", not "in_progress")
       const updateData = {
         id: selectedReport.id,
         title: selectedReport.type,
@@ -305,7 +308,7 @@ const IncidentReportingManagement = () => {
         location: selectedReport.address,
         latitude: selectedReport.latitude || null,
         longitude: selectedReport.longitude || null,
-        status: newStatus.toLowerCase().replace(' ', '_'),
+        status: newStatus, // Send status as-is (Title Case with spaces)
         assigned_catcher_id: null,
         reporter_name: selectedReport.reporter,
         reporter_contact: selectedReport.reporterContact,
@@ -605,9 +608,17 @@ const IncidentReportingManagement = () => {
           {!loading && (
             <>
               {/* Quick Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {Object.entries(statusCounts).map(([status, count]) => (
-                  <div key={status} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                  <button
+                    key={status}
+                    onClick={() => handleStatusFilter(status)}
+                    className={`bg-white p-4 rounded-lg shadow-sm border-2 transition-all text-left ${
+                      statusFilter === status 
+                        ? 'border-[#FA8630] bg-[#FA8630]/5' 
+                        : 'border-gray-200 hover:border-[#FA8630]/50 hover:shadow-md'
+                    }`}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-600 capitalize">{status}</p>
@@ -615,7 +626,7 @@ const IncidentReportingManagement = () => {
                       </div>
                       {status !== "all" && getStatusIcon(status)}
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
 
@@ -870,7 +881,7 @@ const IncidentReportingManagement = () => {
 
               {/* Enhanced Report Details Modal - Matching MonitoringIncidents */}
               {selectedReport && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-y-auto">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9998] p-4 overflow-y-auto">
                   <div className="bg-white w-full max-w-4xl my-8 rounded-xl shadow-2xl relative animate-fadeIn">
                     {/* Close Button - Fixed at top */}
                     <button
@@ -1208,7 +1219,7 @@ const IncidentReportingManagement = () => {
 
       {/* Status Update Modal */}
       {isStatusModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[99999] p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">

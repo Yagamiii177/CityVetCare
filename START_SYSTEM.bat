@@ -1,105 +1,55 @@
 @echo off
-REM ===========================================
-REM CityVetCare System - Complete Start Script
-REM ===========================================
-
+color 0A
 echo.
 echo ========================================
-echo   CityVetCare System Startup
+echo   CityVetCare - Quick Start System
 echo ========================================
 echo.
-
-REM Check if MySQL is running
-echo [1/4] Checking MySQL/MariaDB...
-netstat -an | findstr ":3306" >nul 2>&1
-if %errorlevel% equ 0 (
-    echo   ✓ MySQL is running on port 3306
-) else (
-    echo   ✗ MySQL is NOT running!
-    echo   Please start XAMPP/MySQL first
-    echo.
-    pause
-    exit /b 1
-)
-
-REM Start Backend Server
+echo [INFO] Starting all services...
 echo.
-echo [2/4] Starting Backend Server...
-cd Backend-Node
-if exist node_modules\ (
-    echo   ✓ Node modules found
-) else (
-    echo   Installing dependencies...
-    call npm install
-)
 
-echo   Starting server on port 3000...
-start "CityVetCare Backend" /min cmd /k "npm start"
-timeout /t 5 /nobreak >nul
-echo   ✓ Backend server started
-
-REM Check if backend is responding
-echo.
-echo [3/4] Verifying backend connection...
+REM Kill any existing Node processes
+echo [1/5] Stopping existing servers...
+taskkill /F /IM node.exe /T >nul 2>&1
 timeout /t 2 /nobreak >nul
-curl -s http://localhost:3000/api/health >nul 2>&1
+
+REM Start Backend
+echo [2/5] Starting Backend Server...
+cd /d "%~dp0Backend-Node"
+start "CityVetCare Backend" cmd /k "node server.js"
+timeout /t 5 /nobreak >nul
+
+REM Test Backend
+echo [3/5] Testing Backend Connection...
+curl -s http://localhost:3000/api/incidents/status-counts >nul 2>&1
 if %errorlevel% equ 0 (
-    echo   ✓ Backend API is responding
+    echo       SUCCESS - Backend is running!
 ) else (
-    echo   ⚠ Backend may still be starting...
+    echo       WARNING - Backend may still be starting...
 )
 
-cd ..
-
-REM Start Web Frontend  
-echo.
-echo [4/4] Starting Web Frontend...
-cd Frontend\web
-if exist node_modules\ (
-    echo   ✓ Node modules found
-) else (
-    echo   Installing dependencies...
-    call npm install
-)
-
-echo   Starting Vite dev server...
+REM Start Frontend
+echo [4/5] Starting Frontend...
+cd /d "%~dp0Frontend\web"
 start "CityVetCare Frontend" cmd /k "npm run dev"
+
+echo [5/5] Waiting for services to initialize...
 timeout /t 3 /nobreak >nul
-echo   ✓ Frontend server started
-
-cd ..\..
 
 echo.
 echo ========================================
-echo   System Started Successfully!
+echo   CITYVETCARE SYSTEM STARTED!
 echo ========================================
 echo.
-echo   Backend API:  http://localhost:3000
-echo   Web App:      http://localhost:5173
+echo   Backend:  http://localhost:3000
+echo   Frontend: http://localhost:5173
 echo.
-echo   Check browser windows for access
-echo.
-echo   Press any key to view system status...
+echo   Press any key to open in browser...
+echo ========================================
 pause >nul
 
-REM Display system status
-cls
+start http://localhost:5173
+
 echo.
-echo ========================================
-echo   CityVetCare System Status
-echo ========================================
-echo.
-echo Backend Server:
-curl -s http://localhost:3000/ 2>nul || echo   [Unable to connect]
-echo.
-echo.
-echo ========================================
-echo.
-echo To stop the system:
-echo   1. Close the Backend terminal window
-echo   2. Close the Frontend terminal window
-echo   3. Or use: taskkill /F /IM node.exe
-echo.
-echo ========================================
-echo.
+echo System is running! Close this window anytime.
 pause

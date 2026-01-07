@@ -1,23 +1,36 @@
-import { pool } from '../config/database.js';
+import pool from '../config/database.js';
 import Logger from '../utils/logger.js';
 
 const logger = new Logger('PATROL-STAFF-MODEL');
 
 class PatrolStaff {
   /**
-   * Get all patrol staff with optional filters using stored procedure
+   * Get all patrol staff with optional filters
    */
   static async getAll(filters = {}) {
     try {
-      const [rows] = await pool.execute(
-        'CALL sp_patrol_staff_get_all(?, ?, ?)',
-        [
-          filters.status || null,
-          filters.limit || 1000,
-          filters.offset || 0
-        ]
-      );
-      return rows[0];
+      let query = `
+        SELECT 
+          catcher_id as id,
+          full_name as team_name,
+          full_name as leader_name,
+          contact_number,
+          'active' as availability
+        FROM dog_catcher
+        WHERE 1=1
+      `;
+      
+      const params = [];
+      
+      if (filters.availability) {
+        query += ' AND ? = ?';
+        params.push('active', filters.availability);
+      }
+      
+      query += ' ORDER BY full_name';
+      
+      const [rows] = await pool.execute(query, params);
+      return rows;
     } catch (error) {
       logger.error('Error in PatrolStaff.getAll', error);
       throw error;
@@ -25,12 +38,23 @@ class PatrolStaff {
   }
 
   /**
-   * Get single patrol staff by ID using stored procedure
+   * Get single patrol staff by ID
    */
   static async getById(id) {
     try {
-      const [rows] = await pool.execute('CALL sp_patrol_staff_get_by_id(?)', [id]);
-      return (rows[0] && rows[0].length > 0) ? rows[0][0] : null;
+      const [rows] = await pool.execute(
+        `SELECT 
+          catcher_id as id,
+          full_name as team_name,
+          full_name as leader_name,
+          contact_number,
+          'active' as availability
+        FROM dog_catcher 
+        WHERE catcher_id = ?`,
+        [id]
+      );
+      
+      return rows[0] || null;
     } catch (error) {
       logger.error('Error in PatrolStaff.getById', error);
       throw error;
@@ -38,24 +62,23 @@ class PatrolStaff {
   }
 
   /**
-   * Create new patrol staff using stored procedure
+   * Create new patrol staff
    */
   static async create(data) {
     try {
       const [result] = await pool.execute(
-        'CALL sp_patrol_staff_create(?, ?, ?, ?, ?, ?)',
-        [
-          data.team_name || data.name,
-          data.leader_name || data.name,
-          data.contact_number || data.contact,
-          data.email || null,
-          data.status || data.availability || 'active',
-          data.members_count || 1
-        ]
+        `INSERT INTO dog_catcher (full_name, contact_number) 
+         VALUES (?, ?)`,
+        [data.name || data.team_name, data.contact_number]
       );
-
-      const insertId = result[0][0].id;
-      return { id: insertId, ...data };
+      
+      return {
+        id: result.insertId,
+        team_name: data.name || data.team_name,
+        leader_name: data.name || data.team_name,
+        contact_number: data.contact_number,
+        availability: 'active'
+      };
     } catch (error) {
       logger.error('Error in PatrolStaff.create', error);
       throw error;
@@ -63,24 +86,34 @@ class PatrolStaff {
   }
 
   /**
-   * Update patrol staff using stored procedure
+   * Update patrol staff
    */
   static async update(id, data) {
     try {
+      const fields = [];
+      const params = [];
+      
+      if (data.name || data.team_name) {
+        fields.push('full_name = ?');
+        params.push(data.name || data.team_name);
+      }
+      if (data.contact_number) {
+        fields.push('contact_number = ?');
+        params.push(data.contact_number);
+      }
+      
+      if (fields.length === 0) {
+        return false;
+      }
+      
+      params.push(id);
+      
       const [result] = await pool.execute(
-        'CALL sp_patrol_staff_update(?, ?, ?, ?, ?, ?, ?)',
-        [
-          id,
-          data.team_name || data.name || null,
-          data.leader_name || data.name || null,
-          data.contact_number || data.contact || null,
-          data.email || null,
-          data.status || data.availability || null,
-          data.members_count || null
-        ]
+        `UPDATE dog_catcher SET ${fields.join(', ')} WHERE catcher_id = ?`,
+        params
       );
-
-      return result[0][0].affected_rows > 0;
+      
+      return result.affectedRows > 0;
     } catch (error) {
       logger.error('Error in PatrolStaff.update', error);
       throw error;
@@ -88,12 +121,16 @@ class PatrolStaff {
   }
 
   /**
-   * Delete patrol staff using stored procedure
+   * Delete patrol staff
    */
   static async delete(id) {
     try {
-      const [result] = await pool.execute('CALL sp_patrol_staff_delete(?)', [id]);
-      return result[0][0].affected_rows > 0;
+      const [result] = await pool.execute(
+        'DELETE FROM dog_catcher WHERE catcher_id = ?',
+        [id]
+      );
+      
+      return result.affectedRows > 0;
     } catch (error) {
       logger.error('Error in PatrolStaff.delete', error);
       throw error;

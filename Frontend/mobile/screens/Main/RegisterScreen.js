@@ -28,15 +28,22 @@ const RegisterScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [securePassword, setSecurePassword] = useState(true);
   const [secureConfirm, setSecureConfirm] = useState(true);
-  
+
   const { register } = useAuth();
 
   const updateField = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const validateForm = () => {
-    const { username, password, confirmPassword, email, full_name, contact_number } = formData;
+    const {
+      username,
+      password,
+      confirmPassword,
+      email,
+      full_name,
+      contact_number,
+    } = formData;
 
     if (!username.trim()) {
       Alert.alert("Validation Error", "Username is required");
@@ -99,37 +106,51 @@ const RegisterScreen = ({ navigation }) => {
     setLoading(true);
 
     try {
-      const { confirmPassword, ...registrationData } = formData;
-      console.log('Attempting registration with:', registrationData);
-      
-      const result = await register(registrationData);
-      
-      console.log('Registration result:', result);
-      
+      // Remove unnecessary fields for backend
+      const { confirmPassword, username, ...registrationData } = formData;
+
+      // Rename fields to match backend schema
+      const requestData = {
+        fullName: registrationData.full_name,
+        email: registrationData.email,
+        password: registrationData.password,
+        confirmPassword: confirmPassword,
+        contactNumber: registrationData.contact_number,
+        address: registrationData.address,
+      };
+
+      console.log("Attempting registration with:", requestData);
+
+      const result = await register(requestData);
+
+      console.log("Registration result:", result);
+
       if (result.success) {
         Alert.alert(
-          "Success", 
-          "Registration successful! Welcome to CityVetCare.",
+          "Success",
+          "Registration successful! Please login with your credentials.",
           [
             {
               text: "OK",
-              onPress: () => navigation.replace("Main")
-            }
+              onPress: () => navigation.replace("Login"),
+            },
           ]
         );
       } else {
         // Show detailed error message
-        const errorMsg = result.error || "Registration failed. Please try again.";
-        console.error('Registration failed:', errorMsg);
+        const errorMsg =
+          result.error || "Registration failed. Please try again.";
+        console.error("Registration failed:", errorMsg);
         Alert.alert(
-          "Registration Failed", 
-          errorMsg + "\n\nPlease check:\n• Backend server is running\n• Network connection is active\n• All fields are valid"
+          "Registration Failed",
+          errorMsg +
+            "\n\nPlease check:\n• Backend server is running\n• Network connection is active\n• All fields are valid"
         );
       }
     } catch (error) {
       console.error("Registration exception:", error);
       Alert.alert(
-        "Connection Error", 
+        "Connection Error",
         `Cannot connect to server.\n\nError: ${error.message}\n\nPlease ensure:\n• Backend server is running on port 3000\n• Your device can reach the server`
       );
     } finally {
@@ -148,6 +169,14 @@ const RegisterScreen = ({ navigation }) => {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.innerContainer}>
+          {/* Back Button */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleBackToLogin}
+          >
+            <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          </TouchableOpacity>
+
           {/* Logo */}
           <Image
             source={require("../../assets/icons/logo.png")}
@@ -156,7 +185,6 @@ const RegisterScreen = ({ navigation }) => {
           />
 
           <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Register to report incidents</Text>
 
           {/* Username Input */}
           <View style={styles.inputContainer}>
@@ -309,7 +337,10 @@ const RegisterScreen = ({ navigation }) => {
 
           {/* Register Button */}
           <TouchableOpacity
-            style={[styles.registerButton, loading && styles.registerButtonDisabled]}
+            style={[
+              styles.registerButton,
+              loading && styles.registerButtonDisabled,
+            ]}
             onPress={handleRegister}
             disabled={loading}
           >
@@ -346,6 +377,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 30,
     paddingVertical: 40,
+  },
+  backButton: {
+    position: "absolute",
+    top: 40,
+    left: 20,
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    zIndex: 10,
   },
   logo: {
     width: 100,

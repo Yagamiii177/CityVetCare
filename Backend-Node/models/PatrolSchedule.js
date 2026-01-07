@@ -1,30 +1,53 @@
-import { pool } from '../config/database.js';
+import pool from '../config/database.js';
 import Logger from '../utils/logger.js';
 
 const logger = new Logger('PATROL-SCHEDULE-MODEL');
 
 class PatrolSchedule {
   /**
-   * Get all patrol schedules with optional filters using stored procedure
+   * Get all patrol schedules with optional filters
    */
   static async getAll(filters = {}) {
     try {
-      const [rows] = await pool.execute(
-        'CALL sp_patrol_schedules_get_all(?, ?, ?, ?)',
-        [
-          filters.status || null,
-          filters.incident_id || null,
-          filters.limit || 1000,
-          filters.offset || 0
-        ]
-      );
+      let query = `
+        SELECT 
+          ps.schedule_id as id,
+          ps.report_id as incident_id,
+          ps.assigned_catcher_id,
+          ps.schedule_date,
+          ps.schedule_time,
+          ps.status,
+          ps.notes,
+          ps.created_at,
+          ps.updated_at,
+          ir.description as incident_title,
+          ir.description as incident_description,
+          ir.status as incident_status,
+          il.address_text as incident_location,
+          dc.full_name as assigned_staff_names,
+          CONCAT(ps.assigned_catcher_id) as assigned_staff_ids
+        FROM patrol_schedule ps
+        LEFT JOIN incident_report ir ON ps.report_id = ir.report_id
+        LEFT JOIN incident_location il ON ir.location_id = il.location_id
+        LEFT JOIN dog_catcher dc ON ps.assigned_catcher_id = dc.catcher_id
+        WHERE 1=1
+      `;
       
-      const schedules = rows[0];
-      return schedules.map(row => ({
-        ...row,
-        assigned_staff_ids: row.assigned_staff_ids ? 
-          (typeof row.assigned_staff_ids === 'string' ? JSON.parse(row.assigned_staff_ids) : row.assigned_staff_ids) : []
-      }));
+      const params = [];
+      
+      if (filters.status) {
+        query += ' AND ps.status = ?';
+        params.push(filters.status);
+      }
+      if (filters.incident_id) {
+        query += ' AND ps.report_id = ?';
+        params.push(filters.incident_id);
+      }
+      
+      query += ' ORDER BY ps.schedule_date DESC, ps.schedule_time DESC';
+      
+      const [rows] = await pool.execute(query, params);
+      return rows;
     } catch (error) {
       logger.error('Error in PatrolSchedule.getAll', error);
       throw error;
@@ -32,18 +55,35 @@ class PatrolSchedule {
   }
 
   /**
-   * Get single patrol schedule by ID using stored procedure
+   * Get single patrol schedule by ID
    */
   static async getById(id) {
     try {
-      const [rows] = await pool.execute('CALL sp_patrol_schedules_get_by_id(?)', [id]);
+      const [rows] = await pool.execute(
+        `SELECT 
+          ps.schedule_id as id,
+          ps.report_id as incident_id,
+          ps.assigned_catcher_id,
+          ps.schedule_date,
+          ps.schedule_time,
+          ps.status,
+          ps.notes,
+          ps.created_at,
+          ps.updated_at,
+          ir.description as incident_title,
+          ir.description as incident_description,
+          il.address_text as incident_location,
+          dc.full_name as assigned_staff_names,
+          CONCAT(ps.assigned_catcher_id) as assigned_staff_ids
+        FROM patrol_schedule ps
+        LEFT JOIN incident_report ir ON ps.report_id = ir.report_id
+        LEFT JOIN incident_location il ON ir.location_id = il.location_id
+        LEFT JOIN dog_catcher dc ON ps.assigned_catcher_id = dc.catcher_id
+        WHERE ps.schedule_id = ?`,
+        [id]
+      );
       
-      if (!rows[0] || rows[0].length === 0) {
-        return null;
-      }
-
-      const schedule = rows[0][0];
-      return schedule;
+      return rows[0] || null;
     } catch (error) {
       logger.error('Error in PatrolSchedule.getById', error);
       throw error;
@@ -51,14 +91,31 @@ class PatrolSchedule {
   }
 
   /**
-   * Get schedules by incident ID using stored procedure
+   * Get schedules by incident ID
    */
   static async getByIncidentId(incidentId) {
     try {
-      const [rows] = await pool.execute('CALL sp_patrol_schedules_get_by_incident(?)', [incidentId]);
+      const [rows] = await pool.execute(
+        `SELECT 
+          ps.schedule_id as id,
+          ps.report_id as incident_id,
+          ps.assigned_catcher_id,
+          ps.schedule_date,
+          ps.schedule_time,
+          ps.status,
+          ps.notes,
+          ps.created_at,
+          ps.updated_at,
+          dc.full_name as assigned_staff_names,
+          CONCAT(ps.assigned_catcher_id) as assigned_staff_ids
+        FROM patrol_schedule ps
+        LEFT JOIN dog_catcher dc ON ps.assigned_catcher_id = dc.catcher_id
+        WHERE ps.report_id = ?
+        ORDER BY ps.schedule_date DESC`,
+        [incidentId]
+      );
       
-      const schedules = rows[0];
-      return schedules;
+      return rows;
     } catch (error) {
       logger.error('Error in PatrolSchedule.getByIncidentId', error);
       throw error;
@@ -66,25 +123,39 @@ class PatrolSchedule {
   }
 
   /**
-   * Create new patrol schedule using stored procedure
+   * Create new patrol schedule
    */
   static async create(data) {
     try {
+      // Extract first staff ID if multiple provided (comma-separated)
+      const staffIds = data.assigned_staff_ids || '';
+      const firstStaffId = staffIds.toString().split(',')[0];
+      
       const [result] = await pool.execute(
-        'CALL sp_patrol_schedules_create(?, ?, ?, ?, ?, ?, ?)',
+        `INSERT INTO patrol_schedule 
+         (report_id, assigned_catcher_id, schedule_date, schedule_time, status, notes) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
-          data.catcher_team_id,
-          data.incident_id || null,
-          data.scheduled_date,
-          data.scheduled_time,
-          data.end_time || null,
+          data.incident_id,
+          firstStaffId || null,
+          data.schedule_date,
+          data.schedule_time || null,
           data.status || 'scheduled',
           data.notes || null
         ]
       );
-
-      const insertId = result[0][0].id;
-      return { id: insertId, ...data };
+      
+      return {
+        id: result.insertId,
+        incident_id: data.incident_id,
+        assigned_catcher_id: firstStaffId,
+        assigned_staff_ids: data.assigned_staff_ids,
+        assigned_staff_names: data.assigned_staff_names,
+        schedule_date: data.schedule_date,
+        schedule_time: data.schedule_time,
+        status: data.status || 'scheduled',
+        notes: data.notes
+      };
     } catch (error) {
       logger.error('Error in PatrolSchedule.create', error);
       throw error;
@@ -92,25 +163,48 @@ class PatrolSchedule {
   }
 
   /**
-   * Update patrol schedule using stored procedure
+   * Update patrol schedule
    */
   static async update(id, data) {
     try {
+      const fields = [];
+      const params = [];
+      
+      if (data.assigned_staff_ids) {
+        // Extract first staff ID if multiple provided
+        const staffIds = data.assigned_staff_ids.toString().split(',')[0];
+        fields.push('assigned_catcher_id = ?');
+        params.push(staffIds);
+      }
+      if (data.schedule_date) {
+        fields.push('schedule_date = ?');
+        params.push(data.schedule_date);
+      }
+      if (data.schedule_time) {
+        fields.push('schedule_time = ?');
+        params.push(data.schedule_time);
+      }
+      if (data.status) {
+        fields.push('status = ?');
+        params.push(data.status);
+      }
+      if (data.notes !== undefined) {
+        fields.push('notes = ?');
+        params.push(data.notes);
+      }
+      
+      if (fields.length === 0) {
+        return false;
+      }
+      
+      params.push(id);
+      
       const [result] = await pool.execute(
-        'CALL sp_patrol_schedules_update(?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          id,
-          data.catcher_team_id || null,
-          data.incident_id || null,
-          data.scheduled_date || null,
-          data.scheduled_time || null,
-          data.end_time || null,
-          data.status || null,
-          data.notes || null
-        ]
+        `UPDATE patrol_schedule SET ${fields.join(', ')} WHERE schedule_id = ?`,
+        params
       );
-
-      return result[0][0].affected_rows > 0;
+      
+      return result.affectedRows > 0;
     } catch (error) {
       logger.error('Error in PatrolSchedule.update', error);
       throw error;
@@ -118,12 +212,16 @@ class PatrolSchedule {
   }
 
   /**
-   * Delete patrol schedule using stored procedure
+   * Delete patrol schedule
    */
   static async delete(id) {
     try {
-      const [result] = await pool.execute('CALL sp_patrol_schedules_delete(?)', [id]);
-      return result[0][0].affected_rows > 0;
+      const [result] = await pool.execute(
+        'DELETE FROM patrol_schedule WHERE schedule_id = ?',
+        [id]
+      );
+      
+      return result.affectedRows > 0;
     } catch (error) {
       logger.error('Error in PatrolSchedule.delete', error);
       throw error;
