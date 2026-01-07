@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
-@import url("https://unpkg.com/leaflet/dist/leaflet.css");
+/* Removed external Leaflet CSS import to avoid tracking prevention blocks.
+  Leaflet CSS is now imported locally per-component via `import "leaflet/dist/leaflet.css"`. */
 @import "tailwindcss";
 
 * {
@@ -24,4 +25,34 @@
 
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out;
+}
+
+/* Leaflet map fixes - prevent Tailwind/CSS conflicts */
+.leaflet-container {
+  font-family: "Open Sans", sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.leaflet-container * {
+  box-sizing: content-box;
+}
+
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-pane,
+.leaflet-tile-container,
+.leaflet-overlay-pane,
+.leaflet-shadow-pane,
+.leaflet-marker-pane,
+.leaflet-tooltip-pane,
+.leaflet-popup-pane {
+  position: absolute !important;
+}
+
+.leaflet-container img {
+  max-width: none !important;
+  max-height: none !important;
 }

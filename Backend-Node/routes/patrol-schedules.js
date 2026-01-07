@@ -19,6 +19,7 @@ router.get('/', async (req, res) => {
     const schedules = await PatrolSchedule.getAll(filters);
     
     res.json({
+      success: true,
       records: schedules,
       total: schedules.length,
       message: schedules.length === 0 ? 'No patrol schedules found' : undefined
@@ -42,11 +43,12 @@ router.get('/incident/:incidentId', async (req, res) => {
     const schedules = await PatrolSchedule.getByIncidentId(req.params.incidentId);
     
     res.json({
+      success: true,
       records: schedules,
       total: schedules.length
     });
   } catch (error) {
-    logger.error('Error fetching patrol schedules', error);
+    logger.error('Error fetching patrol schedules by incident', error);
     res.status(500).json({ 
       error: true,
       message: 'Failed to fetch patrol schedules',
@@ -70,7 +72,10 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    res.json(schedule);
+    res.json({
+      success: true,
+      data: schedule
+    });
   } catch (error) {
     logger.error('Error fetching patrol schedule', error);
     res.status(500).json({ 
@@ -87,9 +92,9 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { incident_id, scheduled_date } = req.body;
+    const { incident_id, schedule_date } = req.body;
 
-    if (!incident_id || !scheduled_date) {
+    if (!incident_id || !schedule_date) {
       return res.status(400).json({ 
         error: true,
         message: 'Incident ID and schedule date are required' 
@@ -99,6 +104,7 @@ router.post('/', async (req, res) => {
     const schedule = await PatrolSchedule.create(req.body);
     
     res.status(201).json({
+      success: true,
       message: 'Patrol schedule created successfully',
       id: schedule.id,
       data: schedule
@@ -129,6 +135,7 @@ router.put('/:id', async (req, res) => {
     }
 
     res.json({ 
+      success: true,
       message: 'Patrol schedule updated successfully',
       id: req.params.id
     });
@@ -158,6 +165,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     res.json({ 
+      success: true,
       message: 'Patrol schedule deleted successfully',
       id: req.params.id
     });
@@ -172,4 +180,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 export default router;
-

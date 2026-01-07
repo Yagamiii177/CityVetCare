@@ -3,21 +3,161 @@ import { useState } from "react";
 import "../pages/styles/Login.css";
 import logo from "../assets/logo.png";
 
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3000/api"
+).replace(/\/$/, "");
+
 const Login = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    fullName: "",
+    username: "",
+    password: "",
+    confirmPassword: "",
+    role: "staff",
+  });
+  const [createError, setCreateError] = useState("");
+  const [createSuccess, setCreateSuccess] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
-  const handleSubmit = (e) => {
+  // Login function
+  const login = async (username, password) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username,
+          password,
+          userType: "admin", // Web login is always for admin users
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Store token if provided
+        if (data.token) {
+          localStorage.setItem("token", data.token);
+        }
+        if (data.role) {
+          localStorage.setItem("role", data.role);
+        }
+        if (data.userId) {
+          localStorage.setItem("userId", data.userId);
+        }
+        return { success: true };
+      } else {
+        return { success: false, error: data.message || "Login failed" };
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      return { success: false, error: "Failed to connect to server" };
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (username && password) {
-      setIsLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        navigate("/vaccination-dashboard"); //CHANGE THIS TO VACCINATION LATER
-        setIsLoading(false);
-      }, 1000);
+    setError("");
+
+    if (!username || !password) {
+      setError("Please enter both username and password");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const result = await login(username, password);
+
+      if (result.success) {
+        // Navigate based on user role
+        navigate("/vaccination-dashboard");
+      } else {
+        setError(
+          result.error || "Login failed. Please check your credentials."
+        );
+      }
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
+      console.error("Login error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateAccount = async (e) => {
+    e.preventDefault();
+    setCreateError("");
+    setCreateSuccess("");
+
+    // Validation
+    if (
+      !createForm.fullName ||
+      !createForm.username ||
+      !createForm.password ||
+      !createForm.confirmPassword
+    ) {
+      setCreateError("Please fill in all fields");
+      return;
+    }
+
+    if (createForm.password !== createForm.confirmPassword) {
+      setCreateError("Passwords do not match");
+      return;
+    }
+
+    if (createForm.password.length < 4) {
+      setCreateError("Password must be at least 4 characters");
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/create-admin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: createForm.fullName,
+          username: createForm.username,
+          password: createForm.password,
+          role: createForm.role,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setCreateSuccess("Account created successfully! You can now login.");
+        setCreateForm({
+          fullName: "",
+          username: "",
+          password: "",
+          confirmPassword: "",
+          role: "staff",
+        });
+        setTimeout(() => {
+          setShowCreateModal(false);
+          setCreateSuccess("");
+        }, 2000);
+      } else {
+        setCreateError(data.message || "Failed to create account");
+      }
+    } catch (err) {
+      setCreateError("Error creating account. Please try again.");
+      console.error("Create account error:", err);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -133,6 +273,13 @@ const Login = () => {
           </div>
 
           <div className="p-6 space-y-4">
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
+
             {/* Username Field */}
             <div className="space-y-2">
               <label
@@ -241,6 +388,15 @@ const Login = () => {
                 "Sign In"
               )}
             </button>
+
+            {/* Create Account Button */}
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="w-full py-3 px-4 border-2 border-[#FA8630] rounded-xl text-[#FA8630] font-semibold hover:bg-[#FA8630]/10 transition-colors mt-3"
+            >
+              Create Account
+            </button>
           </div>
 
           {/* Footer */}
@@ -263,6 +419,183 @@ const Login = () => {
             Secure access to Naga City's Anti Rabies Management System
           </p>
         </div>
+
+        {/* Create Account Modal */}
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-xl max-w-md w-full animate-scale-in">
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-[#FA8630] to-[#FF9A52] p-6 text-white flex justify-between items-center">
+                <h3 className="text-xl font-bold">Create New Account</h3>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setCreateError("");
+                    setCreateSuccess("");
+                  }}
+                  className="text-white/80 hover:text-white transition-colors"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <form onSubmit={handleCreateAccount} className="p-6 space-y-4">
+                {/* Error Message */}
+                {createError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                    {createError}
+                  </div>
+                )}
+
+                {/* Success Message */}
+                {createSuccess && (
+                  <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
+                    {createSuccess}
+                  </div>
+                )}
+
+                {/* Full Name Field */}
+                <div className="space-y-2">
+                  <label
+                    htmlFor="create-fullname"
+                    className="block text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                  >
+                    Full Name
+                  </label>
+                  <input
+                    id="create-fullname"
+                    type="text"
+                    placeholder="Enter full name"
+                    value={createForm.fullName}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, fullName: e.target.value })
+                    }
+                    className="w-full border border-gray-200 rounded-xl py-3 px-4 outline-none focus:border-[#FA8630] transition-colors"
+                  />
+                </div>
+
+                {/* Username Field */}
+                <div className="space-y-2">
+                  <label
+                    htmlFor="create-username"
+                    className="block text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                  >
+                    Username
+                  </label>
+                  <input
+                    id="create-username"
+                    type="text"
+                    placeholder="Enter username"
+                    value={createForm.username}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, username: e.target.value })
+                    }
+                    className="w-full border border-gray-200 rounded-xl py-3 px-4 outline-none focus:border-[#FA8630] transition-colors"
+                  />
+                </div>
+
+                {/* Password Field */}
+                <div className="space-y-2">
+                  <label
+                    htmlFor="create-password"
+                    className="block text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                  >
+                    Password
+                  </label>
+                  <input
+                    id="create-password"
+                    type="password"
+                    placeholder="Enter password"
+                    value={createForm.password}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, password: e.target.value })
+                    }
+                    className="w-full border border-gray-200 rounded-xl py-3 px-4 outline-none focus:border-[#FA8630] transition-colors"
+                  />
+                </div>
+
+                {/* Confirm Password Field */}
+                <div className="space-y-2">
+                  <label
+                    htmlFor="confirm-password"
+                    className="block text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                  >
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    placeholder="Confirm password"
+                    value={createForm.confirmPassword}
+                    onChange={(e) =>
+                      setCreateForm({
+                        ...createForm,
+                        confirmPassword: e.target.value,
+                      })
+                    }
+                    className="w-full border border-gray-200 rounded-xl py-3 px-4 outline-none focus:border-[#FA8630] transition-colors"
+                  />
+                </div>
+
+                {/* Role Field */}
+                <div className="space-y-2">
+                  <label
+                    htmlFor="role"
+                    className="block text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                  >
+                    Role
+                  </label>
+                  <select
+                    id="role"
+                    value={createForm.role}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, role: e.target.value })
+                    }
+                    className="w-full border border-gray-200 rounded-xl py-3 px-4 outline-none focus:border-[#FA8630] transition-colors bg-white"
+                  >
+                    <option value="staff">Staff</option>
+                    <option value="veterinarian">Veterinarian</option>
+                  </select>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setCreateError("");
+                      setCreateSuccess("");
+                    }}
+                    className="flex-1 py-3 px-4 border border-gray-200 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreating}
+                    className="flex-1 py-3 px-4 bg-gradient-to-r from-[#FA8630] to-[#FF9A52] text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCreating ? "Creating..." : "Create Account"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

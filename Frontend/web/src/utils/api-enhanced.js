@@ -96,11 +96,11 @@ export const verificationAPI = {
 
 // Patrol Schedule APIs
 export const patrolAPI = {
-  getAll: (params) => apiClient.get('/patrol-schedules', { params }),
-  getById: (id) => apiClient.get(`/patrol-schedules/${id}`),
-  create: (data) => apiClient.post('/patrol-schedules', data),
-  updateStatus: (id, data) => apiClient.put(`/patrol-schedules/${id}/status`, data),
-  getAssigned: (staffId) => apiClient.get(`/patrol-schedules/staff/${staffId}/assigned`),
+  getAll: (params) => apiClient.get('/schedules', { params }),
+  getById: (id) => apiClient.get(`/schedules/${id}`),
+  create: (data) => apiClient.post('/schedules', data),
+  updateStatus: (id, data) => apiClient.put(`/schedules/${id}/status`, data),
+  getAssigned: (staffId) => apiClient.get(`/schedules/staff/${staffId}/assigned`),
 };
 
 // Patrol Staff APIs

@@ -9,20 +9,17 @@ const logger = new Logger('INCIDENTS');
 /**
  * GET /api/incidents
  * Get all incidents with optional filters, search, and pagination
- * Query params: page, limit, search, status, incident_type
  */
 router.get('/', async (req, res) => {
   try {
-    // Pagination params - strictly limit to 10 per page
     const page = parseInt(req.query.page) || 1;
-    const limit = 10; // Fixed at 10 records per page
+    const limit = 10;
     const offset = (page - 1) * limit;
 
-    // Search and filter params
     const filters = {
       status: req.query.status,
       incident_type: req.query.incident_type,
-      search: req.query.search, // This will search across multiple fields
+      search: req.query.search,
       limit: limit,
       offset: offset
     };
@@ -31,7 +28,6 @@ router.get('/', async (req, res) => {
 
     const incidents = await Incident.getAll(filters);
     
-    // Get total count for pagination
     const allIncidents = await Incident.getAll({ 
       status: req.query.status,
       incident_type: req.query.incident_type,
@@ -116,134 +112,103 @@ router.get('/:id', async (req, res) => {
 
 /**
  * POST /api/incidents/upload-images
- * Upload images for incident report
- * This endpoint should be called BEFORE creating the incident to get image URLs
+ * Upload images and return their URLs (separate endpoint for frontend)
  */
-router.post('/upload-images', (req, res) => {
-  upload.array('images', 10)(req, res, (err) => {
-    if (err) {
-      // Handle multer errors
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        logger.error('File too large', { limit: '10MB' });
-        return res.status(400).json({
-          success: false,
-          error: true,
-          message: 'Image file is too large. Maximum size is 10MB per image.',
-          code: 'FILE_TOO_LARGE'
-        });
-      }
-      
-      if (err.code === 'LIMIT_FILE_COUNT') {
-        return res.status(400).json({
-          success: false,
-          error: true,
-          message: 'Too many images. Maximum is 10 images per report.',
-          code: 'TOO_MANY_FILES'
-        });
-      }
-
-      logger.error('Upload error', err);
-      return res.status(500).json({
+router.post('/upload-images', upload.array('images', 5), async (req, res) => {
+  try {
+    logger.info('📥 Image upload request received');
+    logger.debug('Uploading images', { 
+      fileCount: req.files?.length || 0,
+      headers: req.headers['content-type']
+    });
+    
+    if (!req.files || req.files.length === 0) {
+      logger.warn('No images provided in upload request');
+      return res.status(400).json({
         success: false,
         error: true,
-        message: err.message || 'Failed to upload images',
-        details: err.toString()
+        message: 'No images provided'
       });
     }
 
-    try {
-      if (!req.files || req.files.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: true,
-          message: 'No images uploaded'
-        });
+    const imageUrls = req.files.map(file => `/uploads/incident-images/${file.filename}`);
+    
+    logger.info(`✅ Uploaded ${imageUrls.length} images successfully`);
+    logger.debug('Image URLs:', imageUrls);
+    
+    res.json({
+      success: true,
+      message: 'Images uploaded successfully',
+      images: imageUrls,
+      data: {
+        images: imageUrls
       }
-
-      // Generate URLs for uploaded images
-      const imageUrls = req.files.map(file => {
-        return `/uploads/incident-images/${file.filename}`;
-      });
-
-      logger.success('Images uploaded successfully', { count: imageUrls.length });
-
-      res.json({
-        success: true,
-        message: 'Images uploaded successfully',
-        images: imageUrls,
-        count: imageUrls.length
-      });
-    } catch (error) {
-      logger.error('Failed to process uploaded images', error);
-      res.status(500).json({
-        success: false,
-        error: true,
-        message: 'Failed to process uploaded images',
-        details: error.message
-      });
-    }
-  });
+    });
+  } catch (error) {
+    logger.error('❌ Failed to upload images', error);
+    res.status(500).json({
+      success: false,
+      error: true,
+      message: 'Failed to upload images',
+      details: error.message
+    });
+  }
 });
 
 /**
  * POST /api/incidents
- * Create new incident
+ * Create new incident (with optional image upload)
  */
-router.post('/', async (req, res) => {
+router.post('/', upload.array('images', 5), async (req, res) => {
   try {
-    logger.debug('Creating new incident', req.body);
+    logger.info('📝 Creating new incident');
+    logger.debug('Request body:', { ...req.body, images: req.body.images ? '[...]' : 'none' });
     
-    // Clean incident_type - convert empty string to null, then default to 'incident'
-    let incidentType = req.body.incident_type || req.body.reportType || null;
-    if (incidentType === '') incidentType = null;
-    if (!incidentType) incidentType = 'incident';
-    
-    // Generate title from incident_type if not provided
-    let title = req.body.title;
-    if (!title && incidentType) {
-      if (incidentType === 'incident') {
-        title = 'Incident/Bite Report';
-      } else if (incidentType === 'stray') {
-        title = 'Stray Animal Report';
-      } else if (incidentType === 'lost') {
-        title = 'Lost Pet Report';
-      } else {
-        title = 'Animal Report';
+    // Handle images from both file upload and JSON array
+    let images = [];
+    if (req.files && req.files.length > 0) {
+      // File upload from web form
+      images = req.files.map(file => `/uploads/incident-images/${file.filename}`);
+      logger.debug('Images from file upload:', images.length);
+    } else if (req.body.images) {
+      // JSON array from mobile or API call
+      if (Array.isArray(req.body.images)) {
+        images = req.body.images;
+      } else if (typeof req.body.images === 'string') {
+        try {
+          images = JSON.parse(req.body.images);
+        } catch (e) {
+          logger.warn('Failed to parse images string');
+          images = [];
+        }
       }
+      logger.debug('Images from request body:', images.length);
     }
-
-    // Validate required fields
-    if (!title) {
-      return res.status(400).json({ 
-        error: true,
-        message: 'Title or incident_type is required' 
-      });
-    }
-
-    // Add title and cleaned incident_type to request body
+    
     const incidentData = {
       ...req.body,
-      title: title,
-      incident_type: incidentType
+      images: images
     };
 
-    const incident = await Incident.create(incidentData);
+    const incidentId = await Incident.create(incidentData);
     
-    logger.success('Incident created successfully', { id: incident.id });
+    logger.info(`✅ Incident created successfully with ID: ${incidentId}`);
     
     res.status(201).json({
       success: true,
       message: 'Incident created successfully',
-      id: incident.id,
-      data: incident
+      id: incidentId,
+      data: {
+        id: incidentId,
+        ...incidentData
+      }
     });
   } catch (error) {
-    logger.error('Failed to create incident', error);
-    res.status(500).json({ 
+    logger.error('❌ Failed to create incident', error);
+    res.status(500).json({
       error: true,
-      success: false,
       message: 'Failed to create incident',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -254,28 +219,29 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   try {
-    logger.debug('Updating incident', { id: req.params.id, data: req.body });
+    logger.debug(`Updating incident ${req.params.id}`, req.body);
+    
     const updated = await Incident.update(req.params.id, req.body);
     
     if (!updated) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: true,
-        message: 'Incident not found or no changes made' 
+        message: 'Incident not found or no changes made'
       });
     }
-
-    logger.success('Incident updated successfully', { id: req.params.id });
-    res.json({ 
+    
+    logger.info(`Incident ${req.params.id} updated successfully`);
+    
+    res.json({
       success: true,
-      message: 'Incident updated successfully',
-      id: req.params.id
+      message: 'Incident updated successfully'
     });
   } catch (error) {
     logger.error('Failed to update incident', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: true,
       message: 'Failed to update incident',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -289,22 +255,24 @@ router.delete('/:id', async (req, res) => {
     const deleted = await Incident.delete(req.params.id);
     
     if (!deleted) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: true,
-        message: 'Incident not found' 
+        message: 'Incident not found'
       });
     }
-
-    res.json({ 
-      message: 'Incident deleted successfully',
-      id: req.params.id
+    
+    logger.info(`Incident ${req.params.id} deleted successfully`);
+    
+    res.json({
+      success: true,
+      message: 'Incident deleted successfully'
     });
   } catch (error) {
     logger.error('Failed to delete incident', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: true,
       message: 'Failed to delete incident',
-      details: error.message 
+      details: error.message
     });
   }
 });
