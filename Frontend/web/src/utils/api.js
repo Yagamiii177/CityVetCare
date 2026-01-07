@@ -152,7 +152,20 @@ export const apiService = {
     getById: (id) => api.get(`/stray-animals/${id}`),
     create: (data) => api.post("/stray-animals", data),
     update: (id, data) => api.put(`/stray-animals/${id}`, data),
-    updateStatus: (id, data) => api.put(`/stray-animals/${id}/status`, data),
+    putToAdoption: (id) => api.post(`/stray-animals/${id}/adopt`),
+    euthanize: (id, data) => api.post(`/stray-animals/${id}/euthanize`, data),
+    alertOwner: (id) => api.post(`/stray-animals/${id}/alert-owner`),
+  },
+
+  // Euthanized Animals
+  euthanizedAnimals: {
+    list: (filters = {}) => api.get("/euthanized-animals", { params: filters }),
+    getById: (id) => api.get(`/euthanized-animals/${id}`),
+  },
+
+  // Pets (lookup by RFID)
+  pets: {
+    getByRfid: (rfid) => api.get(`/pets/rfid/${rfid}`),
   },
 
   // Dashboard

@@ -9,20 +9,31 @@ import {
   Alert,
   Image,
   Platform,
-  Switch,
   KeyboardAvoidingView,
   Keyboard,
   TouchableWithoutFeedback,
+  Switch,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuth } from "../../../contexts/AuthContext";
+import api from "../../../services/api";
 
 const RegisterStrayAnimalScreen = () => {
   const navigation = useNavigation();
-  const { logout } = useAuth();
+  const { logout, isVeterinarian } = useAuth();
+  const [vetActionPromptVisible, setVetActionPromptVisible] = useState(false);
+  const [rfidStep, setRfidStep] = useState("prompt"); // prompt | rfidInput | form
+  const [rfidStatus, setRfidStatus] = useState(null);
+  const [rfidValue, setRfidValue] = useState("");
+  const [isLoadingPetData, setIsLoadingPetData] = useState(false);
+  const [petOwnerData, setPetOwnerData] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [images, setImages] = useState({
     front: null,
     back: null,
@@ -39,6 +50,7 @@ const RegisterStrayAnimalScreen = () => {
     isCastrated: false,
     color: "",
     markings: "",
+    rfidCode: "",
     dateCaptured: new Date(),
     locationCaptured: "",
   });
@@ -59,8 +71,21 @@ const RegisterStrayAnimalScreen = () => {
     })();
   }, []);
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    setRfidStep("prompt");
+  }, []);
+
+  useEffect(() => {
+    if (isVeterinarian) {
+      setVetActionPromptVisible(true);
+    }
+  }, [isVeterinarian]);
+
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     const requiredFields = [
+      "name",
       "breed",
       "type",
       "sex",
@@ -78,7 +103,7 @@ const RegisterStrayAnimalScreen = () => {
       return;
     }
 
-    const uploadedImages = Object.values(images).filter((img) => img !== null);
+    const uploadedImages = Object.entries(images).filter(([, img]) => img);
     if (uploadedImages.length === 0) {
       Alert.alert(
         "Images Required",
@@ -87,18 +112,94 @@ const RegisterStrayAnimalScreen = () => {
       return;
     }
 
-    // Here you would typically submit to an API
-    // const response = await submitAnimalData({
-    //   ...formData,
-    //   images,
-    //   registrationDate,
-    // });
+    const convertUriToDataUrl = async (uri) => {
+      if (!uri) return null;
+      try {
+        const info = await FileSystem.getInfoAsync(uri, { size: true });
+        const sizeMb = info?.size ? info.size / (1024 * 1024) : 0;
+        if (sizeMb > 3) {
+          Alert.alert(
+            "Image Too Large",
+            "Please choose images under 3MB to submit."
+          );
+          return null;
+        }
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: "base64",
+        });
+        // best-effort mime inference from extension
+        const ext = uri.split(".").pop()?.toLowerCase();
+        const mime = ext === "png" ? "image/png" : "image/jpeg";
+        return `data:${mime};base64,${base64}`;
+      } catch (err) {
+        console.warn("Failed to convert image to base64", err);
+        return null;
+      }
+    };
 
-    Alert.alert(
-      "Registration Submitted",
-      "The stray animal has been successfully registered!",
-      [{ text: "OK", onPress: () => navigation.goBack() }]
+    const imagesPayloadEntries = await Promise.all(
+      uploadedImages.map(async ([key, uri]) => {
+        const dataUrl = await convertUriToDataUrl(uri);
+        return dataUrl ? [key, dataUrl] : null;
+      })
     );
+
+    const imagesPayload = Object.fromEntries(
+      imagesPayloadEntries.filter(Boolean)
+    );
+
+    if (!Object.keys(imagesPayload).length) {
+      Alert.alert(
+        "Image Upload",
+        "Selected images could not be processed. Please try again."
+      );
+      return;
+    }
+
+    const formattedDateCaptured =
+      formData.dateCaptured instanceof Date
+        ? formData.dateCaptured.toISOString().split("T")[0]
+        : formData.dateCaptured;
+
+    const payload = {
+      rfid: formData.rfidCode ? formData.rfidCode.trim() : null,
+      name: formData.name ? formData.name.trim() : null,
+      species:
+        formData.type === "cat"
+          ? "Cat"
+          : formData.type === "dog"
+          ? "Dog"
+          : formData.type,
+      breed: formData.breed,
+      sex: formData.sex,
+      color: formData.color,
+      markings: formData.markings || null,
+      sprayedNeutered: formData.isCastrated,
+      dateCaptured: formattedDateCaptured,
+      registrationDate: registrationDate.toISOString().split("T")[0],
+      locationCaptured: formData.locationCaptured,
+      images: imagesPayload,
+    };
+
+    setIsSubmitting(true);
+
+    try {
+      await api.strayAnimals.create(payload);
+
+      Alert.alert(
+        "Registration Submitted",
+        "The stray animal has been successfully registered!",
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      console.error("Error registering stray animal:", error);
+      Alert.alert(
+        "Submission Failed",
+        error.message || "Unable to register stray animal right now."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (name, value) => {
@@ -106,15 +207,19 @@ const RegisterStrayAnimalScreen = () => {
   };
 
   const pickImage = async (angle) => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.5,
+      });
 
-    if (!result.canceled) {
-      setImages({ ...images, [angle]: result.assets[0].uri });
+      if (!result.canceled) {
+        setImages({ ...images, [angle]: result.assets[0].uri });
+      }
+    } catch (err) {
+      console.warn("Image picker failed", err);
     }
   };
 
@@ -128,14 +233,19 @@ const RegisterStrayAnimalScreen = () => {
       return;
     }
 
-    let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
+    try {
+      let result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.5,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
 
-    if (!result.canceled) {
-      setImages({ ...images, [angle]: result.assets[0].uri });
+      if (!result.canceled) {
+        setImages({ ...images, [angle]: result.assets[0].uri });
+      }
+    } catch (err) {
+      console.warn("Camera capture failed", err);
     }
   };
 
@@ -157,6 +267,51 @@ const RegisterStrayAnimalScreen = () => {
     }
   };
 
+  const fetchPetByRfid = async (rfid) => {
+    setIsLoadingPetData(true);
+    try {
+      const response = await api.pets.getByRfid(rfid.trim());
+
+      if (response && response.pet) {
+        const pet = response.pet;
+        const owner = response.owner;
+
+        // Pre-populate form with pet data
+        setFormData((prev) => ({
+          ...prev,
+          name: pet.name || "",
+          breed: pet.breed || "",
+          type: pet.species || "dog",
+          sex: pet.sex || "",
+          color: pet.color || "",
+          markings: pet.marking || "",
+          rfidCode: rfid.trim(),
+        }));
+
+        // Store owner data to display
+        setPetOwnerData(owner);
+
+        // Move to form step
+        setRfidStep("form");
+      } else {
+        Alert.alert(
+          "Pet Not Found",
+          "No pet found with this RFID. Please check and try again."
+        );
+        setRfidValue("");
+      }
+    } catch (error) {
+      console.error("Error fetching pet data:", error);
+      Alert.alert(
+        "Error",
+        error.message || "Failed to retrieve pet data. Please try again."
+      );
+      setRfidValue("");
+    } finally {
+      setIsLoadingPetData(false);
+    }
+  };
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <KeyboardAvoidingView
@@ -164,6 +319,183 @@ const RegisterStrayAnimalScreen = () => {
         style={styles.container}
         keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
       >
+        <Modal
+          visible={vetActionPromptVisible}
+          animationType="fade"
+          presentationStyle="fullScreen"
+          statusBarTranslucent={false}
+        >
+          <View style={styles.modalFullScreen}>
+            <View style={styles.modalCardWide}>
+              <View style={styles.modalIconBadge}>
+                <Ionicons name="medical-outline" size={28} color="#FD7E14" />
+              </View>
+              <Text style={styles.modalTitle}>What would you like to do?</Text>
+              <Text style={styles.modalSubtitle}>
+                Choose an action to continue
+              </Text>
+              <View style={styles.modalButtonsStack}>
+                <TouchableOpacity
+                  style={[styles.modalButtonBig, styles.modalButtonPrimary]}
+                  onPress={() => {
+                    setVetActionPromptVisible(false);
+                    navigation.replace("PetVaccination");
+                  }}
+                >
+                  <Ionicons
+                    name="document-text-outline"
+                    size={24}
+                    color="#fff"
+                  />
+                  <Text style={styles.modalButtonBigText}>
+                    Add Vaccination Record
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButtonBig, styles.modalButtonSecondary]}
+                  onPress={() => {
+                    setVetActionPromptVisible(false);
+                  }}
+                >
+                  <Ionicons name="paw-outline" size={24} color="#FD7E14" />
+                  <Text style={styles.modalButtonBigTextSecondary}>
+                    Register a Stray Animal
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={rfidStep === "prompt" && !vetActionPromptVisible}
+          animationType="fade"
+          presentationStyle="fullScreen"
+          statusBarTranslucent={false}
+        >
+          <View style={styles.modalFullScreen}>
+            <View style={styles.modalCardWide}>
+              <View style={styles.modalIconBadge}>
+                <Ionicons name="radio-outline" size={28} color="#FD7E14" />
+              </View>
+              <Text style={styles.modalTitle}>Does the pet have RFID?</Text>
+              <Text style={styles.modalSubtitle}>
+                Choose how you want to log this animal
+              </Text>
+              <View style={styles.modalButtonsStack}>
+                <TouchableOpacity
+                  style={[styles.modalButtonBig, styles.modalButtonPrimary]}
+                  onPress={() => {
+                    setRfidStatus("hasRFID");
+                    setRfidStep("rfidInput");
+                  }}
+                >
+                  <Ionicons name="checkbox-outline" size={24} color="#fff" />
+                  <Text style={styles.modalButtonBigText}>Pet Has RFID</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButtonBig, styles.modalButtonSecondary]}
+                  onPress={() => {
+                    setRfidStatus("noRFID");
+                    setRfidStep("form");
+                  }}
+                >
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={24}
+                    color="#FD7E14"
+                  />
+                  <Text style={styles.modalButtonBigTextSecondary}>
+                    Pet Has No RFID
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButtonBig, styles.modalButtonSecondary]}
+                  onPress={() => {
+                    setRfidStep("prompt");
+                    navigation.replace("VetHome");
+                  }}
+                >
+                  <Ionicons
+                    name="arrow-back-outline"
+                    size={22}
+                    color="#FD7E14"
+                  />
+                  <Text style={styles.modalButtonBigTextSecondary}>Back</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={rfidStep === "rfidInput"}
+          animationType="fade"
+          presentationStyle="fullScreen"
+          statusBarTranslucent={false}
+        >
+          <View style={styles.modalFullScreen}>
+            <View style={styles.modalCardWide}>
+              <View style={styles.modalIconBadge}>
+                <Ionicons name="key-outline" size={28} color="#FD7E14" />
+              </View>
+              <Text style={styles.modalTitle}>Enter RFID Code</Text>
+              <Text style={styles.modalSubtitle}>
+                Scan or type the RFID before proceeding
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="RFID code"
+                value={rfidValue}
+                onChangeText={setRfidValue}
+                autoFocus
+              />
+              <View style={styles.modalButtonsStack}>
+                <TouchableOpacity
+                  style={[styles.modalButtonBig, styles.modalButtonPrimary]}
+                  onPress={() => {
+                    if (!rfidValue.trim()) {
+                      Alert.alert(
+                        "RFID Required",
+                        "Please enter an RFID code to continue."
+                      );
+                      return;
+                    }
+                    fetchPetByRfid(rfidValue);
+                  }}
+                  disabled={isLoadingPetData}
+                >
+                  {isLoadingPetData ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="checkmark-circle-outline"
+                        size={24}
+                        color="#fff"
+                      />
+                      <Text style={styles.modalButtonBigText}>Continue</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButtonBig, styles.modalButtonSecondary]}
+                  onPress={() => {
+                    setRfidStep("prompt");
+                  }}
+                >
+                  <Ionicons
+                    name="arrow-back-outline"
+                    size={22}
+                    color="#FD7E14"
+                  />
+                  <Text style={styles.modalButtonBigTextSecondary}>Back</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         <ScrollView
           style={styles.container}
           contentContainerStyle={styles.scrollContainer}
@@ -173,27 +505,56 @@ const RegisterStrayAnimalScreen = () => {
           <View style={styles.headerContainer}>
             <View style={styles.headerContent}>
               <TouchableOpacity
-                onPress={async () => {
-                  Alert.alert("Logout", "Are you sure you want to logout?", [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Logout",
-                      style: "destructive",
-                      onPress: async () => {
-                        await logout();
-                        navigation.replace("Login");
-                      },
-                    },
-                  ]);
+                onPress={() => {
+                  setRfidStep("prompt");
+                  setVetActionPromptVisible(false);
+                  setPetOwnerData(null);
+                  navigation.replace("VetHome");
                 }}
               >
-                <Ionicons name="log-out-outline" size={24} color="#dc3545" />
+                <Ionicons name="arrow-back-outline" size={24} color="#FD7E14" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Register Stray Animal</Text>
               <View style={{ width: 24 }} />
             </View>
             <View style={styles.orangeDivider} />
           </View>
+
+          {/* Pet Owner Information */}
+          {petOwnerData && (
+            <View style={styles.petOwnerCard}>
+              <View style={styles.petOwnerHeader}>
+                <Ionicons
+                  name="person-circle-outline"
+                  size={24}
+                  color="#FD7E14"
+                />
+                <Text style={styles.petOwnerTitle}>Pet Owner Information</Text>
+              </View>
+              <View style={styles.petOwnerDetails}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Owner Name:</Text>
+                  <Text style={styles.detailValue}>
+                    {petOwnerData.full_name}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Email:</Text>
+                  <Text style={styles.detailValue}>{petOwnerData.email}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Contact:</Text>
+                  <Text style={styles.detailValue}>
+                    {petOwnerData.contact_number}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Address:</Text>
+                  <Text style={styles.detailValue}>{petOwnerData.address}</Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           {/* Animal Information Section */}
           <View style={styles.sectionContainer}>
@@ -205,9 +566,9 @@ const RegisterStrayAnimalScreen = () => {
               Basic details about the stray animal
             </Text>
 
-            {/* Name Field (Optional) */}
+            {/* Name Field (Required) */}
             <FormInput
-              label="Name (Optional)"
+              label="Name *"
               value={formData.name}
               onChangeText={(text) => handleChange("name", text)}
               placeholder="If the animal has a known name"
@@ -328,11 +689,60 @@ const RegisterStrayAnimalScreen = () => {
               )}
             </View>
 
-            <FormInput
-              label="Color *"
-              value={formData.color}
-              onChangeText={(text) => handleChange("color", text)}
-            />
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Color *</Text>
+              <View style={styles.colorPickerContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.colorScrollView}
+                >
+                  {[
+                    { name: "Black", hex: "#1a1a1a" },
+                    { name: "White", hex: "#f5f5f5" },
+                    { name: "Brown", hex: "#8B4513" },
+                    { name: "Tan/Fawn", hex: "#D2B48C" },
+                    { name: "Cream", hex: "#FFFDD0" },
+                    { name: "Gray/Silver", hex: "#A9A9A9" },
+                    { name: "Orange/Ginger", hex: "#D2691E" },
+                    { name: "Black & White", hex: "#4B4B4B" },
+                    { name: "Brown & White", hex: "#C4A484" },
+                    { name: "Brindle", hex: "#6B4423" },
+                    { name: "Merle", hex: "#708090" },
+                    { name: "Tabby/Striped", hex: "#B8860B" },
+                    { name: "Tortoiseshell/Calico", hex: "#C25A3A" },
+                    { name: "Tri-color", hex: "#8B7355" },
+                  ].map((colorOption) => (
+                    <TouchableOpacity
+                      key={colorOption.name}
+                      style={[
+                        styles.colorOptionWrapper,
+                        formData.color === colorOption.name &&
+                          styles.colorOptionWrapperActive,
+                      ]}
+                      onPress={() => handleChange("color", colorOption.name)}
+                    >
+                      <View
+                        style={[
+                          styles.colorDot,
+                          { backgroundColor: colorOption.hex },
+                          colorOption.name === "White" && styles.colorDotWhite,
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.colorLabel,
+                          formData.color === colorOption.name &&
+                            styles.colorLabelActive,
+                        ]}
+                      >
+                        {colorOption.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
 
             <FormInput
               label="Markings"
@@ -381,7 +791,7 @@ const RegisterStrayAnimalScreen = () => {
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeader}>
               <Ionicons name="camera-outline" size={20} color="#FD7E14" />
-              <Text style={styles.sectionTitle}>Animal Images *</Text>
+              <Text style={styles.sectionTitle}>Animal Images</Text>
             </View>
             <Text style={styles.sectionDescription}>
               Please provide clear photos from multiple angles
@@ -433,8 +843,19 @@ const RegisterStrayAnimalScreen = () => {
           </View>
 
           {/* Submit Button */}
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.submitButtonText}>Register Animal</Text>
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              isSubmitting && styles.submitButtonDisabled,
+            ]}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Register Animal</Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -484,6 +905,50 @@ const styles = StyleSheet.create({
     backgroundColor: "#FD7E14",
     alignSelf: "center",
     marginTop: 15,
+  },
+  petOwnerCard: {
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: "#FFF9F3",
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: "#FD7E14",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  petOwnerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  petOwnerTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginLeft: 8,
+    color: "#333",
+  },
+  petOwnerDetails: {
+    gap: 8,
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  detailLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#666",
+    flex: 0.4,
+  },
+  detailValue: {
+    fontSize: 13,
+    color: "#333",
+    flex: 0.6,
+    textAlign: "right",
   },
   sectionContainer: {
     marginBottom: 20,
@@ -595,6 +1060,42 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: "#666",
   },
+  colorPickerContainer: {
+    marginTop: 8,
+  },
+  colorScrollView: {
+    flexGrow: 0,
+  },
+  colorOptionWrapper: {
+    alignItems: "center",
+    marginRight: 12,
+    paddingVertical: 8,
+  },
+  colorOptionWrapperActive: {
+    opacity: 1,
+  },
+  colorDot: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: "#ddd",
+    marginBottom: 6,
+  },
+  colorDotWhite: {
+    borderColor: "#999",
+    borderWidth: 2,
+  },
+  colorLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#666",
+    textAlign: "center",
+  },
+  colorLabelActive: {
+    color: "#FD7E14",
+    fontWeight: "700",
+  },
   dateInput: {
     borderWidth: 1,
     borderColor: "#ddd",
@@ -665,10 +1166,106 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 40,
   },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
   submitButtonText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
+  },
+  modalFullScreen: {
+    flex: 1,
+    backgroundColor: "#FFF6EE",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
+  },
+  modalCardWide: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modalButtonLogout: {
+    borderColor: "#dc3545",
+    marginBottom: 0,
+  },
+  modalButtonLogoutText: {
+    marginLeft: 10,
+    fontWeight: "700",
+    fontSize: 17,
+    color: "#dc3545",
+  },
+  modalIconBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#FD7E1420",
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#333",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    fontSize: 15,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 18,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 16,
+    backgroundColor: "#fff",
+  },
+  modalButtonsStack: {
+    flexDirection: "column",
+  },
+  modalButtonBig: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FD7E14",
+    marginBottom: 12,
+    backgroundColor: "#fff",
+  },
+  modalButtonPrimary: {
+    backgroundColor: "#FD7E14",
+  },
+  modalButtonSecondary: {
+    backgroundColor: "#fff",
+  },
+  modalButtonBigText: {
+    marginLeft: 10,
+    fontWeight: "700",
+    fontSize: 17,
+    color: "#fff",
+  },
+  modalButtonBigTextSecondary: {
+    marginLeft: 10,
+    fontWeight: "700",
+    fontSize: 17,
+    color: "#FD7E14",
   },
 });
 

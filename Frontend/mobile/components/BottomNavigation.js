@@ -1,24 +1,25 @@
-import React from "react";
-import { View, TouchableOpacity, StyleSheet, Text, Image } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import React, { useCallback, useState } from "react";
+import { View, TouchableOpacity, StyleSheet, Text } from "react-native";
+import {
+  useNavigation,
+  useRoute,
+  useFocusEffect,
+} from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import api from "../services/api";
 
 const BottomTabNavigator = () => {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const iconImages = {
-    qrCode: require("../assets/icons/qr_icon.png"),
-  };
-
   const tabs = [
-    { name: "Home", icon: "home-outline", screen: "HomePage" },
     { name: "Map", icon: "map-outline", screen: "MapNearbyClinics" },
-    { name: "QR", icon: "qrCode", screen: "QR" },
+    { name: "Stray List", icon: "paw-outline", screen: "StrayList" },
+    { name: "Home", icon: "home-outline", screen: "HomePage" },
     {
-      name: "Stray List",
-      icon: "paw-outline",
-      screen: "StrayList",
+      name: "Notification",
+      icon: "notifications-outline",
+      screen: "Notifications",
     },
     { name: "Profile", icon: "person-outline", screen: "Profile" },
   ];
@@ -30,6 +31,24 @@ const BottomTabNavigator = () => {
   const isActive = (screenName) => {
     return route.name === screenName;
   };
+
+  const [unread, setUnread] = useState(0);
+  const loadUnread = useCallback(async () => {
+    try {
+      const data = await api.notifications.getUnreadCount();
+      setUnread(data?.unread ?? 0);
+    } catch (e) {
+      setUnread(0);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUnread();
+      const interval = setInterval(loadUnread, 15000);
+      return () => clearInterval(interval);
+    }, [loadUnread])
+  );
 
   return (
     <View style={styles.container}>
@@ -44,10 +63,10 @@ const BottomTabNavigator = () => {
                 ]}
                 onPress={() => handlePress(tab.screen)}
               >
-                <Image
-                  source={iconImages.qrCode}
-                  style={styles.qrIcon}
-                  resizeMode="contain"
+                <Ionicons
+                  name={isActive(tab.screen) ? "home" : "home-outline"}
+                  size={32}
+                  color="#FD7E14"
                 />
               </TouchableOpacity>
               <Text
@@ -56,7 +75,7 @@ const BottomTabNavigator = () => {
                   isActive(tab.screen) && styles.activeHomeText,
                 ]}
               >
-                Scan
+                Home
               </Text>
             </View>
           ) : (
@@ -64,19 +83,33 @@ const BottomTabNavigator = () => {
               style={styles.tabButton}
               onPress={() => handlePress(tab.screen)}
             >
-              <Ionicons
-                name={
-                  isActive(tab.screen)
-                    ? tab.icon.replace("-outline", "")
-                    : tab.icon
-                }
-                size={24}
-                color={isActive(tab.screen) ? "#FD7E14" : "#FD7E14"}
-              />
+              <View>
+                <Ionicons
+                  name={
+                    isActive(tab.screen)
+                      ? tab.icon.replace("-outline", "")
+                      : tab.icon
+                  }
+                  size={24}
+                  color={isActive(tab.screen) ? "#FD7E14" : "#FD7E14"}
+                />
+                {tab.name === "Notification" && unread > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {unread > 99 ? "99+" : unread}
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text
                 style={[
                   styles.tabText,
                   isActive(tab.screen) && styles.activeTabText,
+                  tab.name === "Notification" &&
+                  unread > 0 &&
+                  !isActive(tab.screen)
+                    ? styles.attentionTabText
+                    : null,
                 ]}
               >
                 {tab.name}
@@ -117,15 +150,26 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: "#333",
   },
-  qrIcon: {
-    width: 50,
-    height: 50,
-    tintColor: "#FD7E14",
-    marginTop: 9,
+  badge: {
+    position: "absolute",
+    top: -6,
+    right: -10,
+    backgroundColor: "#EF4444",
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  badgeText: { color: "#fff", fontSize: 10, fontWeight: "700" },
   activeTabText: {
     color: "#FF6B6B",
     fontWeight: "bold",
+  },
+  attentionTabText: {
+    color: "#EF4444",
+    fontWeight: "700",
   },
   centerButtonContainer: {
     alignItems: "center",

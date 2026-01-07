@@ -10,10 +10,13 @@ import {
   Image,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "../../services/api";
 
 const AdoptionForm = () => {
   const navigation = useNavigation();
@@ -40,6 +43,7 @@ const AdoptionForm = () => {
   const [showFamiliarityDropdown, setShowFamiliarityDropdown] = useState(false);
   const [showPetLocationDropdown, setShowPetLocationDropdown] = useState(false);
   const [idImage, setIdImage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     // 1. Personal Information
@@ -78,7 +82,7 @@ const AdoptionForm = () => {
     confirmInfoTruthful: false,
   });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Required fields validation
     const requiredFields = [
       "fullName",
@@ -105,11 +109,64 @@ const AdoptionForm = () => {
       return;
     }
 
-    Alert.alert(
-      "Application Submitted",
-      "Thank you for your adoption application! We will review your information shortly.",
-      [{ text: "OK", onPress: () => navigation.goBack() }]
-    );
+    try {
+      setIsSubmitting(true);
+
+      // Get current user ID from storage
+      const userDataStr = await AsyncStorage.getItem("@cityvetcare_user");
+      const userData = userDataStr ? JSON.parse(userDataStr) : null;
+      const adopterId = userData?.owner_id || userData?.id;
+
+      if (!adopterId) {
+        Alert.alert("Error", "Please log in to submit an adoption request");
+        return;
+      }
+
+      // Submit adoption request
+      const adoptionRequest = {
+        stray_id: parseInt(pet.id),
+        adopter_id: adopterId,
+        applicant_details: {
+          fullName: formData.fullName,
+          age: formData.age,
+          phone: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          residenceType: formData.residenceType,
+          ownershipStatus: formData.ownershipStatus,
+          landlordPermission: formData.landlordPermission,
+          fencedYard: formData.fencedYard,
+          householdMembers: formData.householdMembers,
+          hasChildren: formData.hasChildren,
+          childrenAges: formData.childrenAges,
+          previousPets: formData.previousPets,
+          currentPets: formData.currentPets,
+          currentPetsDetails: formData.currentPetsDetails,
+          petCareFamiliarity: formData.petCareFamiliarity,
+          adoptionReason: formData.adoptionReason,
+          aloneHours: formData.aloneHours,
+          petLocation: formData.petLocation,
+          canCommitVetVisits: formData.canCommitVetVisits,
+          willingToReturn: formData.willingToReturn,
+        },
+      };
+
+      await api.adoptionRequests.create(adoptionRequest);
+
+      Alert.alert(
+        "Application Submitted",
+        "Thank you for your adoption application! We will review your information shortly.",
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      console.error("Failed to submit adoption request:", error);
+      Alert.alert(
+        "Submission Failed",
+        "Unable to submit your adoption request. Please try again later."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (name, value) => {

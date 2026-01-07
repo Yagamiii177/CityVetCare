@@ -17,12 +17,12 @@ import {
 } from "@heroicons/react/24/outline";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ClinicRegistration/Drawer";
-import { MetricsCard } from "../../components/CampaignManagement/Dashboard/MetricsCard";
-import { ApprovalCenter } from "../../components/CampaignManagement/Dashboard/ApprovalCenter";
-import { ActivityLog } from "../../components/CampaignManagement/Dashboard/ActivityLog";
-import { AnalyticsCharts } from "../../components/CampaignManagement/Dashboard/AnalyticsCharts";
-import { AlertsPanel } from "../../components/CampaignManagement/Dashboard/AlertsPanel";
-import { MiniClinicMap } from "../../components/CampaignManagement/Dashboard/MiniClinicMap";
+import { MetricsCard } from "../../components/ClinicRegistration/Dashboard/MetricsCard";
+import { ApprovalCenter } from "../../components/ClinicRegistration/Dashboard/ApprovalCenter";
+import { ActivityLog } from "../../components/ClinicRegistration/Dashboard/ActivityLog";
+import { AnalyticsCharts } from "../../components/ClinicRegistration/Dashboard/AnalyticsCharts";
+import { AlertsPanel } from "../../components/ClinicRegistration/Dashboard/AlertsPanel";
+import { MiniClinicMap } from "../../components/ClinicRegistration/Dashboard/MiniClinicMap";
 import { apiService } from "../../utils/api";
 
 /**

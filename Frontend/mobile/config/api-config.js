@@ -30,7 +30,7 @@ import { Platform } from "react-native";
 const getApiBaseUrl = () => {
   // 🔥 FOR PHYSICAL DEVICE (iPhone/Android): Use PC's IP address
   // Make sure your phone and PC are on the SAME WiFi network!
-  return "http://192.168.1.44:3000/api";
+  return "http://192.168.1.10:3000/api";
 
   // UNCOMMENT FOR EMULATOR/SIMULATOR TESTING:
   // For Android Emulator:
@@ -51,7 +51,7 @@ console.log("📱 Platform:", Platform.OS);
 
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
-  TIMEOUT: 15000, // 15 seconds for normal requests
+  TIMEOUT: 30000, // 30 seconds
   UPLOAD_TIMEOUT: 120000, // 2 minutes for image uploads
 };
 
@@ -77,6 +77,19 @@ export const API_ENDPOINTS = {
     UPDATE: (id) => `${API_BASE_URL}/incidents/${id}`,
     DELETE: (id) => `${API_BASE_URL}/incidents/${id}`,
     MY_REPORTS: `${API_BASE_URL}/incidents?user=me`,
+  },
+
+  // Pets
+  PETS: {
+    BY_RFID: (rfid) => `${API_BASE_URL}/pets/rfid/${rfid}`,
+  },
+
+  // Stray Animals
+  STRAY_ANIMALS: {
+    LIST: `${API_BASE_URL}/stray-animals`,
+    DETAIL: (id) => `${API_BASE_URL}/stray-animals/${id}`,
+    CREATE: `${API_BASE_URL}/stray-animals`,
+    UPDATE: (id) => `${API_BASE_URL}/stray-animals/${id}`,
   },
 
   // Notifications

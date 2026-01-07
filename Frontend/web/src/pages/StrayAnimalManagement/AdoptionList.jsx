@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/StrayAnimalManagement/Drawer";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import AdoptionProfile from "../../components/StrayAnimalManagement/AdoptionList/AdoptionProfile";
+import { apiService } from "../../utils/api";
+
+const PLACEHOLDER_IMAGE =
+  "https://via.placeholder.com/120x120.png?text=No+Image";
 
 const AdoptionList = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -13,51 +17,97 @@ const AdoptionList = () => {
   });
   const [selectedAnimal, setSelectedAnimal] = useState(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null);
 
-  const [adoptionList, _setAdoptionList] = useState([
-    {
-      id: 1,
-      name: "Rocky",
-      species: "Dog",
-      breed: "German Shepherd",
-      gender: "Male",
-      color: "Black and Tan",
-      age: "3 years",
-      dateAddedToAdoption: "2023-05-25",
-      status: "Available",
-      notes: "Very energetic, needs active family",
-      image:
-        "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8Y2F0fGVufDB8fDB8fHww",
-    },
-    {
-      id: 2,
-      name: "Mittens",
-      species: "Cat",
-      breed: "Domestic Shorthair",
-      gender: "Female",
-      color: "Calico",
-      age: "2 years",
-      dateAddedToAdoption: "2023-06-10",
-      status: "Available",
-      notes: "Gentle and affectionate",
-      image:
-        "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8Y2F0fGVufDB8fDB8fHww",
-    },
-    {
-      id: 3,
-      name: "Buddy",
-      species: "Dog",
-      breed: "Golden Retriever",
-      gender: "Male",
-      color: "Golden",
-      age: "5 years",
-      dateAddedToAdoption: "2023-04-15",
-      status: "Pending",
-      notes: "Good with children and other pets",
-      image:
-        "https://images.unsplash.com/photo-1633722715463-d30f4f325e24?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8Z29sZGVuJTIwcmV0cmlldmVyfGVufDB8fDB8fHww",
-    },
-  ]);
+  const extractImageUrls = (images) => {
+    if (!images) return [];
+    if (Array.isArray(images)) return images.filter(Boolean);
+    if (typeof images === "string") {
+      try {
+        const parsed = JSON.parse(images);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        if (parsed && typeof parsed === "object")
+          return Object.values(parsed).filter(Boolean);
+      } catch (e) {
+        return [];
+      }
+    }
+    if (typeof images === "object") {
+      return Object.values(images).filter(Boolean);
+    }
+    return [];
+  };
+
+  useEffect(() => {
+    const loadAdoptionRequests = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const res = await apiService.strayAnimals.list({ status: "adoption" });
+        const animals = res?.data?.data || res?.data || [];
+        const mapped = animals.map((animal) => {
+          const imageUrls = extractImageUrls(animal.images);
+          const primaryImage = imageUrls[0] || PLACEHOLDER_IMAGE;
+          const statusValue = (animal.status || "Adoption").toString();
+          return {
+            id: animal.id || animal.animal_id,
+            name: animal.name || `Stray #${animal.id}`,
+            species: animal.species || "Unknown",
+            breed: animal.breed || "Mixed Breed",
+            gender: animal.sex || animal.gender || "Unknown",
+            color: animal.color || "",
+            age: "Unknown",
+            dateAddedToAdoption:
+              animal.dateCaptured || animal.date_captured || "",
+            status:
+              statusValue.charAt(0).toUpperCase() +
+              statusValue.slice(1).toLowerCase(),
+            notes: animal.notes || "",
+            image: primaryImage,
+            imageUrls,
+          };
+        });
+        setAdoptionList(mapped);
+      } catch (err) {
+        setError("Failed to load adoption requests");
+        setAdoptionList([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAdoptionRequests();
+  }, []);
+  const refresh = async () => {
+    const res = await apiService.strayAnimals.list({ status: "adoption" });
+    const animals = res?.data?.data || res?.data || [];
+    const mapped = animals.map((animal) => {
+      const imageUrls = extractImageUrls(animal.images);
+      const primaryImage = imageUrls[0] || PLACEHOLDER_IMAGE;
+      const statusValue = (animal.status || "Adoption").toString();
+      return {
+        id: animal.id || animal.animal_id,
+        name: animal.name || `Stray #${animal.id}`,
+        species: animal.species || "Unknown",
+        breed: animal.breed || "Mixed Breed",
+        gender: animal.sex || animal.gender || "Unknown",
+        color: animal.color || "",
+        age: "Unknown",
+        dateAddedToAdoption: animal.dateCaptured || animal.date_captured || "",
+        status:
+          statusValue.charAt(0).toUpperCase() +
+          statusValue.slice(1).toLowerCase(),
+        notes: animal.notes || "",
+        image: primaryImage,
+        imageUrls,
+      };
+    });
+    setAdoptionList(mapped);
+  };
+
+  const [adoptionList, setAdoptionList] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
@@ -104,6 +154,24 @@ const AdoptionList = () => {
   const hasFilters =
     filters.status !== "" || filters.species !== "" || searchTerm !== "";
 
+  const handleBringBackToCaptured = (animalId) => {
+    setActionLoading(animalId);
+    apiService.strayAnimals
+      .update(animalId, { status: "captured" })
+      .then(refresh)
+      .catch(() => setError("Failed to bring back to captured"))
+      .finally(() => setActionLoading(null));
+  };
+
+  const handleEuthanize = (animalId) => {
+    setActionLoading(animalId);
+    apiService.strayAnimals
+      .euthanize(animalId, { reason: "Euthanized from adoption list" })
+      .then(refresh)
+      .catch(() => setError("Failed to euthanize animal"))
+      .finally(() => setActionLoading(null));
+  };
+
   return (
     <div className="min-h-screen bg-[#E8E8E8]">
       <Header
@@ -125,8 +193,14 @@ const AdoptionList = () => {
       >
         <div className="px-6 py-8">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Adoption List</h1>
+            <h1 className="text-2xl font-bold">Adoption Requests</h1>
           </div>
+
+          {error && (
+            <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+              {error}
+            </div>
+          )}
 
           {/* Search and Filters */}
           <div className="mb-6">
@@ -220,6 +294,9 @@ const AdoptionList = () => {
                       ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
+                      Image
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
                       Name
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
@@ -237,10 +314,22 @@ const AdoptionList = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
                       Notes
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-[#E8E8E8]">
-                  {filteredAnimals.length > 0 ? (
+                  {isLoading ? (
+                    <tr>
+                      <td
+                        colSpan="9"
+                        className="px-6 py-4 text-center text-sm text-gray-500"
+                      >
+                        Loading adoption requests...
+                      </td>
+                    </tr>
+                  ) : filteredAnimals.length > 0 ? (
                     filteredAnimals.map((animal) => (
                       <tr
                         key={animal.id}
@@ -249,6 +338,15 @@ const AdoptionList = () => {
                       >
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                           {animal.id}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <div className="h-12 w-12 rounded-md overflow-hidden border border-gray-200 bg-gray-50">
+                            <img
+                              src={animal.image || PLACEHOLDER_IMAGE}
+                              alt={animal.name}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {animal.name}
@@ -280,12 +378,40 @@ const AdoptionList = () => {
                             {animal.notes}
                           </span>
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBringBackToCaptured(animal.id);
+                              }}
+                              disabled={actionLoading === animal.id}
+                              className="px-3 py-1 rounded-md bg-white border border-[#FA8630] text-[#FA8630] hover:bg-[#FA8630]/10 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {actionLoading === animal.id
+                                ? "Processing..."
+                                : "Bring back to Captured"}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEuthanize(animal.id);
+                              }}
+                              disabled={actionLoading === animal.id}
+                              className="px-3 py-1 rounded-md bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {actionLoading === animal.id
+                                ? "Processing..."
+                                : "Euthanize"}
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
                       <td
-                        colSpan="7"
+                        colSpan="9"
                         className="px-6 py-4 text-center text-sm text-gray-500"
                       >
                         No animals available for adoption matching your criteria

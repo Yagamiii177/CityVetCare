@@ -12,6 +12,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "../../services/api";
 
 const RedemptionForm = () => {
   const navigation = useNavigation();
@@ -27,7 +29,7 @@ const RedemptionForm = () => {
     address: "",
   });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Required fields validation
     const requiredFields = ["fullName", "age", "phone", "email", "address"];
     const missingFields = requiredFields.filter((field) => !formData[field]);
@@ -45,14 +47,48 @@ const RedemptionForm = () => {
       return;
     }
 
-    // Here you would typically submit to an API
-    // const response = await submitRedemptionForm({ pet, ...formData, proofImages });
+    try {
+      // For now we only submit metadata (images not uploaded)
+      // TODO: extend backend to handle file uploads for proofs
+      const userDataStr = await AsyncStorage.getItem("@cityvetcare_user");
+      const userData = userDataStr ? JSON.parse(userDataStr) : null;
+      const ownerId = userData?.owner_id || userData?.id;
 
-    Alert.alert(
-      "Redemption Submitted",
-      "Thank you for your redemption request! We will verify your information and contact you shortly.",
-      [{ text: "OK", onPress: () => navigation.goBack() }]
-    );
+      const strayId = pet?.id ? parseInt(pet.id) : null;
+
+      if (!ownerId) {
+        Alert.alert("Error", "Please log in to submit a redemption request");
+        return;
+      }
+
+      if (!strayId) {
+        Alert.alert(
+          "Missing Pet",
+          "Please start redemption from a specific pet in the Captured list."
+        );
+        return;
+      }
+
+      const payload = {
+        stray_id: strayId,
+        owner_id: ownerId,
+        remarks: `Redemption request from ${formData.fullName}`,
+      };
+
+      await api.redemptionRequests.create(payload);
+
+      Alert.alert(
+        "Redemption Submitted",
+        "Thank you for your redemption request! We will verify your information and contact you shortly.",
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      console.error("Failed to submit redemption request:", error);
+      Alert.alert(
+        "Submission Failed",
+        "Unable to submit your redemption request. Please try again later."
+      );
+    }
   };
 
   const handleChange = (name, value) => {

@@ -45,7 +45,7 @@ const Login = () => {
       if (response.ok) {
         // Store token if provided
         if (data.token) {
-          localStorage.setItem("token", data.token);
+          localStorage.setItem("auth_token", data.token);
         }
         if (data.role) {
           localStorage.setItem("role", data.role);
