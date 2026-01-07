@@ -27,6 +27,8 @@ import ReadingMaterialListScreen from "./screens/CampaignManagement/ReadingMater
 import MapNearbyClinics from "./screens/CampaignManagement/MapNearbyClinics";
 import ScreenOption from "./screens/CampaignManagement/ScreenOption";
 import ReportStatus from "./screens/ReportManagement/ReportStatus";
+import MyReportsScreen from "./screens/ReportManagement/MyReportsScreen";
+import ReportDetailScreen from "./screens/ReportManagement/ReportDetailScreen";
 import NotFound from "./screens/PetVaccinationManagement/NotFound";
 import AnnouncementScreen from "./screens/CampaignManagement/AnnouncementScreen";
 import RegisterPet from "./components/PetVaccinationManagement/RegisterPet";
@@ -108,6 +110,8 @@ export default function App() {
               component={LocationPickerScreen}
             />
             <Stack.Screen name="ReportStatus" component={ReportStatus} />
+            <Stack.Screen name="MyReports" component={MyReportsScreen} />
+            <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
             <Stack.Screen name="EventsScreen" component={EventsScreen} />
             <Stack.Screen name="Announcement" component={AnnouncementScreen} />
             <Stack.Screen
@@ -185,6 +189,22 @@ function MainStackScreen() {
       <Stack.Screen
         name="ReportStatus"
         component={ReportStatus}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="MyReports"
+        component={MyReportsScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="ReportDetail"
+        component={ReportDetailScreen}
         options={{
           animation: "slide_from_bottom",
           animationDuration: 300,

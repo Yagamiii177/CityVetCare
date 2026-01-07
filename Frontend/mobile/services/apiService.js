@@ -112,6 +112,26 @@ export const incidentService = {
   },
 
   /**
+   * Get all incidents reported by a specific owner
+   * @param {number} ownerId - The pet owner ID
+   * @param {object} filters - Optional filters (status)
+   */
+  getByOwnerId: async (ownerId, filters = {}) => {
+    const queryParams = new URLSearchParams(filters).toString();
+    const url = queryParams 
+      ? `${API_ENDPOINTS.INCIDENTS.LIST}/owner/${ownerId}?${queryParams}`
+      : `${API_ENDPOINTS.INCIDENTS.LIST}/owner/${ownerId}`;
+    
+    console.log('📡 Fetching owner reports:', url);
+    
+    const response = await fetchWithError(url, {
+      method: 'GET',
+    });
+    
+    return response;
+  },
+
+  /**
    * Upload images for incident report
    * @param {Array} imageUris - Array of local image URIs
    * @returns {Promise<Array>} Array of server image URLs
@@ -220,13 +240,15 @@ export const incidentService = {
   /**
    * Create new incident report
    * @param {Object} reportData - Report data including location, images, etc.
+   * @param {Object} user - Authenticated user object (optional, for authenticated reports)
    */
-  create: async (reportData) => {
+  create: async (reportData, user = null) => {
     try {
       console.log('📝 Creating incident report...', {
         reportType: reportData.reportType,
         hasImages: reportData.images?.length > 0,
-        location: reportData.location
+        location: reportData.location,
+        isAuthenticated: !!user
       });
 
       // Step 1: Upload images first if any
@@ -268,7 +290,7 @@ export const incidentService = {
         latitude: reportData.location?.latitude || null,
         longitude: reportData.location?.longitude || null,
         status: 'pending',
-        reporter_name: reportData.reporterName || 'Mobile User',
+        reporter_name: user?.full_name || reportData.reporterName || 'Mobile User',
         reporter_contact: reportData.contactNumber || '',
         incident_date: incidentDate,
         incident_type: reportData.reportType || 'incident',
@@ -277,10 +299,15 @@ export const incidentService = {
         animal_type: reportData.animalType || null,
         pet_gender: reportData.petGender || null,
         pet_size: reportData.petSize || null,
-        images: imageUrls // Send as array
+        images: imageUrls, // Send as array
+        // Add owner_id if user is authenticated
+        owner_id: user?.owner_id || user?.id || null
       };
 
-      console.log('📤 Submitting report to backend...', payload);
+      console.log('📤 Submitting report to backend...', {
+        ...payload,
+        isAuthenticated: !!payload.owner_id
+      });
 
       // Step 5: Submit the report
       const result = await fetchWithError(API_ENDPOINTS.INCIDENTS.CREATE, {

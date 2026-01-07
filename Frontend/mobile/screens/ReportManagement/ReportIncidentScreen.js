@@ -14,7 +14,10 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
-const ReportIncidentScreen = ({ navigation }) => {
+const ReportIncidentScreen = ({ navigation, route }) => {
+  // Track if this is an emergency report (no login) or authenticated report
+  const isEmergencyMode = route.params?.isEmergencyMode || false;
+  
   const [animalType, setAnimalType] = useState(null);
   const [petGender, setPetGender] = useState(null);
   const [images, setImages] = useState([]);
@@ -140,6 +143,7 @@ const ReportIncidentScreen = ({ navigation }) => {
         date: date.toISOString(), // Convert to string to avoid serialization warning
         description,
       },
+      isEmergencyMode, // Pass emergency mode flag to next screen
     });
   };
 
@@ -184,7 +188,7 @@ const ReportIncidentScreen = ({ navigation }) => {
 
         <TouchableOpacity
           style={styles.historyButton}
-          onPress={() => navigation.navigate("ReportStatus")}
+          onPress={() => navigation.navigate("MyReports")}
           activeOpacity={0.7}
         >
           <MaterialCommunityIcons name="history" size={27} color="#FD7E14" />

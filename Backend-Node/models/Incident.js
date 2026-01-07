@@ -190,18 +190,19 @@ class Incident {
       const reportType = data.incident_type === 'incident' ? 'bite' : data.incident_type || 'stray';
       const incidentDate = data.incident_date || new Date().toISOString().slice(0, 19).replace('T', ' ');
       
+      // Support owner_id for authenticated mobile reports
+      const queryFields = data.owner_id 
+        ? 'reporter_id, location_id, owner_id, report_type, description, incident_date, status'
+        : 'reporter_id, location_id, report_type, description, incident_date, status';
+      
+      const queryPlaceholders = data.owner_id ? '?, ?, ?, ?, ?, ?, ?' : '?, ?, ?, ?, ?, ?';
+      const queryParams = data.owner_id 
+        ? [reporterId, locationId, data.owner_id, reportType, data.description || null, incidentDate, data.status || 'Pending']
+        : [reporterId, locationId, reportType, data.description || null, incidentDate, data.status || 'Pending'];
+      
       const [reportResult] = await connection.execute(
-        `INSERT INTO incident_report (
-          reporter_id, location_id, report_type, description, incident_date, status
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          reporterId,
-          locationId,
-          reportType,
-          data.description || null,
-          incidentDate,
-          data.status || 'Pending'
-        ]
+        `INSERT INTO incident_report (${queryFields}) VALUES (${queryPlaceholders})`,
+        queryParams
       );
       const reportId = reportResult.insertId;
       
@@ -304,6 +305,80 @@ class Incident {
       return result.affectedRows > 0;
     } catch (error) {
       logger.error('Failed to delete incident', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all reports submitted by a specific pet owner
+   * @param {number} ownerId - The pet owner ID
+   * @param {object} filters - Optional filters (status)
+   */
+  static async getByOwnerId(ownerId, filters = {}) {
+    try {
+      let query = `
+        SELECT 
+          ir.report_id as id,
+          ir.report_type as incident_type,
+          ir.description,
+          ir.incident_date,
+          ir.status,
+          ir.reported_at as created_at,
+          ir.updated_at,
+          l.address_text as location_address,
+          l.latitude,
+          l.longitude,
+          p.animal_type,
+          p.pet_color,
+          p.pet_breed,
+          p.pet_gender,
+          p.pet_size,
+          ps.schedule_date as patrol_date,
+          ps.schedule_time as patrol_time,
+          ps.status as patrol_status,
+          ps.notes as patrol_notes,
+          GROUP_CONCAT(DISTINCT dc.full_name SEPARATOR ', ') as assigned_catchers,
+          GROUP_CONCAT(DISTINCT dc.contact_number SEPARATOR ', ') as catcher_contacts,
+          ia.severity_level,
+          ia.injuries_description as resolution_notes
+        FROM incident_report ir
+        JOIN incident_location l ON ir.location_id = l.location_id
+        LEFT JOIN incident_pet p ON ir.report_id = p.report_id
+        LEFT JOIN patrol_schedule ps ON ir.report_id = ps.report_id
+        LEFT JOIN dog_catcher dc ON FIND_IN_SET(dc.catcher_id, ps.assigned_catcher_id) > 0
+        LEFT JOIN incident_assessment ia ON ir.report_id = ia.report_id
+        WHERE ir.owner_id = ?
+      `;
+      
+      const params = [ownerId];
+      
+      // Add status filter if provided
+      if (filters.status && filters.status !== 'All') {
+        query += ' AND ir.status = ?';
+        params.push(filters.status);
+      }
+      
+      query += ' GROUP BY ir.report_id';
+      query += ' ORDER BY ir.reported_at DESC';
+      
+      const [rows] = await pool.execute(query, params);
+      
+      // Get images for each report
+      for (let row of rows) {
+        const [images] = await pool.execute(
+          'SELECT image_path FROM report_image WHERE report_id = ?',
+          [row.id]
+        );
+        row.images = images.map(img => img.image_path);
+        
+        // Format dates
+        row.is_emergency = false; // Authenticated reports are not emergency
+      }
+      
+      logger.info(`Found ${rows.length} reports for owner ${ownerId}`);
+      return rows;
+    } catch (error) {
+      logger.error(`Failed to get reports for owner ${ownerId}`, error);
       throw error;
     }
   }

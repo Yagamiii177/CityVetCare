@@ -91,8 +91,9 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleEmergencyReport = () => {
-    // Navigate directly to report incident screen
-    navigation.navigate("ReportIncident");
+    // Navigate to report incident screen with emergency mode flag
+    // This flag ensures the user is returned to login after submission
+    navigation.navigate("ReportIncident", { isEmergencyMode: true });
   };
 
   return (

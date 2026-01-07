@@ -82,6 +82,46 @@ router.get('/status-counts', async (req, res) => {
 });
 
 /**
+ * GET /api/incidents/owner/:ownerId
+ * Get all incidents reported by a specific pet owner
+ * This endpoint is used by the mobile app's "My Reports" feature
+ */
+router.get('/owner/:ownerId', async (req, res) => {
+  try {
+    const ownerId = parseInt(req.params.ownerId);
+    
+    if (!ownerId || isNaN(ownerId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid owner ID'
+      });
+    }
+    
+    const filters = {
+      status: req.query.status
+    };
+    
+    logger.debug(`Fetching incidents for owner ${ownerId}`, filters);
+    
+    const incidents = await Incident.getByOwnerId(ownerId, filters);
+    
+    res.json({
+      success: true,
+      data: incidents,
+      total: incidents.length,
+      message: incidents.length === 0 ? 'No reports found' : undefined
+    });
+  } catch (error) {
+    logger.error(`Failed to fetch incidents for owner`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch your reports',
+      details: error.message
+    });
+  }
+});
+
+/**
  * GET /api/incidents/:id
  * Get single incident by ID
  */
