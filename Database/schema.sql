@@ -60,20 +60,130 @@ CREATE TABLE IF NOT EXISTS pet (
     INDEX idx_pet_species (species)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Incident Report Table
+-- =============================================
+-- INCIDENT REPORT MANAGEMENT SYSTEM
+-- Normalized schema for Web and Mobile reporting
+-- =============================================
+
+-- Reporter Table - Store citizen information
+CREATE TABLE IF NOT EXISTS reporter (
+    reporter_id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(100),
+    contact_number VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_contact_number (contact_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Incident Location Table - For map-based reporting
+CREATE TABLE IF NOT EXISTS incident_location (
+    location_id INT AUTO_INCREMENT PRIMARY KEY,
+    address_text VARCHAR(255),
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_coordinates (latitude, longitude)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Incident Report Table - Core report data
 CREATE TABLE IF NOT EXISTS incident_report (
     report_id INT AUTO_INCREMENT PRIMARY KEY,
-    owner_id INT NULL,
-    report_type VARCHAR(50) NOT NULL,
+    reporter_id INT NOT NULL,
+    location_id INT NOT NULL,
+    
+    -- Report Classification
+    report_type ENUM('bite', 'stray', 'lost') NOT NULL,
     description TEXT,
-    location VARCHAR(255),
-    photo TEXT,
-    date_reported DATETIME DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(50) DEFAULT 'pending',
-    CONSTRAINT fk_incident_owner FOREIGN KEY (owner_id) REFERENCES pet_owner(owner_id) ON DELETE SET NULL,
-    INDEX idx_incident_owner (owner_id),
-    INDEX idx_incident_type (report_type),
-    INDEX idx_incident_status (status)
+    incident_date DATETIME NOT NULL,
+    status ENUM('Pending', 'Verified', 'Scheduled', 'In Progress', 'Resolved', 'Rejected', 'Cancelled') DEFAULT 'Pending',
+    priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
+    
+    -- Timestamps
+    reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_report_reporter FOREIGN KEY (reporter_id) REFERENCES reporter(reporter_id) ON DELETE CASCADE,
+    CONSTRAINT fk_report_location FOREIGN KEY (location_id) REFERENCES incident_location(location_id) ON DELETE CASCADE,
+    INDEX idx_report_type (report_type),
+    INDEX idx_status (status),
+    INDEX idx_incident_date (incident_date),
+    INDEX idx_reported_at (reported_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Incident Pet Table - Animal information linked to incident reports
+CREATE TABLE IF NOT EXISTS incident_pet (
+    pet_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    
+    -- Pet Information
+    animal_type ENUM('Dog', 'Cat', 'Other') NOT NULL,
+    pet_color VARCHAR(100),
+    pet_breed VARCHAR(100),
+    pet_gender ENUM('Male', 'Female', 'Unknown') DEFAULT 'Unknown',
+    pet_size ENUM('Small', 'Medium', 'Large') DEFAULT 'Medium',
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_incident_pet_report FOREIGN KEY (report_id) REFERENCES incident_report(report_id) ON DELETE CASCADE,
+    INDEX idx_incident_pet_report (report_id),
+    INDEX idx_incident_animal_type (animal_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Report Images Table - Evidence uploads
+CREATE TABLE IF NOT EXISTS report_image (
+    image_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    image_path VARCHAR(255) NOT NULL,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_image_report FOREIGN KEY (report_id) REFERENCES incident_report(report_id) ON DELETE CASCADE,
+    INDEX idx_image_report (report_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Incident Assessment Table - Admin-only evaluation
+CREATE TABLE IF NOT EXISTS incident_assessment (
+    assessment_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    assessed_by INT NOT NULL,
+    
+    -- Assessment Details
+    severity_level ENUM('Low', 'Medium', 'High', 'Critical') DEFAULT 'Medium',
+    injuries_description TEXT,
+    follow_up_required BOOLEAN DEFAULT FALSE,
+    
+    -- Timestamps
+    assessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_assessment_report FOREIGN KEY (report_id) REFERENCES incident_report(report_id) ON DELETE CASCADE,
+    CONSTRAINT fk_assessment_admin FOREIGN KEY (assessed_by) REFERENCES administrator(admin_id) ON DELETE CASCADE,
+    INDEX idx_assessment_report (report_id),
+    INDEX idx_severity (severity_level)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Patrol Schedule Table - Scheduling support
+CREATE TABLE IF NOT EXISTS patrol_schedule (
+    schedule_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    assigned_catcher_id INT NOT NULL,
+    
+    -- Schedule Details
+    schedule_date DATE NOT NULL,
+    schedule_time TIME,
+    status ENUM('Assigned', 'On Patrol', 'Completed', 'Cancelled') DEFAULT 'Assigned',
+    notes TEXT,
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_schedule_report FOREIGN KEY (report_id) REFERENCES incident_report(report_id) ON DELETE CASCADE,
+    CONSTRAINT fk_schedule_catcher FOREIGN KEY (assigned_catcher_id) REFERENCES dog_catcher(catcher_id) ON DELETE CASCADE,
+    INDEX idx_schedule_report (report_id),
+    INDEX idx_schedule_date (schedule_date),
+    INDEX idx_schedule_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS stray_animals (
@@ -138,14 +248,73 @@ CREATE TABLE IF NOT EXISTS private_clinic (
     clinic_id INT AUTO_INCREMENT PRIMARY KEY,
     clinic_name VARCHAR(150) NOT NULL,
     address VARCHAR(255),
+    barangay VARCHAR(100),
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8),
     contact_number VARCHAR(20),
+    email VARCHAR(150),
+    head_veterinarian VARCHAR(150),
+    license_number VARCHAR(100),
+    services JSON,
+    operating_hours JSON,
     schedule TEXT,
     documents TEXT,
-    status VARCHAR(50) DEFAULT 'pending',
+    status ENUM('Active', 'Pending', 'Inactive', 'Suspended', 'Temporarily Closed') DEFAULT 'Pending',
+    permit_expiry_date DATE,
+    accreditation_expiry_date DATE,
+    last_inspection_date DATE,
+    inspection_status ENUM('Passed', 'Pending', 'Needs Follow-up') DEFAULT 'Pending',
+    inspection_notes TEXT,
+    last_activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_clinic_name (clinic_name),
-    INDEX idx_clinic_status (status)
+    INDEX idx_clinic_status (status),
+    INDEX idx_clinic_license (license_number),
+    INDEX idx_clinic_email (email),
+    INDEX idx_clinic_barangay (barangay),
+    INDEX idx_permit_expiry (permit_expiry_date),
+    INDEX idx_inspection_status (inspection_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Upgrade existing private_clinic table to support ClinicList and mapping fields
+ALTER TABLE private_clinic
+    ADD COLUMN IF NOT EXISTS email VARCHAR(150) AFTER contact_number,
+    ADD COLUMN IF NOT EXISTS head_veterinarian VARCHAR(150) AFTER email,
+    ADD COLUMN IF NOT EXISTS license_number VARCHAR(100) AFTER head_veterinarian,
+    ADD COLUMN IF NOT EXISTS services JSON AFTER license_number,
+    ADD COLUMN IF NOT EXISTS barangay VARCHAR(100) AFTER address,
+    ADD COLUMN IF NOT EXISTS latitude DECIMAL(10, 8) AFTER barangay,
+    ADD COLUMN IF NOT EXISTS longitude DECIMAL(11, 8) AFTER latitude,
+    ADD COLUMN IF NOT EXISTS operating_hours JSON AFTER services,
+    ADD COLUMN IF NOT EXISTS permit_expiry_date DATE AFTER status,
+    ADD COLUMN IF NOT EXISTS accreditation_expiry_date DATE AFTER permit_expiry_date,
+    ADD COLUMN IF NOT EXISTS last_inspection_date DATE AFTER accreditation_expiry_date,
+    ADD COLUMN IF NOT EXISTS inspection_status ENUM('Passed', 'Pending', 'Needs Follow-up') DEFAULT 'Pending' AFTER last_inspection_date,
+    ADD COLUMN IF NOT EXISTS inspection_notes TEXT AFTER inspection_status,
+    ADD COLUMN IF NOT EXISTS last_activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER inspection_notes,
+    MODIFY COLUMN status ENUM('Active', 'Pending', 'Inactive', 'Suspended', 'Temporarily Closed') DEFAULT 'Pending';
+ALTER TABLE private_clinic
+    ADD INDEX IF NOT EXISTS idx_clinic_license (license_number),
+    ADD INDEX IF NOT EXISTS idx_clinic_email (email),
+    ADD INDEX IF NOT EXISTS idx_clinic_barangay (barangay),
+    ADD INDEX IF NOT EXISTS idx_permit_expiry (permit_expiry_date),
+    ADD INDEX IF NOT EXISTS idx_inspection_status (inspection_status);
+
+-- Clinic Listing Table - tracks registered clinics for ClinicList UI
+CREATE TABLE IF NOT EXISTS clinic_listing (
+    listing_id INT AUTO_INCREMENT PRIMARY KEY,
+    clinic_id INT NOT NULL,
+    listed_by INT NULL,
+    listing_status ENUM('Active', 'Pending', 'Inactive', 'Suspended') DEFAULT 'Pending',
+    notes TEXT,
+    listed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_listing_clinic FOREIGN KEY (clinic_id) REFERENCES private_clinic(clinic_id) ON DELETE CASCADE,
+    CONSTRAINT fk_listing_admin FOREIGN KEY (listed_by) REFERENCES administrator(admin_id) ON DELETE SET NULL,
+    UNIQUE INDEX uq_listing_clinic (clinic_id),
+    INDEX idx_listing_status (listing_status),
+    INDEX idx_listing_dates (listed_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Vaccination Record Table
@@ -163,22 +332,6 @@ CREATE TABLE IF NOT EXISTS vaccination_record (
     INDEX idx_vaccination_type (vaccine_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Clinic Vaccination Submission Table
-CREATE TABLE IF NOT EXISTS clinic_vaccination_submission (
-    submission_id INT AUTO_INCREMENT PRIMARY KEY,
-    clinic_id INT NOT NULL,
-    owner_name VARCHAR(150),
-    pet_name VARCHAR(150),
-    species VARCHAR(50),
-    vaccine_type VARCHAR(100),
-    date_administered DATE,
-    proof_photo TEXT,
-    status VARCHAR(50) DEFAULT 'pending',
-    verified_by INT NULL,
-    CONSTRAINT fk_submission_clinic FOREIGN KEY (clinic_id) REFERENCES private_clinic(clinic_id) ON DELETE CASCADE,
-    CONSTRAINT fk_submission_admin FOREIGN KEY (verified_by) REFERENCES administrator(admin_id) ON DELETE SET NULL,
-    INDEX idx_submission_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Announcement Table
 CREATE TABLE IF NOT EXISTS announcement (

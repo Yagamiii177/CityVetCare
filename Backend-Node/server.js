@@ -10,9 +10,18 @@ import validateEnv from "./utils/validateEnv.js";
 // Import routes
 import authRouter from "./routes/auth.js";
 import healthRouter from "./routes/health.js";
+import incidentsRouter from "./routes/incidents.js";
+import catchersRouter from "./routes/catchers.js";
+import dashboardRouter from "./routes/dashboard.js";
+import schedulesRouter from "./routes/schedules.js";
 import strayAnimalsRouter from "./routes/strayAnimals.js";
 import readingMaterialsRouter from "./routes/readingMaterials.js";
 import announcementsRouter from "./routes/announcements.js";
+import patrolStaffRouter from "./routes/patrol-staff.js";
+import patrolSchedulesRouter from "./routes/patrol-schedules.js";
+import clinicsRouter from "./routes/clinics.js";
+import clinicMapRouter from "./routes/clinic-map.js";
+import adminDashboardRouter from "./routes/admin-dashboard.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -58,8 +67,9 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase payload size limits for image uploads (10MB for mobile base64 images)
+app.use(express.json({ limit: "15mb" })); // Accommodate base64 encoding overhead
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
 // Serve uploaded files as static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -74,21 +84,41 @@ app.use((req, res, next) => {
 app.get("/", (req, res) => {
   res.json({
     message: "CityVetCare API",
-    version: "3.0.0",
+    version: "3.1.0",
     platform: "Node.js/Express",
-    description: "Simplified authentication system for City Vet Care",
+    description: "Complete report management system for City Vet Care",
     endpoints: {
       "/api/health": "Health check",
       "/api/auth": "Authentication (login, create account)",
+      "/api/incidents": "Incident report management",
+      "/api/catchers": "Catcher team management",
+      "/api/dashboard": "Dashboard statistics",
+      "/api/schedules": "Patrol scheduling",
+      "/api/patrol-staff": "Patrol staff management (dedicated)",
+      "/api/patrol-schedules": "Patrol schedules management (dedicated)",
+      "/api/stray-animals": "Stray animals management",
+      "/api/reading-materials": "Reading materials management",
+      "/api/announcements": "Announcements management",
+      "/api/clinics": "Clinic registration management",
+      "/api/admin-dashboard": "Admin dashboard statistics and management",
     },
   });
 });
 
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/incidents", incidentsRouter);
+app.use("/api/catchers", catchersRouter);
+app.use("/api/dashboard", dashboardRouter);
+app.use("/api/schedules", schedulesRouter);
+app.use("/api/patrol-staff", patrolStaffRouter);
+app.use("/api/patrol-schedules", patrolSchedulesRouter);
 app.use("/api/stray-animals", strayAnimalsRouter);
 app.use("/api/reading-materials", readingMaterialsRouter);
 app.use("/api/announcements", announcementsRouter);
+app.use("/api/clinics", clinicsRouter);
+app.use("/api/admin-dashboard", adminDashboardRouter);
+app.use("/api/clinic-map", clinicMapRouter);
 
 // 404 handler
 app.use((req, res) => {

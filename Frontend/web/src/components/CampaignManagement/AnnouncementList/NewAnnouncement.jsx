@@ -791,7 +791,7 @@ const NewAnnouncement = ({ isOpen, onClose, onCreate }) => {
       </div>
 
       {/* Add this CSS for the slide-down animation */}
-      <style jsx>{`
+      <style>{`
         @keyframes slide-down {
           from {
             transform: translateY(-100%);

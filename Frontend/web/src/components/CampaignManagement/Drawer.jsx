@@ -33,11 +33,6 @@ export const Drawer = ({ isOpen, onItemClick, setIsDrawerOpen }) => {
       icon: <DocumentTextIcon className="h-5 w-5 mr-3" />,
       path: "/reading-material",
     },
-    {
-      name: "Statistics & Logs",
-      icon: <PlusCircleIcon className="h-5 w-5 mr-3" />,
-      path: "/statistics-logs",
-    },
   ];
 
   const handleNavigation = (path) => {

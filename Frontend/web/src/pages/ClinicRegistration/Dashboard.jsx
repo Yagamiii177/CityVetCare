@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Header } from "../../components/Header";
-import { Drawer } from "../../components/StrayAnimalManagement/Drawer";
+import { Drawer } from "../../components/ClinicRegistration/Drawer";
 import {
   ChartBarIcon,
   BuildingLibraryIcon,

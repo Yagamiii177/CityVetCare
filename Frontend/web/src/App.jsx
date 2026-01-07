@@ -7,6 +7,8 @@ import CampaignDashboard from "./pages/CampaignManagement/Dashboard";
 import AnnouncementList from "./pages/CampaignManagement/AnnouncementList";
 import ReadingMaterial from "./pages/CampaignManagement/ReadingMaterial";
 import ClinicDashboard from "./pages/ClinicRegistration/Dashboard";
+import ClinicList from "./pages/ClinicRegistration/ClinicList";
+import ClinicMap from "./pages/ClinicRegistration/ClinicMap";
 import StrayDashboard from "./pages/StrayAnimalManagement/Dashboard";
 import AddStray from "./pages/StrayAnimalManagement/AddStray";
 import AdoptionList from "./pages/StrayAnimalManagement/AdoptionList";
@@ -56,6 +58,8 @@ function App() {
 
         {/* CLINIC MANAGEMENT ROUTES */}
         <Route path="/clinic-dashboard" element={<ClinicDashboard />} />
+        <Route path="/clinic-list" element={<ClinicList />} />
+        <Route path="/clinic-map" element={<ClinicMap />} />
       </Routes>
     </Router>
   );

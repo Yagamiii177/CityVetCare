@@ -6,7 +6,6 @@ import {
   UserCircleIcon,
   ArrowLeftOnRectangleIcon,
   Cog6ToothIcon,
-  BuildingLibraryIcon,
 } from "@heroicons/react/24/outline";
 import logo from "../assets/logo.png";
 
@@ -134,7 +133,6 @@ export const Header = ({ isDrawerOpen, toggleDrawer }) => {
             onClick={() => navigate("/clinic-dashboard")}
             className={getButtonStyles("clinics")}
           >
-            <BuildingLibraryIcon className="h-4 w-4 mr-1.5" />
             Clinic Management
           </button>
         </div>

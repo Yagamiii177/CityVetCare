@@ -126,7 +126,7 @@ export const apiService = {
     delete: (id) => api.delete(`/schedules/${id}`),
   },
 
-  // Patrol Staff
+  // Patrol Staff (Dedicated endpoint)
   patrolStaff: {
     getAll: (filters = {}) => api.get("/patrol-staff", { params: filters }),
     getById: (id) => api.get(`/patrol-staff/${id}`),
@@ -135,10 +135,12 @@ export const apiService = {
     delete: (id) => api.delete(`/patrol-staff/${id}`),
   },
 
-  // Patrol Schedules
+  // Patrol Schedules (Dedicated endpoint)
   patrolSchedules: {
     getAll: (filters = {}) => api.get("/patrol-schedules", { params: filters }),
     getById: (id) => api.get(`/patrol-schedules/${id}`),
+    getByIncident: (incidentId) =>
+      api.get(`/patrol-schedules/incident/${incidentId}`),
     create: (data) => api.post("/patrol-schedules", data),
     update: (id, data) => api.put(`/patrol-schedules/${id}`, data),
     delete: (id) => api.delete(`/patrol-schedules/${id}`),
@@ -165,6 +167,33 @@ export const apiService = {
     register: (userData) => api.post("/auth/register", userData),
     logout: () => api.post("/auth/logout"),
     verify: () => api.get("/auth"),
+  },
+
+  // Clinics
+  clinics: {
+    getAll: (filters = {}) => api.get("/clinics", { params: filters }),
+    getLocations: (filters = {}) =>
+      api.get("/clinics/locations", { params: filters }),
+    getById: (id) => api.get(`/clinics/${id}`),
+    create: (data) => api.post("/clinics", data),
+    update: (id, data) => api.put(`/clinics/${id}`, data),
+    updateStatus: (id, data) => api.patch(`/clinics/${id}/status`, data),
+    approve: (id) => api.patch(`/clinics/${id}/approve`),
+  },
+
+  // Admin Dashboard
+  adminDashboard: {
+    getStats: () => api.get("/admin-dashboard/stats"),
+    getPendingClinics: (params = {}) =>
+      api.get("/admin-dashboard/pending-clinics", { params }),
+    getActivity: (params = {}) =>
+      api.get("/admin-dashboard/activity", { params }),
+    getAnalytics: () => api.get("/admin-dashboard/analytics"),
+    getAlerts: () => api.get("/admin-dashboard/alerts"),
+    approveClinic: (id) => api.patch(`/admin-dashboard/clinics/${id}/approve`),
+    rejectClinic: (id, reason) =>
+      api.patch(`/admin-dashboard/clinics/${id}/reject`, { reason }),
+    dismissAlert: (id) => api.patch(`/admin-dashboard/alerts/${id}/dismiss`),
   },
 };
 

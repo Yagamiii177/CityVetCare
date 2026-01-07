@@ -20,12 +20,18 @@ const DashboardPage = () => {
 
   const fetchDashboardData = async () => {
     try {
+      // Use the main dashboard endpoint instead of /stats
       const response = await dashboardAPI.getStats();
-      setStats(response.data.data);
+      
+      // Check if response has the full data structure
+      const data = response.data.data || response.data;
+      
+      console.log('Dashboard data received:', data);
+      setStats(data);
       setError(null);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
-      setError('Failed to load dashboard data');
+      setError('Failed to load dashboard data: ' + (error.response?.data?.message || error.message));
     } finally {
       setLoading(false);
     }
@@ -56,7 +62,31 @@ const DashboardPage = () => {
   if (error) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-red-600">{error}</div>
+        <div className="text-center">
+          <div className="text-red-600 text-xl font-bold mb-4">{error}</div>
+          <button 
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              fetchDashboardData();
+            }}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Add safety check for stats
+  if (!stats || !stats.incidents) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="text-gray-600 mb-4">Loading dashboard data...</div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+        </div>
       </div>
     );
   }
@@ -138,8 +168,10 @@ const DashboardPage = () => {
             <StatItem label="Total Incidents" value={incidents.total_incidents} />
             <StatItem label="Bite Incidents" value={incidents.bite_incidents} color="red" />
             <StatItem label="Stray Reports" value={incidents.stray_incidents} color="blue" />
+            <StatItem label="Resolved" value={incidents.resolved} color="green" />
             <StatItem label="Urgent Priority" value={incidents.urgent} color="orange" />
             <StatItem label="High Priority" value={incidents.high_priority} color="yellow" />
+            <StatItem label="Verified" value={incidents.verified} color="blue" />
             <StatItem label="Rejected" value={incidents.rejected} color="gray" />
           </div>
         </div>
@@ -220,7 +252,7 @@ const DashboardPage = () => {
 };
 
 // Helper Components
-const MetricCard = ({ title, value, subtitle, color, trend }) => {
+const MetricCard = ({ title, value, subtitle, color, trend, icon: IconComponent }) => {
   const colorClasses = {
     yellow: 'bg-yellow-100 text-yellow-700',
     blue: 'bg-blue-100 text-blue-700',
@@ -237,9 +269,11 @@ const MetricCard = ({ title, value, subtitle, color, trend }) => {
           <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
           {trend && <p className="text-xs text-red-600 mt-1">{trend}</p>}
         </div>
-        <div className={`p-3 rounded-full ${colorClasses[color]}`}>
-          <Icon className="w-6 h-6" />
-        </div>
+        {IconComponent && (
+          <div className={`p-3 rounded-full ${colorClasses[color]}`}>
+            <IconComponent className="w-6 h-6" />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -247,10 +281,19 @@ const MetricCard = ({ title, value, subtitle, color, trend }) => {
 
 const StatItem = ({ label, value, color = 'gray', size = 'md' }) => {
   const textSize = size === 'sm' ? 'text-sm' : 'text-base';
+  const colorClasses = {
+    gray: 'text-gray-600',
+    red: 'text-red-600',
+    blue: 'text-blue-600',
+    green: 'text-green-600',
+    yellow: 'text-yellow-600',
+    orange: 'text-orange-600',
+  };
+  
   return (
     <div className="flex justify-between items-center">
       <span className={`${textSize} text-gray-600`}>{label}</span>
-      <span className={`${textSize} font-semibold text-${color}-600`}>{value}</span>
+      <span className={`${textSize} font-semibold ${colorClasses[color] || colorClasses.gray}`}>{value}</span>
     </div>
   );
 };

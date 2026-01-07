@@ -15,6 +15,7 @@ const resetDatabase = async () => {
     port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER || "root",
     password: process.env.DB_PASSWORD || "",
+    connectTimeout: 60000,
   });
 
   try {
@@ -35,8 +36,22 @@ const resetDatabase = async () => {
       .split(";")
       .filter((stmt) => stmt.trim().length > 0);
 
-    for (const statement of statements) {
-      await connection.query(statement);
+    for (let i = 0; i < statements.length; i++) {
+      const statement = statements[i].trim();
+      if (statement) {
+        try {
+          await connection.query(statement);
+        } catch (error) {
+          console.error(
+            `❌ Error executing statement ${i + 1}:`,
+            error.message
+          );
+          // Continue with next statement for non-critical errors
+          if (!error.message.includes("already exists")) {
+            throw error;
+          }
+        }
+      }
     }
 
     console.log("✓ Database and tables created successfully");
