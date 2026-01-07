@@ -15,6 +15,9 @@ import PendingVerification from "./pages/ReportManagement/PendingVerification";
 import ReportHistory from "./pages/ReportManagement/ReportHistory";   
 import IncidentMonitoring from "./pages/ReportManagement/MonitoringIncidents";
 import CatcherSchedule from "./pages/ReportManagement/CatcherSchedule";
+import PetRegistration from "./pages/VaccinationManagement/PetRegistration";
+import VaccinationRecord from "./pages/VaccinationManagement/VaccinationRecord";
+
 
 function App() {
   return (
@@ -25,10 +28,9 @@ function App() {
         <Route path="/landing" element={<Landing />} />
 
         {/* Vaccination MANAGEMENT ROUTES */}
-        <Route
-          path="/vaccination-dashboard"
-          element={<VaccinationDashboard />}
-        />
+        <Route path="/vaccination-dashboard" element={<VaccinationDashboard />} />
+        <Route path="/pet-registration" element={<PetRegistration />} />
+        <Route path="/vaccination-record" element={<VaccinationRecord />} />
 
         {/* STRAY ANIMAL MANAGEMENT ROUTES */}
         <Route path="/stray-dashboard" element={<StrayDashboard />} />

@@ -21,28 +21,19 @@ export const Drawer = ({ isOpen, onItemClick, setIsDrawerOpen }) => {
     {
       name: "Dashboard",
       icon: <HomeIcon className="h-5 w-5 mr-3" />,
-      path: "/dashboard",
+      path: "/vaccination-dashboard",
     },
     {
-      name: "Captured Animals",
+      name: "Pet Registration",
       icon: <ClipboardDocumentListIcon className="h-5 w-5 mr-3" />,
-      path: "/captured-animals",
+      path: "/pet-registration",
     },
     {
-      name: "Redemption Requests",
+      name: "Vaccination Record",
       icon: <ArrowsRightLeftIcon className="h-5 w-5 mr-3" />,
-      path: "/redemption-requests",
+      path: "/vaccination-record",
     },
-    {
-      name: "Adoption List",
-      icon: <HomeModernIcon className="h-5 w-5 mr-3" />,
-      path: "/adoption-list",
-    },
-    {
-      name: "Statistics & Logs",
-      icon: <DocumentTextIcon className="h-5 w-5 mr-3" />,
-      path: "/statistics-logs",
-    },
+ 
   ];
 
   const handleNavigation = (path) => {
