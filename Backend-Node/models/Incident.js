@@ -26,11 +26,14 @@ class Incident {
           p.pet_color,
           p.pet_breed,
           p.pet_gender,
-          p.pet_size
+          p.pet_size,
+          GROUP_CONCAT(DISTINCT dc.full_name SEPARATOR ', ') as assigned_team
         FROM incident_report ir
         JOIN reporter r ON ir.reporter_id = r.reporter_id
         JOIN incident_location l ON ir.location_id = l.location_id
         LEFT JOIN incident_pet p ON ir.report_id = p.report_id
+        LEFT JOIN patrol_schedule ps ON ir.report_id = ps.report_id AND ps.status IN ('Assigned', 'On Patrol')
+        LEFT JOIN dog_catcher dc ON FIND_IN_SET(dc.catcher_id, ps.assigned_catcher_id) > 0
         WHERE 1=1
       `;
       
@@ -56,6 +59,7 @@ class Incident {
         params.push(searchTerm, searchTerm, searchTerm);
       }
       
+      query += ' GROUP BY ir.report_id';
       query += ' ORDER BY ir.reported_at DESC';
       
       if (filters.limit) {
@@ -103,12 +107,16 @@ class Incident {
           p.pet_color,
           p.pet_breed,
           p.pet_gender,
-          p.pet_size
+          p.pet_size,
+          GROUP_CONCAT(DISTINCT dc.full_name SEPARATOR ', ') as assigned_team
         FROM incident_report ir
         JOIN reporter r ON ir.reporter_id = r.reporter_id
         JOIN incident_location l ON ir.location_id = l.location_id
         LEFT JOIN incident_pet p ON ir.report_id = p.report_id
+        LEFT JOIN patrol_schedule ps ON ir.report_id = ps.report_id AND ps.status IN ('Assigned', 'On Patrol')
+        LEFT JOIN dog_catcher dc ON FIND_IN_SET(dc.catcher_id, ps.assigned_catcher_id) > 0
         WHERE ir.report_id = ?
+        GROUP BY ir.report_id
       `;
       
       const [rows] = await pool.execute(query, [id]);

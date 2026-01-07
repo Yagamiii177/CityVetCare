@@ -53,8 +53,7 @@ const createCustomIcon = (color) => {
 };
 
 const biteIcon = createCustomIcon("#EF4444"); // Red for bite incidents
-const strayIcon = createCustomIcon("#F59E0B"); // Amber for stray animals
-const rabiesIcon = createCustomIcon("#DC2626"); // Dark red for rabies
+const strayIcon = createCustomIcon("#3B82F6"); // Blue for stray animals
 
 const IncidentMonitoring = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -62,7 +61,7 @@ const IncidentMonitoring = () => {
   const [selectedReport, setSelectedReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filter, setFilter] = useState("all"); // "all", "bite", "stray", "rabies"
+  const [filter, setFilter] = useState("all"); // "all", "bite", "stray"
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
@@ -127,22 +126,36 @@ const IncidentMonitoring = () => {
     fetchReports();
   }, []);
 
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    const refreshInterval = setInterval(() => {
+      fetchReports();
+    }, 10000); // 10 seconds
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(refreshInterval);
+  }, []);
+
   // Refresh function for manual updates
   const handleRefresh = () => {
     fetchReports();
   };
 
   const getIconByType = (type) => {
-    switch (type) {
-      case "Bite Incident":
-        return biteIcon;
-      case "Stray Animal":
-        return strayIcon;
-      case "Rabies Suspected":
-        return rabiesIcon;
-      default:
-        return biteIcon;
+    const typeStr = String(type).toLowerCase();
+    
+    // Check for bite-related incidents
+    if (typeStr.includes('bite')) {
+      return biteIcon; // Red marker
     }
+    
+    // Check for stray animal incidents
+    if (typeStr.includes('stray')) {
+      return strayIcon; // Blue marker
+    }
+    
+    // Default to red for unrecognized types
+    return biteIcon;
   };
 
   const getStatusBadge = (status) => {
@@ -159,10 +172,21 @@ const IncidentMonitoring = () => {
     );
   };
 
-  const filteredReports = reports.filter(report => 
-    filter === "all" || 
-    report.type.toLowerCase().includes(filter.toLowerCase())
-  );
+  const filteredReports = reports.filter(report => {
+    if (filter === "all") return true;
+    
+    const typeStr = String(report.type).toLowerCase();
+    
+    if (filter === "bite") {
+      return typeStr.includes('bite');
+    }
+    
+    if (filter === "stray") {
+      return typeStr.includes('stray');
+    }
+    
+    return false;
+  });
 
   // Component to handle map view changes
   const MapController = () => {
@@ -254,21 +278,11 @@ const IncidentMonitoring = () => {
                 onClick={() => setFilter("stray")}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   filter === "stray" 
-                    ? "bg-amber-500 text-white" 
+                    ? "bg-blue-500 text-white" 
                     : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
                 }`}
               >
                 Stray Animals
-              </button>
-              <button
-                onClick={() => setFilter("rabies")}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  filter === "rabies" 
-                    ? "bg-red-700 text-white" 
-                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                Rabies Suspected
               </button>
             </div>
           </div>

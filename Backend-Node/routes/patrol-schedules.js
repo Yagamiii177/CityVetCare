@@ -35,6 +35,46 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * POST /api/patrol-schedules/check-conflict
+ * Check for schedule conflicts before creating
+ */
+router.post('/check-conflict', async (req, res) => {
+  try {
+    const { staff_ids, schedule_date, schedule_time, exclude_schedule_id } = req.body;
+
+    if (!staff_ids || !schedule_date) {
+      return res.status(400).json({ 
+        error: true,
+        message: 'Staff IDs and schedule date are required' 
+      });
+    }
+
+    const conflicts = await PatrolSchedule.checkConflicts(
+      staff_ids, 
+      schedule_date, 
+      schedule_time,
+      exclude_schedule_id
+    );
+    
+    res.json({
+      success: true,
+      has_conflict: conflicts.length > 0,
+      conflicts: conflicts,
+      message: conflicts.length > 0 
+        ? `Found ${conflicts.length} conflicting schedule(s)` 
+        : 'No conflicts found'
+    });
+  } catch (error) {
+    logger.error('Error checking schedule conflicts', error);
+    res.status(500).json({ 
+      error: true,
+      message: 'Failed to check schedule conflicts',
+      details: error.message 
+    });
+  }
+});
+
+/**
  * GET /api/patrol-schedules/incident/:incidentId
  * Get schedules by incident ID
  */
@@ -144,6 +184,48 @@ router.put('/:id', async (req, res) => {
     res.status(500).json({ 
       error: true,
       message: 'Failed to update patrol schedule',
+      details: error.message 
+    });
+  }
+});
+
+/**
+ * DELETE /api/patrol-schedules/:id/staff/:staffId
+ * Remove a staff member from a patrol schedule
+ */
+router.delete('/:id/staff/:staffId', async (req, res) => {
+  try {
+    const { id, staffId } = req.params;
+    
+    const removed = await PatrolSchedule.removeStaff(id, staffId);
+    
+    if (!removed) {
+      return res.status(404).json({ 
+        error: true,
+        message: 'Patrol schedule not found or staff member not in schedule' 
+      });
+    }
+
+    res.json({ 
+      success: true,
+      message: 'Staff member removed from patrol schedule successfully',
+      schedule_id: id,
+      removed_staff_id: staffId
+    });
+  } catch (error) {
+    logger.error('Error removing staff from patrol schedule', error);
+    
+    // Check if it's a validation error (last staff member)
+    if (error.message.includes('Cannot remove the last staff member')) {
+      return res.status(400).json({ 
+        error: true,
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({ 
+      error: true,
+      message: 'Failed to remove staff member',
       details: error.message 
     });
   }

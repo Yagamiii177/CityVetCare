@@ -120,8 +120,39 @@ const IncidentReportingManagement = () => {
   // Transform backend incident data to frontend format
   const transformIncident = useCallback((incident) => {
     const getDateTime = (dateTimeStr, fallback) => {
-      const [date, time] = (dateTimeStr || fallback || '').split(' ');
-      return { date: date || 'N/A', time: time || 'N/A' };
+      try {
+        const dateString = dateTimeStr || fallback || '';
+        if (!dateString) return { date: 'Not specified', time: 'Not specified' };
+        
+        // Parse datetime - could be MySQL datetime (YYYY-MM-DD HH:MM:SS) or ISO format
+        const dateObj = new Date(dateString);
+        
+        if (isNaN(dateObj.getTime())) {
+          // If date parsing failed, try splitting by space
+          const parts = dateString.split(' ');
+          if (parts.length >= 2) {
+            return { date: parts[0], time: parts[1] };
+          }
+          return { date: dateString, time: 'Not specified' };
+        }
+        
+        // Format date as YYYY-MM-DD
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const date = `${year}-${month}-${day}`;
+        
+        // Format time as HH:MM:SS
+        const hours = String(dateObj.getHours()).padStart(2, '0');
+        const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+        const seconds = String(dateObj.getSeconds()).padStart(2, '0');
+        const time = `${hours}:${minutes}:${seconds}`;
+        
+        return { date, time };
+      } catch (error) {
+        console.error('Error parsing date/time:', error);
+        return { date: 'Not specified', time: 'Not specified' };
+      }
     };
 
     const { date, time } = getDateTime(incident.incident_date, incident.created_at);
@@ -160,7 +191,7 @@ const IncidentReportingManagement = () => {
       // Keep old fields for backwards compatibility
       animalCount: extractAnimalCount(incident.description),
       injuries: extractInjuries(incident.description),
-      assignedTeam: incident.catcher_team_name || null,
+      assignedTeam: incident.assigned_team || null,
       followUpRequired: incident.follow_up_required ?? true,
       latitude: incident.latitude,
       longitude: incident.longitude,
@@ -526,6 +557,72 @@ const IncidentReportingManagement = () => {
     );
   }, []);
 
+  // Export reports to CSV
+  const handleExportCSV = useCallback(() => {
+    if (reports.length === 0) {
+      setNotificationModal({
+        isOpen: true,
+        title: 'No Data',
+        message: 'No reports available to export',
+        type: 'warning'
+      });
+      return;
+    }
+
+    // Prepare CSV headers
+    const headers = [
+      'ID', 'Reporter', 'Contact', 'Type', 'Report Type', 'Location',
+      'Date', 'Time', 'Status', 'Animal Type', 'Breed', 'Color',
+      'Gender', 'Size', 'Assigned Team', 'Description'
+    ];
+
+    // Prepare CSV rows
+    const rows = reports.map(report => [
+      report.id,
+      report.reporter,
+      report.reporterContact,
+      report.type,
+      report.reportType,
+      report.address,
+      report.date,
+      report.time,
+      report.status,
+      report.animalType,
+      report.petBreed,
+      report.petColor,
+      report.petGender,
+      report.petSize,
+      report.assignedTeam || 'Not assigned',
+      `"${report.description.replace(/"/g, '""')}"` // Escape quotes in description
+    ]);
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `incident_reports_${timestamp}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setNotificationModal({
+      isOpen: true,
+      title: 'Export Successful',
+      message: `Exported ${reports.length} reports to CSV file`,
+      type: 'success'
+    });
+  }, [reports]);
+
   // View report details
   const handleViewReport = useCallback((report) => {
     setSelectedReport(report);
@@ -709,6 +806,7 @@ const IncidentReportingManagement = () => {
                   <button 
                     className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={reports.length === 0}
+                    onClick={handleExportCSV}
                     aria-label="Export reports"
                     title="Export reports to CSV"
                   >
@@ -899,7 +997,7 @@ const IncidentReportingManagement = () => {
                         <div className="border-b border-gray-200 pb-4">
                           <div className="flex items-start justify-between pr-12">
                             <div>
-                              <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedReport.type}</h2>
+                              <h2 className="text-3xl font-bold text-gray-900 mb-2">Incident Report</h2>
                               <p className="text-gray-500">Incident ID: #{selectedReport.id}</p>
                             </div>
                             <div>

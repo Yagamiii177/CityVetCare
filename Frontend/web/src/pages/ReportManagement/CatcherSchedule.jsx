@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
+import MultiSelectCheckbox from "../../components/MultiSelectCheckbox";
 import { apiService } from "../../utils/api";
 import {
   ClockIcon,
@@ -13,6 +14,7 @@ import {
   ArrowPathIcon,
   XMarkIcon,
   MagnifyingGlassIcon,
+  EyeIcon,
 } from "@heroicons/react/24/solid";
 
 const AnimalCatcherSchedule = () => {
@@ -20,6 +22,7 @@ const AnimalCatcherSchedule = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  const [conflictWarning, setConflictWarning] = useState(null);
   
   // Data state
   const [approvedIncidents, setApprovedIncidents] = useState([]);
@@ -39,7 +42,21 @@ const AnimalCatcherSchedule = () => {
     notes: "",
   });
   
+  const [formErrors, setFormErrors] = useState({});
   const [showForm, setShowForm] = useState(false);
+  const [selectedSchedule, setSelectedSchedule] = useState(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  
+  // New states for "Add Dog Catcher" modal
+  const [showAddCatcherModal, setShowAddCatcherModal] = useState(false);
+  const [newCatcherData, setNewCatcherData] = useState({
+    full_name: "",
+    contact_number: "",
+  });
+  const [catcherFormErrors, setCatcherFormErrors] = useState({});
+  
+  // State for pending incidents count
+  const [pendingIncidentsCount, setPendingIncidentsCount] = useState(0);
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
@@ -50,14 +67,15 @@ const AnimalCatcherSchedule = () => {
 
   // Auto-clear messages after 5 seconds
   useEffect(() => {
-    if (successMessage || error) {
+    if (successMessage || error || conflictWarning) {
       const timer = setTimeout(() => {
         setSuccessMessage(null);
         setError(null);
+        setConflictWarning(null);
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [successMessage, error]);
+  }, [successMessage, error, conflictWarning]);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -72,6 +90,14 @@ const AnimalCatcherSchedule = () => {
       setApprovedIncidents(incidentsRes.data.records || []);
       setSchedules(schedulesRes.data.records || []);
       setPatrolStaff(staffRes.data.records || []);
+      
+      // Calculate pending incidents count (Verified incidents without patrol schedules)
+      const approvedIncidents = incidentsRes.data.records || [];
+      const existingSchedules = schedulesRes.data.records || [];
+      const scheduledIncidentIds = new Set(existingSchedules.map(s => s.incident_id));
+      const pendingCount = approvedIncidents.filter(inc => !scheduledIncidentIds.has(inc.id)).length;
+      setPendingIncidentsCount(pendingCount);
+      
       setError(null);
     } catch (err) {
       console.error("Error fetching data:", err);
@@ -82,20 +108,77 @@ const AnimalCatcherSchedule = () => {
   };
 
   const handleFormChange = (e) => {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     
-    if (type === 'select-multiple') {
-      // Handle multi-select for staff
-      const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
-      setFormData((prev) => ({
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    
+    // Clear field-specific error when user starts typing
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({
         ...prev,
-        [name]: selectedOptions,
+        [name]: null,
       }));
-    } else {
-      setFormData((prev) => ({
+    }
+    
+    // Clear conflict warning when user changes schedule details
+    if ((name === 'scheduled_date' || name === 'scheduled_time') && conflictWarning) {
+      setConflictWarning(null);
+    }
+  };
+
+  // Handle multi-select staff change
+  const handleStaffChange = (selectedIds) => {
+    setFormData((prev) => ({
+      ...prev,
+      assigned_staff_ids: selectedIds,
+    }));
+    
+    if (formErrors.assigned_staff_ids) {
+      setFormErrors((prev) => ({
         ...prev,
-        [name]: value,
+        assigned_staff_ids: null,
       }));
+    }
+    
+    // Clear conflict warning
+    if (conflictWarning) {
+      setConflictWarning(null);
+    }
+  };
+
+  // Check for conflicts in real-time
+  const checkScheduleConflict = async () => {
+    if (
+      formData.assigned_staff_ids.length === 0 ||
+      !formData.scheduled_date ||
+      !formData.scheduled_time
+    ) {
+      return false; // Not enough data to check
+    }
+
+    try {
+      const response = await apiService.patrolSchedules.checkConflict({
+        staff_ids: formData.assigned_staff_ids.join(','),
+        schedule_date: `${formData.scheduled_date} ${formData.scheduled_time}:00`,
+        schedule_time: formData.scheduled_time,
+      });
+
+      if (response.data.has_conflict) {
+        const conflictDetails = response.data.conflicts
+          .map((c) => `${c.staff_name} is already scheduled`)
+          .join(', ');
+        setConflictWarning(conflictDetails);
+        return true;
+      } else {
+        setConflictWarning(null);
+        return false;
+      }
+    } catch (err) {
+      console.error("Error checking conflicts:", err);
+      return false;
     }
   };
 
@@ -104,11 +187,40 @@ const AnimalCatcherSchedule = () => {
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
+    setConflictWarning(null);
+    setFormErrors({});
 
     try {
       // Validate form
-      if (formData.assigned_staff_ids.length === 0 || !formData.incident_id || !formData.scheduled_date || !formData.scheduled_time) {
-        setError("Please fill in all required fields and select at least one staff member");
+      const errors = {};
+      
+      if (formData.assigned_staff_ids.length === 0) {
+        errors.assigned_staff_ids = "Please select at least one patrol staff member";
+      }
+      
+      if (!formData.incident_id) {
+        errors.incident_id = "Please select an incident";
+      }
+      
+      if (!formData.scheduled_date) {
+        errors.scheduled_date = "Please select a date";
+      }
+      
+      if (!formData.scheduled_time) {
+        errors.scheduled_time = "Please select a time";
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFormErrors(errors);
+        setError("Please fill in all required fields");
+        setLoading(false);
+        return;
+      }
+
+      // Check for schedule conflicts
+      const hasConflict = await checkScheduleConflict();
+      if (hasConflict) {
+        setError("Cannot create schedule: Time conflict detected. Please choose a different time or staff.");
         setLoading(false);
         return;
       }
@@ -125,6 +237,7 @@ const AnimalCatcherSchedule = () => {
         assigned_staff_names: staffNames,
         incident_id: formData.incident_id,
         schedule_date: `${formData.scheduled_date} ${formData.scheduled_time}:00`,
+        schedule_time: formData.scheduled_time,
         status: "scheduled",
         notes: formData.notes,
       };
@@ -133,9 +246,9 @@ const AnimalCatcherSchedule = () => {
 
       // Fetch complete incident data before updating
       const incidentResponse = await apiService.incidents.getById(formData.incident_id);
-      const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
+      const incident = incidentResponse.data.data || incidentResponse.data;
 
-      // Update incident status to 'verified' (scheduled in patrol_schedules) with all required fields
+      // Update incident status to 'verified'
       await apiService.incidents.update(formData.incident_id, {
         title: incident.title,
         description: incident.description,
@@ -146,7 +259,7 @@ const AnimalCatcherSchedule = () => {
         assigned_catcher_id: incident.assigned_catcher_id,
       });
 
-      setSuccessMessage("Patrol schedule created successfully! Incident status updated to 'Verified'.");
+      setSuccessMessage(`✓ Patrol schedule created! One patrol group with ${formData.assigned_staff_ids.length} team member(s) assigned.`);
       
       // Reset form
       setFormData({
@@ -162,7 +275,8 @@ const AnimalCatcherSchedule = () => {
       await fetchAllData();
     } catch (err) {
       console.error("Error creating schedule:", err);
-      setError(err.response?.data?.message || "Failed to create schedule. Please try again.");
+      const errorMessage = err.response?.data?.message || err.message || "Failed to create schedule";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -174,53 +288,50 @@ const AnimalCatcherSchedule = () => {
     setSuccessMessage(null);
 
     try {
-      // Find the schedule to get its full data
-      const schedule = schedules.find(s => s.id === scheduleId);
-      if (!schedule) {
-        throw new Error("Schedule not found");
-      }
-
-      // Update schedule status
+      // CRITICAL FIX: Backend automatically updates incident status when patrol status changes
+      // We only need to update the patrol schedule, and the backend handles the rest
       await apiService.patrolSchedules.update(scheduleId, {
-        assigned_staff_ids: schedule.assigned_staff_ids,
-        assigned_staff_names: schedule.assigned_staff_names,
-        incident_id: schedule.incident_id,
-        schedule_date: schedule.schedule_date,
         status: newStatus,
-        notes: schedule.notes,
       });
 
-      // Update incident status based on patrol status
-      let incidentStatus = "";
-      if (newStatus === "in_progress") {
-        incidentStatus = "in_progress";
-      } else if (newStatus === "completed") {
-        incidentStatus = "resolved";
-      }
-
-      if (incidentStatus && incidentId) {
-        // Fetch complete incident data before updating
-        const incidentResponse = await apiService.incidents.getById(incidentId);
-        const incident = incidentResponse.data.data || incidentResponse.data; // Handle both old and new response format
-        
-        await apiService.incidents.update(incidentId, {
-          title: incident.title,
-          description: incident.description,
-          location: incident.location,
-          latitude: incident.latitude,
-          longitude: incident.longitude,
-          status: incidentStatus,
-          assigned_catcher_id: incident.assigned_catcher_id,
-        });
-      }
-
-      setSuccessMessage(`Patrol status updated to ${newStatus}!`);
+      setSuccessMessage(`Patrol status updated to ${newStatus.replace('_', ' ')}!`);
       
-      // Refresh data
+      // Refresh data to reflect backend changes
       await fetchAllData();
     } catch (err) {
       console.error("Error updating status:", err);
       setError(err.response?.data?.message || "Failed to update status. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handler for removing staff from patrol schedule
+  const handleRemoveStaff = async (scheduleId, staffId) => {
+    // Confirm before removing
+    if (!confirm("Are you sure you want to remove this staff member from the patrol schedule?")) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await apiService.patrolSchedules.removeStaff(scheduleId, staffId);
+      setSuccessMessage("Staff member removed from patrol schedule successfully!");
+      
+      // Refresh data to reflect changes
+      await fetchAllData();
+      
+      // If viewing the modal, update the selected schedule
+      if (selectedSchedule && selectedSchedule.id === scheduleId) {
+        const updatedSchedule = await apiService.patrolSchedules.getById(scheduleId);
+        setSelectedSchedule(updatedSchedule.data.data);
+      }
+    } catch (err) {
+      console.error("Error removing staff:", err);
+      const errorMessage = err.response?.data?.message || err.message || "Failed to remove staff member";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -236,6 +347,72 @@ const AnimalCatcherSchedule = () => {
         return "bg-green-100 text-green-800 border border-green-200";
       default:
         return "bg-gray-100 text-gray-800 border border-gray-200";
+    }
+  };
+  
+  // Handler for adding new dog catcher
+  const handleAddCatcher = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setCatcherFormErrors({});
+
+    try {
+      // Validate form
+      const errors = {};
+      
+      if (!newCatcherData.full_name || newCatcherData.full_name.trim() === "") {
+        errors.full_name = "Full name is required";
+      }
+      
+      if (!newCatcherData.contact_number || newCatcherData.contact_number.trim() === "") {
+        errors.contact_number = "Contact number is required";
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setCatcherFormErrors(errors);
+        setLoading(false);
+        return;
+      }
+
+      // Create new dog catcher
+      await apiService.patrolStaff.create({
+        name: newCatcherData.full_name,
+        team_name: newCatcherData.full_name,
+        contact_number: newCatcherData.contact_number,
+      });
+
+      setSuccessMessage(`✓ Dog catcher "${newCatcherData.full_name}" added successfully!`);
+      
+      // Reset form and close modal
+      setNewCatcherData({ full_name: "", contact_number: "" });
+      setShowAddCatcherModal(false);
+
+      // Refresh patrol staff data
+      await fetchAllData();
+    } catch (err) {
+      console.error("Error adding dog catcher:", err);
+      const errorMessage = err.response?.data?.message || err.message || "Failed to add dog catcher";
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleCatcherFormChange = (e) => {
+    const { name, value } = e.target;
+    
+    setNewCatcherData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    
+    // Clear field-specific error when user starts typing
+    if (catcherFormErrors[name]) {
+      setCatcherFormErrors((prev) => ({
+        ...prev,
+        [name]: null,
+      }));
     }
   };
 
@@ -271,6 +448,32 @@ const AnimalCatcherSchedule = () => {
         }`}
       >
         <div className="px-6 py-8">
+          {/* PRIORITY: Incidents Waiting to Be Scheduled Banner - TOP OF PAGE */}
+          {pendingIncidentsCount > 0 && (
+            <div className="mb-6 bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-xl shadow-lg p-5">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-full bg-orange-500 shadow-md">
+                  <ExclamationCircleIcon className="h-6 w-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-orange-900 mb-1">
+                    {pendingIncidentsCount} incident(s) waiting to be scheduled
+                  </h3>
+                  <p className="text-sm text-orange-800">
+                    These incidents have been approved and need patrol assignment.
+                  </p>
+                  <button
+                    onClick={() => setShowForm(true)}
+                    className="mt-3 inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700 transition-colors shadow-md"
+                  >
+                    <CalendarIcon className="h-4 w-4" />
+                    Schedule Patrol Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Header with Search and Filters */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
@@ -281,13 +484,22 @@ const AnimalCatcherSchedule = () => {
                 Assign patrols and track their progress
               </p>
             </div>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 bg-[#FA8630] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#E87928] transition-colors shadow-sm"
-            >
-              {showForm ? <XMarkIcon className="h-4 w-4" /> : <PlusIcon className="h-4 w-4" />}
-              {showForm ? "Cancel" : "New Schedule"}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAddCatcherModal(true)}
+                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors shadow-sm"
+              >
+                <PlusIcon className="h-4 w-4" />
+                Add New Dog Catcher
+              </button>
+              <button
+                onClick={() => setShowForm(!showForm)}
+                className="flex items-center gap-2 bg-[#FA8630] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#E87928] transition-colors shadow-sm"
+              >
+                {showForm ? <XMarkIcon className="h-4 w-4" /> : <PlusIcon className="h-4 w-4" />}
+                {showForm ? "Cancel" : "New Schedule"}
+              </button>
+            </div>
           </div>
 
           {/* Success/Error Messages */}
@@ -302,6 +514,16 @@ const AnimalCatcherSchedule = () => {
             <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-center gap-2">
               <ExclamationCircleIcon className="h-5 w-5" />
               {error}
+            </div>
+          )}
+
+          {conflictWarning && (
+            <div className="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-center gap-2">
+              <ExclamationCircleIcon className="h-5 w-5" />
+              <div>
+                <p className="font-semibold">Schedule Conflict Warning</p>
+                <p className="text-sm mt-1">{conflictWarning}</p>
+              </div>
             </div>
           )}
 
@@ -374,106 +596,188 @@ const AnimalCatcherSchedule = () => {
 
           {/* Schedule Form */}
           {showForm && (
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
-              <h2 className="text-lg font-semibold text-gray-800 mb-6">
-                Create New Patrol Schedule
-              </h2>
+            <div className="bg-white p-8 rounded-lg shadow-md border border-gray-200 mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">
+                    Create New Patrol Schedule
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Assign patrol staff to verified incidents
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowForm(false);
+                    setFormData({
+                      assigned_staff_ids: [],
+                      incident_id: "",
+                      scheduled_date: "",
+                      scheduled_time: "",
+                      notes: "",
+                    });
+                    setFormErrors({});
+                    setConflictWarning(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  type="button"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Staff Selection - Multi-select */}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Section 1: Staff Selection */}
+                <div className="pb-6 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                    Step 1: Select Patrol Staff
+                  </h3>
+                  
+                  <MultiSelectCheckbox
+                    label="Patrol Staff (Animal Catchers)"
+                    placeholder="Click to select one or more animal catchers..."
+                    required={true}
+                    options={patrolStaff.map((staff) => ({
+                      value: staff.id.toString(),
+                      label: staff.team_name || staff.leader_name || `Catcher ${staff.id}`,
+                      sublabel: staff.contact_number || "No contact number",
+                    }))}
+                    selectedValues={formData.assigned_staff_ids}
+                    onChange={handleStaffChange}
+                    error={formErrors.assigned_staff_ids}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    💡 Click on staff members to select them. No keyboard shortcuts required.
+                  </p>
+                </div>
+
+                {/* Section 2: Incident Selection */}
+                <div className="pb-6 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                    Step 2: Select Incident
+                  </h3>
+                  
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Patrol Staff * (Hold Ctrl/Cmd to select multiple)
-                    </label>
-                    <select
-                      name="assigned_staff_ids"
-                      multiple
-                      value={formData.assigned_staff_ids}
-                      onChange={handleFormChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FA8630] min-h-[120px]"
-                      required
-                    >
-                      {patrolStaff.map((staff) => (
-                        <option key={staff.id} value={staff.id}>
-                          {staff.team_name} (Leader: {staff.leader_name}) - {staff.contact_number}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {formData.assigned_staff_ids.length} staff member(s) selected
-                    </p>
-                  </div>
-
-                  {/* Incident Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Approved Incident *
+                      Approved Incident <span className="text-red-500">*</span>
                     </label>
                     <select
                       name="incident_id"
                       value={formData.incident_id}
                       onChange={handleFormChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FA8630]"
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FA8630] transition-all ${
+                        formErrors.incident_id ? "border-red-500" : "border-gray-300"
+                      }`}
                       required
                     >
-                      <option value="">Select an incident</option>
+                      <option value="">-- Select an incident to schedule --</option>
                       {approvedIncidents.map((incident) => (
                         <option key={incident.id} value={incident.id}>
                           #{incident.id} - {incident.title} ({incident.location})
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  {/* Date */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Scheduled Date *
-                    </label>
-                    <input
-                      type="date"
-                      name="scheduled_date"
-                      value={formData.scheduled_date}
-                      onChange={handleFormChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FA8630]"
-                      required
-                    />
-                  </div>
-
-                  {/* Time */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Scheduled Time *
-                    </label>
-                    <input
-                      type="time"
-                      name="scheduled_time"
-                      value={formData.scheduled_time}
-                      onChange={handleFormChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FA8630]"
-                      required
-                    />
+                    {formErrors.incident_id && (
+                      <p className="text-xs text-red-500 mt-1.5 font-medium">
+                        {formErrors.incident_id}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                {/* Notes */}
+                {/* Section 3: Schedule Date & Time */}
+                <div className="pb-6 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                    Step 3: Set Date and Time
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Date - Fully Clickable */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Schedule Date <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="date"
+                          name="scheduled_date"
+                          value={formData.scheduled_date}
+                          onChange={handleFormChange}
+                          onBlur={checkScheduleConflict}
+                          min={new Date().toISOString().split('T')[0]}
+                          className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FA8630] transition-all cursor-pointer ${
+                            formErrors.scheduled_date ? "border-red-500" : "border-gray-300"
+                          }`}
+                          style={{ colorScheme: 'light' }}
+                          required
+                        />
+                        <CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none z-10" />
+                      </div>
+                      {formErrors.scheduled_date && (
+                        <p className="text-xs text-red-500 mt-1.5 font-medium">
+                          {formErrors.scheduled_date}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        Click anywhere on the field to select a date
+                      </p>
+                    </div>
+
+                    {/* Time - Fully Clickable, No Overlap */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Schedule Time <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="time"
+                          name="scheduled_time"
+                          value={formData.scheduled_time}
+                          onChange={handleFormChange}
+                          onBlur={checkScheduleConflict}
+                          className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FA8630] transition-all cursor-pointer ${
+                            formErrors.scheduled_time ? "border-red-500" : "border-gray-300"
+                          }`}
+                          style={{ colorScheme: 'light' }}
+                          required
+                        />
+                        <ClockIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none z-10" />
+                      </div>
+                      {formErrors.scheduled_time && (
+                        <p className="text-xs text-red-500 mt-1.5 font-medium">
+                          {formErrors.scheduled_time}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        Click anywhere on the field to select a time
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 4: Notes (Optional) */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes (Optional)
-                  </label>
-                  <textarea
-                    name="notes"
-                    value={formData.notes}
-                    onChange={handleFormChange}
-                    rows="3"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FA8630]"
-                    placeholder="Add any special instructions or notes..."
-                  />
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                    Step 4: Additional Notes (Optional)
+                  </h3>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Special Instructions or Notes
+                    </label>
+                    <textarea
+                      name="notes"
+                      value={formData.notes}
+                      onChange={handleFormChange}
+                      rows="4"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FA8630] transition-all"
+                      placeholder="Add any special instructions, safety considerations, or important details for the patrol team..."
+                    />
+                  </div>
                 </div>
 
                 {/* Submit Button */}
-                <div className="flex justify-end gap-4 pt-4">
+                <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
                   <button
                     type="button"
                     onClick={() => {
@@ -485,18 +789,20 @@ const AnimalCatcherSchedule = () => {
                         scheduled_time: "",
                         notes: "",
                       });
+                      setFormErrors({});
+                      setConflictWarning(null);
                     }}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="px-6 py-2 bg-[#FA8630] text-white rounded-lg hover:bg-[#E87928] transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                    disabled={loading || conflictWarning}
+                    className="px-6 py-3 bg-[#FA8630] text-white rounded-lg hover:bg-[#E87928] transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 font-medium shadow-sm"
                   >
                     {loading && <ArrowPathIcon className="h-4 w-4 animate-spin" />}
-                    {loading ? "Creating..." : "Create Schedule"}
+                    {loading ? "Creating Schedule..." : "Create Patrol Schedule"}
                   </button>
                 </div>
               </form>
@@ -602,9 +908,16 @@ const AnimalCatcherSchedule = () => {
                             <div className="w-8 h-8 rounded-full bg-[#FA8630]/10 flex items-center justify-center flex-shrink-0">
                               <UserGroupIcon className="h-4 w-4 text-[#FA8630]" />
                             </div>
-                            <span className="text-sm text-gray-800 font-medium">
-                              {schedule.assigned_staff_names || "Unassigned"}
-                            </span>
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-800 font-medium">
+                                {schedule.assigned_staff_names || "Unassigned"}
+                              </span>
+                              {schedule.staff_count > 1 && (
+                                <span className="text-xs text-gray-500">
+                                  {schedule.staff_count} team members
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="py-4 px-4">
@@ -629,15 +942,27 @@ const AnimalCatcherSchedule = () => {
                         <td className="py-4 px-4">
                           <span
                             className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide ${getStatusColor(
-                              schedule.status
+                              schedule.incident_status === "In Progress" ? "in_progress" : 
+                              schedule.incident_status === "Resolved" ? "completed" : "scheduled"
                             )}`}
                           >
-                            {schedule.status.replace("_", " ")}
+                            {schedule.incident_status || "Verified"}
                           </span>
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex gap-2">
-                            {schedule.status === "scheduled" && (
+                            <button
+                              onClick={() => {
+                                setSelectedSchedule(schedule);
+                                setShowViewModal(true);
+                              }}
+                              className="px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-md hover:bg-blue-600 transition-colors shadow-sm flex items-center gap-1"
+                              title="View Details"
+                            >
+                              <EyeIcon className="h-3.5 w-3.5" />
+                              View
+                            </button>
+                            {schedule.incident_status !== "In Progress" && schedule.incident_status !== "Resolved" && (
                               <button
                                 onClick={() =>
                                   updateScheduleStatus(
@@ -652,7 +977,7 @@ const AnimalCatcherSchedule = () => {
                                 Start
                               </button>
                             )}
-                            {schedule.status === "in_progress" && (
+                            {schedule.incident_status === "In Progress" && (
                               <button
                                 onClick={() =>
                                   updateScheduleStatus(
@@ -667,7 +992,7 @@ const AnimalCatcherSchedule = () => {
                                 Complete
                               </button>
                             )}
-                            {schedule.status === "completed" && (
+                            {schedule.incident_status === "Resolved" && (
                               <span className="px-4 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-md flex items-center gap-1">
                                 <CheckCircleIcon className="h-3.5 w-3.5" />
                                 Finished
@@ -682,25 +1007,379 @@ const AnimalCatcherSchedule = () => {
               </div>
             )}
           </div>
+        </div>
+      </main>
 
-          {/* Additional Info */}
-          {approvedIncidents.length > 0 && (
-            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <ExclamationCircleIcon className="h-5 w-5 text-blue-600 mt-0.5" />
+      {/* View Details Modal */}
+      {showViewModal && selectedSchedule && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-[#FA8630] to-[#E87928] p-6 rounded-t-2xl">
+              <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm font-medium text-blue-900">
-                    {approvedIncidents.length} incident(s) waiting to be scheduled
+                  <h2 className="text-2xl font-bold text-white mb-1">Patrol Schedule Details</h2>
+                  <p className="text-white/90 text-sm">Schedule ID: #{selectedSchedule.id}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setSelectedSchedule(null);
+                  }}
+                  className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Status Badge - CRITICAL FIX: Display incident status from incident_report */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-gray-600">Current Status:</span>
+                <span
+                  className={`px-4 py-2 rounded-full text-sm font-semibold uppercase tracking-wide ${getStatusColor(
+                    selectedSchedule.incident_status === "In Progress" ? "in_progress" : 
+                    selectedSchedule.incident_status === "Resolved" ? "completed" : "scheduled"
+                  )}`}
+                >
+                  {selectedSchedule.incident_status || "Verified"}
+                </span>
+              </div>
+
+              {/* Incident Information */}
+              <div className="bg-gradient-to-br from-blue-50 to-white p-5 rounded-xl border border-blue-100 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <ExclamationCircleIcon className="h-5 w-5 text-blue-600" />
+                  Incident Information
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                      Incident ID
+                    </label>
+                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                      <span className="text-gray-900 font-medium">#{selectedSchedule.incident_id}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                      Incident Description
+                    </label>
+                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                      <span className="text-gray-900">{selectedSchedule.incident_title || selectedSchedule.incident_description || "No description available"}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                      Location
+                    </label>
+                    <div className="flex items-start gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                      <MapPinIcon className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-gray-900">{selectedSchedule.incident_location || "Location not specified"}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Patrol Team Information */}
+              <div className="bg-gradient-to-br from-orange-50 to-white p-5 rounded-xl border border-orange-100 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <UserGroupIcon className="h-5 w-5 text-[#FA8630]" />
+                  Assigned Patrol Team
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                      Team Members ({selectedSchedule.staff_count || 1})
+                    </label>
+                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                      <span className="text-gray-900 font-medium">{selectedSchedule.assigned_staff_names || "Unassigned"}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                      Staff IDs
+                    </label>
+                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                      <span className="text-gray-900 font-mono text-sm">{selectedSchedule.assigned_staff_ids || selectedSchedule.assigned_catcher_id || "N/A"}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Patrol Staff Details Table - ONLY IN PATROL SCHEDULE MANAGEMENT */}
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                    Assigned Patrol Staff Details
+                  </h4>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Full Name
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Contact Number
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Action
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {(() => {
+                          // Use staff_details from backend if available
+                          const assignedStaff = selectedSchedule.staff_details || [];
+                          
+                          if (assignedStaff.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan="4" className="px-4 py-6 text-center text-sm text-gray-500">
+                                  No staff assigned or staff details not available
+                                </td>
+                              </tr>
+                            );
+                          }
+                          
+                          return assignedStaff.map((staff) => (
+                            <tr key={staff.catcher_id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                                {staff.full_name || `Staff ${staff.catcher_id}`}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {staff.contact_number || "N/A"}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                  Active
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {selectedSchedule.incident_status !== "Resolved" && (
+                                  <button
+                                    onClick={() => handleRemoveStaff(selectedSchedule.id, staff.catcher_id)}
+                                    disabled={assignedStaff.length === 1}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-500 text-white hover:bg-red-600"
+                                    title={assignedStaff.length === 1 ? "Cannot remove the last staff member" : "Remove staff from schedule"}
+                                  >
+                                    Remove
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ));
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                  {selectedSchedule.staff_details && selectedSchedule.staff_details.length === 1 && (
+                    <p className="mt-2 text-xs text-amber-600 flex items-center gap-1">
+                      <ExclamationCircleIcon className="h-4 w-4" />
+                      At least one staff member must remain assigned to the patrol schedule.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Schedule Information */}
+              <div className="bg-gradient-to-br from-green-50 to-white p-5 rounded-xl border border-green-100 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <CalendarIcon className="h-5 w-5 text-green-600" />
+                  Schedule Details
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                      Schedule Date
+                    </label>
+                    <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                      <CalendarIcon className="h-4 w-4 text-gray-400" />
+                      <span className="text-gray-900 font-medium">
+                        {selectedSchedule.schedule_date ? new Date(selectedSchedule.schedule_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : "N/A"}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                      Schedule Time
+                    </label>
+                    <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                      <ClockIcon className="h-4 w-4 text-gray-400" />
+                      <span className="text-gray-900 font-medium">
+                        {selectedSchedule.schedule_date ? new Date(selectedSchedule.schedule_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : selectedSchedule.schedule_time || "N/A"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedSchedule.notes && (
+                <div className="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Notes</h3>
+                  <p className="text-gray-700 whitespace-pre-wrap">{selectedSchedule.notes}</p>
+                </div>
+              )}
+
+              {/* Timestamps */}
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Created At</label>
+                  <p className="text-sm text-gray-700">
+                    {selectedSchedule.created_at ? new Date(selectedSchedule.created_at).toLocaleString() : "N/A"}
                   </p>
-                  <p className="text-xs text-blue-700 mt-1">
-                    These incidents have been approved and need patrol assignment
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Last Updated</label>
+                  <p className="text-sm text-gray-700">
+                    {selectedSchedule.updated_at ? new Date(selectedSchedule.updated_at).toLocaleString() : "N/A"}
                   </p>
                 </div>
               </div>
             </div>
-          )}
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-gray-50 px-6 py-4 rounded-b-2xl border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedSchedule(null);
+                }}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
-      </main>
+      )}
+      
+      {/* Add New Dog Catcher Modal */}
+      {showAddCatcherModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-green-600 to-green-500 p-6 rounded-t-2xl">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-1">Add New Dog Catcher</h2>
+                  <p className="text-white/90 text-sm">Register a new animal catcher to the system</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAddCatcherModal(false);
+                    setNewCatcherData({ full_name: "", contact_number: "" });
+                    setCatcherFormErrors({});
+                  }}
+                  className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <form onSubmit={handleAddCatcher} className="p-6 space-y-5">
+              {/* Full Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="full_name"
+                  value={newCatcherData.full_name}
+                  onChange={handleCatcherFormChange}
+                  placeholder="Enter full name"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
+                    catcherFormErrors.full_name ? "border-red-500" : "border-gray-300"
+                  }`}
+                  required
+                />
+                {catcherFormErrors.full_name && (
+                  <p className="text-xs text-red-500 mt-1.5 font-medium">
+                    {catcherFormErrors.full_name}
+                  </p>
+                )}
+              </div>
+
+              {/* Contact Number */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Contact Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  name="contact_number"
+                  value={newCatcherData.contact_number}
+                  onChange={handleCatcherFormChange}
+                  placeholder="Enter contact number"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
+                    catcherFormErrors.contact_number ? "border-red-500" : "border-gray-300"
+                  }`}
+                  required
+                />
+                {catcherFormErrors.contact_number && (
+                  <p className="text-xs text-red-500 mt-1.5 font-medium">
+                    {catcherFormErrors.contact_number}
+                  </p>
+                )}
+              </div>
+
+              {/* Info Note */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <ExclamationCircleIcon className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">Note</p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      The new dog catcher will be immediately available for patrol assignment after creation.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddCatcherModal(false);
+                    setNewCatcherData({ full_name: "", contact_number: "" });
+                    setCatcherFormErrors({});
+                  }}
+                  className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleIcon className="h-4 w-4" />
+                      Add Dog Catcher
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

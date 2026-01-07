@@ -54,20 +54,44 @@ const PendingVerification = () => {
       });
       
       // Transform backend data to frontend format with new mobile fields
-      const transformedReports = pendingReports.map(incident => ({
+      const transformedReports = pendingReports.map(incident => {
+        // Parse date/time properly
+        const getDateTime = (dateTimeStr) => {
+          try {
+            if (!dateTimeStr) return { date: 'Not specified', time: 'Not specified' };
+            const dateObj = new Date(dateTimeStr);
+            if (isNaN(dateObj.getTime())) {
+              const parts = dateTimeStr.split(' ');
+              return { date: parts[0] || 'Not specified', time: parts[1] || 'Not specified' };
+            }
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const hours = String(dateObj.getHours()).padStart(2, '0');
+            const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+            const seconds = String(dateObj.getSeconds()).padStart(2, '0');
+            return { date: `${year}-${month}-${day}`, time: `${hours}:${minutes}:${seconds}` };
+          } catch (error) {
+            return { date: 'Not specified', time: 'Not specified' };
+          }
+        };
+        
+        const { date, time } = getDateTime(incident.incident_date || incident.created_at);
+        
+        return {
         id: incident.id,
         reporter: incident.reporter_name,
         reporterContact: incident.reporter_contact,
         reporterAddress: incident.location,
-        type: incident.title,
+        type: incident.title || 'Unknown Incident',
         address: incident.location,
-        date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
-        time: incident.incident_date ? incident.incident_date.split(' ')[1] : incident.created_at.split(' ')[1],
+        date,
+        time,
         status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
         description: incident.description,
         images: incident.images || [], // Add images field
         // NEW: Use database fields directly from mobile form
-        reportType: incident.incident_type ? (incident.incident_type === 'incident' ? 'Incident/Bite Report' : incident.incident_type === 'stray' ? 'Stray Animal Report' : 'Lost Pet Report') : 'Animal Report',
+        reportType: incident.report_type ? (incident.report_type === 'bite' ? 'Incident/Bite Report' : incident.report_type === 'stray' ? 'Stray Animal Report' : incident.report_type === 'lost' ? 'Lost Pet Report' : 'Animal Report') : 'Animal Report',
         animalType: incident.animal_type ? (incident.animal_type.charAt(0).toUpperCase() + incident.animal_type.slice(1)) : extractAnimalType(incident.description),
         petBreed: incident.pet_breed || 'Not specified',
         petColor: incident.pet_color || 'Not specified',
@@ -78,7 +102,8 @@ const PendingVerification = () => {
         submittedBy: "System",
         submissionDate: incident.created_at,
         verificationNotes: "",
-      }));
+      };
+      });
 
       setReports(transformedReports);
       setLoading(false);
@@ -542,7 +567,7 @@ const PendingVerification = () => {
 
           {/* Enhanced Detail Modal - Matching MonitoringIncidents */}
           {selectedReport && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-y-auto">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9998] p-4 overflow-y-auto">
               <div className="bg-white w-full max-w-4xl my-8 rounded-xl shadow-2xl relative animate-fadeIn">
                 {/* Close Button - Fixed at top */}
                 <button
@@ -673,15 +698,6 @@ const PendingVerification = () => {
                             </label>
                             <div className="p-3 bg-white rounded-lg border border-gray-200">
                               <span className="text-gray-900 font-medium">{selectedReport.reportType || 'Animal Report'}</span>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
-                              Incident Type
-                            </label>
-                            <div className="p-3 bg-white rounded-lg border border-gray-200">
-                              <span className="text-gray-900 font-medium">{selectedReport.type}</span>
                             </div>
                           </div>
 

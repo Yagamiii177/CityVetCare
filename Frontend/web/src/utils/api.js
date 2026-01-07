@@ -140,9 +140,11 @@ export const apiService = {
     getAll: (filters = {}) => api.get("/patrol-schedules", { params: filters }),
     getById: (id) => api.get(`/patrol-schedules/${id}`),
     getByIncident: (incidentId) => api.get(`/patrol-schedules/incident/${incidentId}`),
+    checkConflict: (data) => api.post("/patrol-schedules/check-conflict", data),
     create: (data) => api.post("/patrol-schedules", data),
     update: (id, data) => api.put(`/patrol-schedules/${id}`, data),
     delete: (id) => api.delete(`/patrol-schedules/${id}`),
+    removeStaff: (scheduleId, staffId) => api.delete(`/patrol-schedules/${scheduleId}/staff/${staffId}`),
   },
 
   // Stray Animals

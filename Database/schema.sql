@@ -167,7 +167,7 @@ CREATE TABLE IF NOT EXISTS incident_assessment (
 CREATE TABLE IF NOT EXISTS patrol_schedule (
     schedule_id INT AUTO_INCREMENT PRIMARY KEY,
     report_id INT NOT NULL,
-    assigned_catcher_id INT NOT NULL,
+    assigned_catcher_id VARCHAR(255) NOT NULL COMMENT 'Comma-separated catcher IDs for team patrols',
     
     -- Schedule Details
     schedule_date DATE NOT NULL,
@@ -180,10 +180,10 @@ CREATE TABLE IF NOT EXISTS patrol_schedule (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
     CONSTRAINT fk_schedule_report FOREIGN KEY (report_id) REFERENCES incident_report(report_id) ON DELETE CASCADE,
-    CONSTRAINT fk_schedule_catcher FOREIGN KEY (assigned_catcher_id) REFERENCES dog_catcher(catcher_id) ON DELETE CASCADE,
     INDEX idx_schedule_report (report_id),
     INDEX idx_schedule_date (schedule_date),
-    INDEX idx_schedule_status (status)
+    INDEX idx_schedule_status (status),
+    INDEX idx_assigned_catchers (assigned_catcher_id(50))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS stray_animals (

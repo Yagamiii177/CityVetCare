@@ -55,6 +55,23 @@ const IncidentDashboard = () => {
 
   // Colors for charts
   const COLORS = ['#FA8630', '#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'];
+  
+  // Status color mapping (requirement: Blue for Pending Verification, Green for Resolved)
+  const STATUS_COLORS = {
+    'Pending Verification': '#3B82F6', // Blue
+    'Pending': '#3B82F6', // Blue
+    'Verified': '#8B5CF6', // Purple
+    'Scheduled': '#F59E0B', // Amber
+    'In Progress': '#FA8630', // Orange
+    'Resolved': '#10B981', // Green
+    'Rejected': '#EF4444', // Red
+    'Cancelled': '#6B7280', // Gray
+  };
+  
+  // Function to get color by status name
+  const getStatusColor = (statusName) => {
+    return STATUS_COLORS[statusName] || '#6B7280'; // Default gray
+  };
 
   // Fetch dashboard data from API
   useEffect(() => {
@@ -72,13 +89,21 @@ const IncidentDashboard = () => {
           const apiData = dashResponse.data.data || dashResponse.data;
           const summary = apiData.summary || {};
           const incidents = apiData.incidents || {};
+          const patrols = apiData.patrols || {};
+          
+          // Count scheduled patrols from patrol_schedule table (status = 'Assigned' or 'Scheduled')
+          const scheduledCount = patrols.scheduled || 
+            schedulesResponse.data?.records?.filter(s => 
+              s.status === 'Assigned' || s.status === 'Scheduled'
+            ).length || 0;
           
           setDashboardData({
             totalReports: incidents.total_incidents || summary.total_incidents || 0,
             resolvedReports: incidents.resolved || summary.resolved_incidents || 0,
-            pendingReports: incidents.pending || summary.pending_incidents || 0,
+            // Pending status represents incidents awaiting verification
+            pendingReports: incidents.pending_verification || incidents.pending || summary.pending_incidents || 0,
             reportsThisWeek: incidents.in_progress || summary.in_progress_incidents || 0,
-            scheduledPatrols: schedulesResponse.data?.records?.filter(s => s.status === 'scheduled').length || 0,
+            scheduledPatrols: scheduledCount,
             inProgressReports: incidents.in_progress || summary.in_progress_incidents || 0,
           });
           
@@ -152,18 +177,32 @@ const IncidentDashboard = () => {
 
   // Generate category distribution by incident type
   const generateCategoryData = (incidents) => {
-    const categories = {};
+    const categories = {
+      'Bite Incident': 0,
+      'Stray Animal': 0,
+      'Other': 0
+    };
     
     incidents.forEach(inc => {
-      const type = inc.incident_type || 'other';
-      const displayType = type.charAt(0).toUpperCase() + type.slice(1);
-      categories[displayType] = (categories[displayType] || 0) + 1;
+      // Use report_type field from backend (bite, stray, lost)
+      const type = (inc.report_type || inc.incident_type || '').toLowerCase();
+      
+      if (type === 'bite' || type.includes('bite')) {
+        categories['Bite Incident']++;
+      } else if (type === 'stray' || type.includes('stray')) {
+        categories['Stray Animal']++;
+      } else {
+        categories['Other']++;
+      }
     });
 
-    return Object.entries(categories).map(([name, value]) => ({
-      name,
-      value,
-    }));
+    // Only return categories with values > 0 to avoid "Other = 100%" issue
+    return Object.entries(categories)
+      .filter(([name, value]) => value > 0)
+      .map(([name, value]) => ({
+        name,
+        value,
+      }));
   };
 
   // Generate status distribution
@@ -171,12 +210,21 @@ const IncidentDashboard = () => {
     const statuses = {};
     
     incidents.forEach(inc => {
-      const status = inc.status || 'Pending';
-      // Normalize status to Title Case for consistent display
-      const displayStatus = status.split(' ').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-      ).join(' ');
-      statuses[displayStatus] = (statuses[displayStatus] || 0) + 1;
+      let status = inc.status || 'Pending';
+      
+      // Normalize status names for consistency
+      if (status.toLowerCase() === 'pending' || status.toLowerCase() === 'pending_verification') {
+        status = 'Pending Verification';
+      } else if (status.toLowerCase() === 'in progress' || status.toLowerCase() === 'in_progress') {
+        status = 'In Progress';
+      } else {
+        // Normalize to Title Case
+        status = status.split(' ').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
+      }
+      
+      statuses[status] = (statuses[status] || 0) + 1;
     });
 
     return Object.entries(statuses).map(([name, value]) => ({
@@ -234,12 +282,12 @@ const IncidentDashboard = () => {
             />
 
             <MetricCard
-              icon={<ClockIcon className="h-6 w-6 text-yellow-600" />}
+              icon={<ClockIcon className="h-6 w-6 text-blue-600" />}
               title="Pending Verification"
               value={dashboardData.pendingReports}
               trend="neutral"
               change="Awaiting review"
-              bgColor="bg-yellow-50"
+              bgColor="bg-blue-50"
             />
 
             <MetricCard
@@ -359,10 +407,15 @@ const IncidentDashboard = () => {
 
                 <StatItem
                   icon={<ClockIcon className="h-5 w-5 text-yellow-600" />}
-                  title="Avg. Response Time"
-                  value="2.3h"
-                  description="Time to assignment"
-                  trend="down"
+                  title="This Week"
+                  value={allIncidents.filter(i => {
+                    const weekAgo = new Date();
+                    weekAgo.setDate(weekAgo.getDate() - 7);
+                    const incDate = new Date(i.created_at);
+                    return incDate >= weekAgo;
+                  }).length}
+                  description="Reports this week"
+                  trend="neutral"
                 />
               </div>
             </div>
@@ -399,12 +452,24 @@ const IncidentDashboard = () => {
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
+                        isAnimationActive={true}
+                        animationBegin={0}
+                        animationDuration={400}
                       >
                         {categoryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={COLORS[index % COLORS.length]}
+                          />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'white', 
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px'
+                        }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -441,7 +506,11 @@ const IncidentDashboard = () => {
                           borderRadius: '8px'
                         }} 
                       />
-                      <Bar dataKey="value" fill="#FA8630" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                        {statusData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={getStatusColor(entry.name)} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 )}
