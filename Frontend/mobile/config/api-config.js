@@ -9,6 +9,7 @@
  */
 
 import { Platform } from "react-native";
+import { getApiBaseUrl } from "./api-helper";
 
 // ============================================
 // 🔧 CONFIGURATION GUIDE
@@ -25,24 +26,6 @@ import { Platform } from "react-native";
 // Are you using iOS Simulator?
 // - No changes needed! Auto-detected.
 // ============================================
-
-// Auto-detect the best API URL based on platform
-const getApiBaseUrl = () => {
-  // 🔥 FOR PHYSICAL DEVICE (iPhone/Android): Use PC's IP address
-  // Make sure your phone and PC are on the SAME WiFi network!
-  return "http://192.168.1.45:3000/api";
-
-  // UNCOMMENT FOR EMULATOR/SIMULATOR TESTING:
-  // For Android Emulator:
-  // if (Platform.OS === 'android') {
-  //   return 'http://10.0.2.2:3000/api';
-  // }
-
-  // For iOS Simulator:
-  // if (Platform.OS === 'ios') {
-  //   return 'http://localhost:3000/api';
-  // }
-};
 
 const API_BASE_URL = getApiBaseUrl();
 

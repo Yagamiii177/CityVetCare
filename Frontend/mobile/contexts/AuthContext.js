@@ -99,7 +99,8 @@ export const AuthProvider = ({ children }) => {
   // Role checks
   const isUser = user?.role === "user";
   const isVeterinarian = user?.role === "veterinarian";
-  const isAdmin = user?.role === "admin";
+  // Backend may return 'staff' for administrator accounts.
+  const isAdmin = user?.role === "admin" || user?.role === "staff";
   const isCatcher = user?.role === "catcher";
   const isStaff = isVeterinarian || isAdmin || isCatcher;
 

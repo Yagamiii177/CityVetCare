@@ -30,15 +30,10 @@ import ReadingMaterialsScreen from "./screens/announcement_resources/reading_mat
 import ReadingMaterialDetailScreen from "./screens/announcement_resources/reading_materials/readingMaterialDetailScreen";
 import MapNearbyClinics from "./screens/announcement_resources/MapNearbyClinics";
 import ReportStatus from "./screens/ReportManagement/ReportStatus";
-<<<<<<< HEAD
 import MyReportsScreen from "./screens/ReportManagement/MyReportsScreen";
 import ReportDetailScreen from "./screens/ReportManagement/ReportDetailScreen";
-import NotFound from "./screens/PetVaccinationManagement/NotFound";
-import AnnouncementScreen from "./screens/CampaignManagement/AnnouncementScreen";
-=======
 import AnnouncementScreen from "./screens/announcement_resources/announcement/announcementScreen";
 import AnnouncementDetailScreen from "./screens/announcement_resources/announcement/announcementDetailScreen";
->>>>>>> 733077ab88905bd840cdb76d1034ae691aa16a7f
 import RegisterPet from "./components/PetVaccinationManagement/RegisterPet";
 import PetProfile from "./components/PetVaccinationManagement/PetProfile";
 import NotFound from "./screens/PetVaccinationManagement/NotFound";
@@ -121,12 +116,8 @@ export default function App() {
               component={LocationPickerScreen}
             />
             <Stack.Screen name="ReportStatus" component={ReportStatus} />
-<<<<<<< HEAD
             <Stack.Screen name="MyReports" component={MyReportsScreen} />
             <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
-            <Stack.Screen name="EventsScreen" component={EventsScreen} />
-=======
->>>>>>> 733077ab88905bd840cdb76d1034ae691aa16a7f
             <Stack.Screen name="Announcement" component={AnnouncementScreen} />
             <Stack.Screen
               name="AnnouncementDetail"

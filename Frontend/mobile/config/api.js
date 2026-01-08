@@ -19,8 +19,11 @@
 // For iOS Simulator: Uncomment line below
 // const API_BASE_URL = "http://localhost:3000";
 
-// For physical device testing: Uncomment and update IP as needed
-const API_BASE_URL = "http://192.168.1.44:3000"; // Replace with YOUR IP
+import { getApiBaseUrl } from "./api-helper";
+
+// Keep this legacy config in sync with api-config.js
+// api-helper returns a URL that ends with `/api`; this file expects the host-only base.
+const API_BASE_URL = getApiBaseUrl().replace(/\/api\/?$/, "");
 
 const API_CONFIG = {
   baseURL: API_BASE_URL,
