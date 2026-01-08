@@ -12,8 +12,6 @@ import QRScreen from "./screens/Main/QRScreen";
 import NotificationsScreen from "./screens/Main/NotificationScreen";
 import ProfileScreen from "./screens/Main/ProfileScreen";
 import StrayListScreen from "./screens/StrayAnimalManagement/StrayListScreen";
-import EventRegistration from "./screens/CampaignManagement/EventRegistration";
-import EventsScreen from "./screens/CampaignManagement/EventsScreen";
 import AdoptionScreen from "./screens/StrayAnimalManagement/AdoptionScreen";
 import AnimalProfileScreen from "./screens/StrayAnimalManagement/AdoptionProfileScreen";
 import AdoptionFormScreen from "./screens/StrayAnimalManagement/AdoptionFormScreen";
@@ -24,15 +22,15 @@ import VetHomeScreen from "./screens/StrayAnimalManagement/AnimalLogger/VetHomeS
 import PetVaccinationScreen from "./screens/PetVaccinationManagement/PetVaccinationScreen";
 import SuccessPage from "./screens/PetVaccinationManagement/SuccessPage";
 import AboutUsScreen from "./screens/Main/AboutUsScreen";
-import ReadingMaterialListScreen from "./screens/CampaignManagement/ReadingMaterialListScreen";
-import MapNearbyClinics from "./screens/CampaignManagement/MapNearbyClinics";
-import ScreenOption from "./screens/CampaignManagement/ScreenOption";
+import ReadingMaterialsScreen from "./screens/announcement_resources/reading_materials/readingMaterialsScreen";
+import ReadingMaterialDetailScreen from "./screens/announcement_resources/reading_materials/readingMaterialDetailScreen";
+import MapNearbyClinics from "./screens/announcement_resources/MapNearbyClinics";
 import ReportStatus from "./screens/ReportManagement/ReportStatus";
-import NotFound from "./screens/PetVaccinationManagement/NotFound";
-import AnnouncementScreen from "./screens/CampaignManagement/AnnouncementScreen";
+import AnnouncementScreen from "./screens/announcement_resources/announcement/announcementScreen";
+import AnnouncementDetailScreen from "./screens/announcement_resources/announcement/announcementDetailScreen";
 import RegisterPet from "./components/PetVaccinationManagement/RegisterPet";
 import PetProfile from "./components/PetVaccinationManagement/PetProfile";
-
+import NotFound from "./screens/PetVaccinationManagement/NotFound";
 import { Asset } from "expo-asset";
 import * as SplashScreen from "expo-splash-screen";
 import { View } from "react-native";
@@ -103,10 +101,6 @@ export default function App() {
             />
             <Stack.Screen name="VetHome" component={VetHomeScreen} />
             <Stack.Screen
-              name="EventRegistration"
-              component={EventRegistration}
-            />
-            <Stack.Screen
               name="ReportIncident"
               component={ReportIncidentScreen}
             />
@@ -115,17 +109,23 @@ export default function App() {
               component={LocationPickerScreen}
             />
             <Stack.Screen name="ReportStatus" component={ReportStatus} />
-            <Stack.Screen name="EventsScreen" component={EventsScreen} />
             <Stack.Screen name="Announcement" component={AnnouncementScreen} />
             <Stack.Screen
-              name="ReadingMaterial"
-              component={ReadingMaterialListScreen}
+              name="AnnouncementDetail"
+              component={AnnouncementDetailScreen}
+            />
+            <Stack.Screen
+              name="ReadingMaterials"
+              component={ReadingMaterialsScreen}
+            />
+            <Stack.Screen
+              name="ReadingMaterialDetail"
+              component={ReadingMaterialDetailScreen}
             />
             <Stack.Screen
               name="MapNearbyClinics"
               component={MapNearbyClinics}
             />
-            <Stack.Screen name="ScreenOption" component={ScreenOption} />
             <Stack.Screen
               name="PetVaccination"
               component={PetVaccinationScreen}
@@ -231,6 +231,14 @@ function MainStackScreen() {
       <Stack.Screen
         name="AboutUs"
         component={AboutUsScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="AnnouncementDetail"
+        component={AnnouncementDetailScreen}
         options={{
           animation: "slide_from_bottom",
           animationDuration: 300,

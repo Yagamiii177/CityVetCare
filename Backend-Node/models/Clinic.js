@@ -14,6 +14,16 @@ const formatDate = (value) => {
   }
 };
 
+const parseJSON = (value) => {
+  if (!value) return null;
+  try {
+    return typeof value === "string" ? JSON.parse(value) : value;
+  } catch (error) {
+    logger.error("Failed to parse JSON", error);
+    return null;
+  }
+};
+
 const mapRow = (row) => ({
   id: row.clinic_id,
   name: row.clinic_name,
@@ -25,8 +35,8 @@ const mapRow = (row) => ({
   barangay: row.barangay,
   latitude: row.latitude ? parseFloat(row.latitude) : null,
   longitude: row.longitude ? parseFloat(row.longitude) : null,
-  services: row.services ? JSON.parse(row.services) : [],
-  operatingHours: row.operating_hours ? JSON.parse(row.operating_hours) : null,
+  services: parseJSON(row.services) || [],
+  workingHours: parseJSON(row.operating_hours),
   status: row.status,
   permitExpiryDate: formatDate(row.permit_expiry_date),
   accreditationExpiryDate: formatDate(row.accreditation_expiry_date),

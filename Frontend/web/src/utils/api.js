@@ -38,6 +38,17 @@ api.interceptors.request.use(
     if (isDevelopment) {
       console.log("📤 API Request:", config.method.toUpperCase(), config.url);
     }
+
+    // If sending FormData, remove Content-Type header to let axios set it automatically with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+      if (isDevelopment) {
+        console.log(
+          "📦 FormData detected - Content-Type will be auto-set by axios"
+        );
+      }
+    }
+
     const token = localStorage.getItem("auth_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

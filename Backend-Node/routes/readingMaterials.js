@@ -76,8 +76,8 @@ router.get("/archive-history", async (req, res) => {
   }
 });
 
-// GET single reading material by ID
-router.get("/:id", async (req, res) => {
+// PUT update reading material
+router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const [materials] = await pool.query(
@@ -368,39 +368,6 @@ router.delete("/:id", async (req, res) => {
   } catch (error) {
     console.error("Error deleting reading material:", error);
     res.status(500).json({ error: "Failed to delete reading material" });
-  }
-});
-
-// GET single reading material by ID (MUST be after all specific routes)
-router.get("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const [materials] = await pool.query(
-      "SELECT * FROM reading_materials WHERE id = ?",
-      [id]
-    );
-
-    if (materials.length === 0) {
-      return res.status(404).json({ error: "Reading material not found" });
-    }
-
-    const material = materials[0];
-    const parsedMaterial = {
-      ...material,
-      tags:
-        typeof material.tags === "string"
-          ? JSON.parse(material.tags)
-          : material.tags,
-      images:
-        typeof material.images === "string"
-          ? JSON.parse(material.images)
-          : material.images,
-    };
-
-    res.json(parsedMaterial);
-  } catch (error) {
-    console.error("Error fetching reading material:", error);
-    res.status(500).json({ error: "Failed to fetch reading material" });
   }
 });
 router.post("/:id/archive", async (req, res) => {

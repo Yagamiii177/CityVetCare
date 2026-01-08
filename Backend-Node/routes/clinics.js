@@ -84,6 +84,9 @@ router.get("/locations", async (req, res) => {
       phone: row.contact_number,
       veterinarian: row.head_veterinarian,
       services: row.services ? JSON.parse(row.services) : [],
+      workingHours: row.operating_hours
+        ? JSON.parse(row.operating_hours)
+        : null,
     }));
 
     res.json(markers);
@@ -155,6 +158,7 @@ router.post("/", async (req, res) => {
       latitude,
       longitude,
       services = [],
+      workingHours,
       status,
     } = req.body;
 
@@ -182,6 +186,7 @@ router.post("/", async (req, res) => {
       latitude,
       longitude,
       services,
+      operatingHours: workingHours,
       status: normalizeStatus(status),
     });
 
@@ -206,6 +211,7 @@ router.put("/:id", async (req, res) => {
       latitude,
       longitude,
       services,
+      workingHours,
       status,
     } = req.body;
 
@@ -220,6 +226,7 @@ router.put("/:id", async (req, res) => {
       latitude,
       longitude,
       services,
+      operatingHours: workingHours,
       status: normalizeStatus(status),
     });
 
