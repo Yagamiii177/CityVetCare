@@ -66,6 +66,61 @@ const RegisterStrayAnimalScreen = () => {
   const [registrationDate] = useState(new Date());
   const [isLocationPickerVisible, setIsLocationPickerVisible] = useState(false);
 
+  // Pet registration (pet table)
+  const [isPetRegisterVisible, setIsPetRegisterVisible] = useState(false);
+  const [isSubmittingPet, setIsSubmittingPet] = useState(false);
+  const [petPhotoUri, setPetPhotoUri] = useState(null);
+  const [petFormData, setPetFormData] = useState({
+    ownerId: "",
+    rfid: "",
+    name: "",
+    species: "Dog",
+    breed: "",
+    age: "",
+    sex: "",
+    color: "",
+    markings: "",
+    status: "active",
+  });
+
+  const breedOptions = {
+    Dog: [
+      "Aspin",
+      "Beagle",
+      "Boxer",
+      "Bulldog",
+      "Chihuahua",
+      "Dachshund",
+      "German Shepherd",
+      "Golden Retriever",
+      "Great Dane",
+      "Labrador Retriever",
+      "Mixed Breed",
+      "Other",
+      "Poodle",
+      "Rottweiler",
+      "Shih Tzu",
+      "Siberian Husky",
+      "Yorkshire Terrier",
+    ],
+    Cat: [
+      "Abyssinian",
+      "Bengal",
+      "British Shorthair",
+      "Domestic Longhair",
+      "Domestic Shorthair",
+      "Maine Coon",
+      "Mixed Breed",
+      "Other",
+      "Persian",
+      "Ragdoll",
+      "Russian Blue",
+      "Scottish Fold",
+      "Siamese",
+      "Sphynx",
+    ],
+  };
+
   useEffect(() => {
     (async () => {
       const { status } =
@@ -198,6 +253,175 @@ const RegisterStrayAnimalScreen = () => {
     setConfirmSubmit(true);
   };
 
+  const handlePetChange = (key, value) => {
+    setPetFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const pickPetPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.6,
+      });
+      if (!result.canceled) {
+        setPetPhotoUri(result.assets?.[0]?.uri ?? null);
+      }
+    } catch (err) {
+      console.warn("Pet photo picker failed", err);
+    }
+  };
+
+  const takePetPhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission required",
+        "We need camera access to take photos"
+      );
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.6,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
+      if (!result.canceled) {
+        setPetPhotoUri(result.assets?.[0]?.uri ?? null);
+      }
+    } catch (err) {
+      console.warn("Pet camera capture failed", err);
+    }
+  };
+
+  const convertUriToDataUrlForPet = async (uri) => {
+    if (!uri || typeof uri !== "string" || uri.trim() === "") return null;
+    try {
+      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      const sizeMb = info?.size ? info.size / (1024 * 1024) : 0;
+      if (sizeMb > 3) {
+        Alert.alert("Image Too Large", "Please choose an image under 3MB.");
+        return null;
+      }
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: "base64",
+      });
+      const ext = uri.split(".").pop()?.toLowerCase();
+      const mime = ext === "png" ? "image/png" : "image/jpeg";
+      return `data:${mime};base64,${base64}`;
+    } catch (err) {
+      console.warn("Failed to convert pet photo to base64", err);
+      return null;
+    }
+  };
+
+  const registerPet = async () => {
+    if (isSubmittingPet) return;
+
+    const ownerIdRaw = petFormData.ownerId?.toString().trim();
+    const ownerId = ownerIdRaw ? Number(ownerIdRaw) : NaN;
+    if (!ownerIdRaw || Number.isNaN(ownerId)) {
+      Alert.alert("Owner Required", "Please enter a valid Owner ID.");
+      return;
+    }
+
+    if (!petFormData.name || petFormData.name.toString().trim() === "") {
+      Alert.alert("Name Required", "Please enter the pet name.");
+      return;
+    }
+
+    if (!petFormData.species || petFormData.species.toString().trim() === "") {
+      Alert.alert("Species Required", "Please select a species.");
+      return;
+    }
+
+    const rfidTrimmed = petFormData.rfid
+      ? petFormData.rfid.toString().trim()
+      : "";
+    if (rfidTrimmed && !/^\d{9}$/.test(rfidTrimmed)) {
+      Alert.alert("Invalid RFID", "RFID must be exactly 9 digits.");
+      return;
+    }
+
+    if (!petPhotoUri) {
+      Alert.alert("Photo Required", "Please add a pet photo.");
+      return;
+    }
+
+    const photoDataUrl = await convertUriToDataUrlForPet(petPhotoUri);
+    if (!photoDataUrl) {
+      Alert.alert("Photo Error", "Unable to process the selected photo.");
+      return;
+    }
+
+    const ageRaw = petFormData.age?.toString().trim();
+    const ageValue = ageRaw ? Number(ageRaw) : null;
+    if (ageValue !== null && (Number.isNaN(ageValue) || ageValue < 0)) {
+      Alert.alert("Invalid Age", "Age must be a non-negative number.");
+      return;
+    }
+
+    const payload = {
+      owner_id: ownerId,
+      rfid: rfidTrimmed || null,
+      name: petFormData.name.toString().trim(),
+      species: petFormData.species.toString().trim(),
+      breed: petFormData.breed ? petFormData.breed.toString().trim() : null,
+      age: ageValue,
+      sex: petFormData.sex ? petFormData.sex.toString().trim() : null,
+      color: petFormData.color ? petFormData.color.toString().trim() : null,
+      markings: petFormData.markings
+        ? petFormData.markings.toString().trim()
+        : null,
+      photo: photoDataUrl,
+      status: petFormData.status
+        ? petFormData.status.toString().trim()
+        : "active",
+    };
+
+    setIsSubmittingPet(true);
+    try {
+      await api.pets.create(payload);
+      Alert.alert(
+        "Pet Registered",
+        "The pet has been registered successfully.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              setIsPetRegisterVisible(false);
+              setPetPhotoUri(null);
+              setPetFormData({
+                ownerId: "",
+                rfid: "",
+                name: "",
+                species: "Dog",
+                breed: "",
+                age: "",
+                sex: "",
+                color: "",
+                markings: "",
+                status: "active",
+              });
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("Error registering pet:", error);
+      Alert.alert(
+        "Registration Failed",
+        error.message || "Unable to register pet right now."
+      );
+    } finally {
+      setIsSubmittingPet(false);
+    }
+  };
+
   const confirmRegistration = async () => {
     if (!pendingPayload) return;
 
@@ -306,15 +530,24 @@ const RegisterStrayAnimalScreen = () => {
         const pet = response.pet;
         const owner = response.owner || null;
 
+        const normalizedType = (() => {
+          const raw = pet?.species
+            ? String(pet.species).trim().toLowerCase()
+            : "";
+          if (raw === "dog") return "dog";
+          if (raw === "cat") return "cat";
+          return pet?.species || "dog";
+        })();
+
         // Pre-populate form with pet data using functional update
         setFormData((prev) => ({
           ...prev,
           name: pet.name || "",
           breed: pet.breed || "",
-          type: pet.species || "dog",
+          type: normalizedType,
           sex: pet.sex || "",
           color: pet.color || "",
-          markings: pet.marking || "",
+          markings: pet.markings || pet.marking || "",
           rfidCode: rfid.trim(),
         }));
 
@@ -427,6 +660,277 @@ const RegisterStrayAnimalScreen = () => {
                 </View>
               </View>
             </View>
+          </Modal>
+
+          <Modal
+            visible={isPetRegisterVisible}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setIsPetRegisterVisible(false)}
+          >
+            <TouchableWithoutFeedback
+              onPress={() => setIsPetRegisterVisible(false)}
+            >
+              <View style={styles.petRegisterOverlay}>
+                <TouchableWithoutFeedback>
+                  <View style={styles.petRegisterCard}>
+                    <View style={styles.petRegisterHeader}>
+                      <View style={styles.buttonRow}>
+                        <Ionicons
+                          name="paw-outline"
+                          size={20}
+                          color="#FD7E14"
+                        />
+                        <Text style={styles.petRegisterTitle}>
+                          Register Pet
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setIsPetRegisterVisible(false)}
+                      >
+                        <Ionicons name="close" size={22} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView
+                      style={{ maxHeight: 520 }}
+                      contentContainerStyle={{ paddingBottom: 8 }}
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      <FormInput
+                        label="Owner ID *"
+                        value={petFormData.ownerId}
+                        onChangeText={(t) => handlePetChange("ownerId", t)}
+                        placeholder="e.g. 12"
+                        keyboardType="numeric"
+                      />
+
+                      <FormInput
+                        label="RFID (9 digits)"
+                        value={petFormData.rfid}
+                        onChangeText={(t) => handlePetChange("rfid", t)}
+                        placeholder="Optional"
+                        keyboardType="numeric"
+                      />
+
+                      <FormInput
+                        label="Name *"
+                        value={petFormData.name}
+                        onChangeText={(t) => handlePetChange("name", t)}
+                        placeholder="Pet name"
+                      />
+
+                      <View style={styles.formGroup}>
+                        <Text style={styles.label}>Species *</Text>
+                        <View style={styles.typeButtonsContainer}>
+                          <TouchableOpacity
+                            style={[
+                              styles.typeButton,
+                              petFormData.species === "Dog" &&
+                                styles.typeButtonActive,
+                            ]}
+                            onPress={() => handlePetChange("species", "Dog")}
+                          >
+                            <View style={styles.buttonRow}>
+                              <Ionicons
+                                name="paw-outline"
+                                size={24}
+                                color={
+                                  petFormData.species === "Dog"
+                                    ? "#fff"
+                                    : "#FD7E14"
+                                }
+                              />
+                              <Text
+                                style={[
+                                  styles.typeButtonText,
+                                  petFormData.species === "Dog" &&
+                                    styles.typeButtonTextActive,
+                                ]}
+                              >
+                                Dog
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.typeButton,
+                              petFormData.species === "Cat" &&
+                                styles.typeButtonActive,
+                            ]}
+                            onPress={() => handlePetChange("species", "Cat")}
+                          >
+                            <View style={styles.buttonRow}>
+                              <Ionicons
+                                name="paw-outline"
+                                size={24}
+                                color={
+                                  petFormData.species === "Cat"
+                                    ? "#fff"
+                                    : "#FD7E14"
+                                }
+                              />
+                              <Text
+                                style={[
+                                  styles.typeButtonText,
+                                  petFormData.species === "Cat" &&
+                                    styles.typeButtonTextActive,
+                                ]}
+                              >
+                                Cat
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      <FormInput
+                        label="Breed"
+                        value={petFormData.breed}
+                        onChangeText={(t) => handlePetChange("breed", t)}
+                        placeholder="Optional"
+                      />
+
+                      <FormInput
+                        label="Age"
+                        value={petFormData.age}
+                        onChangeText={(t) => handlePetChange("age", t)}
+                        placeholder="Optional"
+                        keyboardType="numeric"
+                      />
+
+                      <FormInput
+                        label="Sex"
+                        value={petFormData.sex}
+                        onChangeText={(t) => handlePetChange("sex", t)}
+                        placeholder="Optional (male/female)"
+                      />
+
+                      <FormInput
+                        label="Color"
+                        value={petFormData.color}
+                        onChangeText={(t) => handlePetChange("color", t)}
+                        placeholder="Optional"
+                      />
+
+                      <FormInput
+                        label="Markings"
+                        value={petFormData.markings}
+                        onChangeText={(t) => handlePetChange("markings", t)}
+                        placeholder="Optional"
+                      />
+
+                      <FormInput
+                        label="Status"
+                        value={petFormData.status}
+                        onChangeText={(t) => handlePetChange("status", t)}
+                        placeholder="active"
+                      />
+
+                      <View style={styles.formGroup}>
+                        <Text style={styles.label}>Photo *</Text>
+                        {petPhotoUri ? (
+                          <View style={styles.petPhotoPreviewWrap}>
+                            <Image
+                              source={{ uri: petPhotoUri }}
+                              style={styles.petPhotoPreview}
+                            />
+                            <TouchableOpacity
+                              style={styles.petPhotoRemove}
+                              onPress={() => setPetPhotoUri(null)}
+                            >
+                              <Ionicons
+                                name="trash-outline"
+                                size={18}
+                                color="#fff"
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <View style={styles.petPhotoButtonsRow}>
+                            <TouchableOpacity
+                              style={styles.petPhotoButton}
+                              onPress={pickPetPhoto}
+                            >
+                              <View style={styles.buttonRow}>
+                                <Ionicons
+                                  name="image-outline"
+                                  size={18}
+                                  color="#FD7E14"
+                                />
+                                <Text style={styles.petPhotoButtonText}>
+                                  Choose Photo
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.petPhotoButton}
+                              onPress={takePetPhoto}
+                            >
+                              <View style={styles.buttonRow}>
+                                <Ionicons
+                                  name="camera-outline"
+                                  size={18}
+                                  color="#FD7E14"
+                                />
+                                <Text style={styles.petPhotoButtonText}>
+                                  Take Photo
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                    </ScrollView>
+
+                    <View style={styles.petRegisterFooter}>
+                      <TouchableOpacity
+                        style={[
+                          styles.modalButtonBig,
+                          styles.modalButtonSecondary,
+                        ]}
+                        onPress={() => setIsPetRegisterVisible(false)}
+                        disabled={isSubmittingPet}
+                      >
+                        <View style={styles.buttonRow}>
+                          <Ionicons
+                            name="close-circle-outline"
+                            size={22}
+                            color="#FD7E14"
+                          />
+                          <Text style={styles.modalButtonBigTextSecondary}>
+                            Cancel
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.modalButtonBig,
+                          styles.modalButtonPrimary,
+                        ]}
+                        onPress={registerPet}
+                        disabled={isSubmittingPet}
+                      >
+                        {isSubmittingPet ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <View style={styles.buttonRow}>
+                            <Ionicons
+                              name="checkmark-circle-outline"
+                              size={22}
+                              color="#fff"
+                            />
+                            <Text style={styles.modalButtonBigText}>
+                              Register
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableWithoutFeedback>
+              </View>
+            </TouchableWithoutFeedback>
           </Modal>
 
           <Modal
@@ -599,40 +1103,8 @@ const RegisterStrayAnimalScreen = () => {
                   options={[
                     { label: "Select breed", value: "" },
                     ...(formData.type === "cat"
-                      ? [
-                          "Abyssinian",
-                          "Bengal",
-                          "British Shorthair",
-                          "Domestic Longhair",
-                          "Domestic Shorthair",
-                          "Maine Coon",
-                          "Mixed Breed",
-                          "Other",
-                          "Persian",
-                          "Ragdoll",
-                          "Russian Blue",
-                          "Scottish Fold",
-                          "Siamese",
-                          "Sphynx",
-                        ]
-                      : [
-                          "Beagle",
-                          "Boxer",
-                          "Bulldog",
-                          "Chihuahua",
-                          "Dachshund",
-                          "German Shepherd",
-                          "Golden Retriever",
-                          "Great Dane",
-                          "Labrador Retriever",
-                          "Mixed Breed",
-                          "Other",
-                          "Poodle",
-                          "Rottweiler",
-                          "Shih Tzu",
-                          "Siberian Husky",
-                          "Yorkshire Terrier",
-                        ]
+                      ? breedOptions.Cat
+                      : breedOptions.Dog
                     ).map((b) => ({ label: b, value: b })),
                   ]}
                   onSelect={(val) => handleChange("breed", val)}
@@ -1047,6 +1519,75 @@ const styles = StyleSheet.create({
     width: "95%",
     backgroundColor: "#FD7E14",
     alignSelf: "center",
+
+    petRegisterOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      padding: 16,
+    },
+    petRegisterCard: {
+      backgroundColor: "#fff",
+      borderRadius: 16,
+      padding: 16,
+    },
+    petRegisterHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: "#eee",
+      marginBottom: 12,
+    },
+    petRegisterTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: "#333",
+      marginLeft: 8,
+    },
+    petRegisterFooter: {
+      marginTop: 10,
+      gap: 10,
+    },
+    petPhotoButtonsRow: {
+      flexDirection: "row",
+      gap: 10,
+    },
+    petPhotoButton: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: "#FD7E14",
+      backgroundColor: "#FFF5EC",
+      justifyContent: "center",
+    },
+    petPhotoButtonText: {
+      color: "#FD7E14",
+      fontWeight: "700",
+      marginLeft: 8,
+    },
+    petPhotoPreviewWrap: {
+      position: "relative",
+      borderRadius: 12,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: "#eee",
+    },
+    petPhotoPreview: {
+      width: "100%",
+      height: 180,
+    },
+    petPhotoRemove: {
+      position: "absolute",
+      top: 10,
+      right: 10,
+      backgroundColor: "rgba(253,126,20,0.9)",
+      borderRadius: 16,
+      padding: 8,
+    },
     marginTop: 15,
   },
   petOwnerCard: {

@@ -62,6 +62,10 @@ cd /d "%~dp0Backend-Node"
 node reset-database.js
 
 echo.
+echo Applying database migrations...
+call npm run migrate
+
+echo.
 pause
 goto MENU
 echo Invalid choice. Please try again.

@@ -11,9 +11,13 @@ import {
   ActivityIndicator,
   Image,
   ScrollView,
+  Modal,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Calendar } from "react-native-calendars";
 import { useAuth } from "../../contexts/AuthContext";
+import LocationPickerModal from "../../components/LocationPickerModal";
 
 const RegisterScreen = ({ navigation }) => {
   const [formData, setFormData] = useState({
@@ -23,16 +27,53 @@ const RegisterScreen = ({ navigation }) => {
     email: "",
     full_name: "",
     contact_number: "",
+    birthdate: "",
     address: "",
+    home_latitude: null,
+    home_longitude: null,
   });
   const [loading, setLoading] = useState(false);
   const [securePassword, setSecurePassword] = useState(true);
   const [secureConfirm, setSecureConfirm] = useState(true);
+  const [showBirthdatePicker, setShowBirthdatePicker] = useState(false);
+  const [birthdateDraft, setBirthdateDraft] = useState("2000-01-01");
+  const [isLocationPickerVisible, setIsLocationPickerVisible] = useState(false);
 
   const { register } = useAuth();
 
   const updateField = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const formatBirthdate = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString();
+  };
+
+  const openBirthdatePicker = () => {
+    const initial =
+      typeof formData.birthdate === "string" && formData.birthdate
+        ? formData.birthdate
+        : "2000-01-01";
+    setBirthdateDraft(initial);
+    setShowBirthdatePicker(true);
+  };
+
+  const closeBirthdatePicker = () => {
+    setShowBirthdatePicker(false);
+  };
+
+  const applyBirthdateDraft = () => {
+    updateField("birthdate", birthdateDraft);
+    closeBirthdatePicker();
+  };
+
+  const handleLocationSelect = (locationData) => {
+    updateField("address", locationData?.address || "");
+    updateField("home_latitude", locationData?.latitude ?? null);
+    updateField("home_longitude", locationData?.longitude ?? null);
   };
 
   const validateForm = () => {
@@ -43,6 +84,8 @@ const RegisterScreen = ({ navigation }) => {
       email,
       full_name,
       contact_number,
+      birthdate,
+      address,
     } = formData;
 
     if (!username.trim()) {
@@ -73,6 +116,16 @@ const RegisterScreen = ({ navigation }) => {
 
     if (!contact_number.trim()) {
       Alert.alert("Validation Error", "Contact number is required");
+      return false;
+    }
+
+    if (!birthdate) {
+      Alert.alert("Validation Error", "Birthdate is required");
+      return false;
+    }
+
+    if (!address.trim()) {
+      Alert.alert("Validation Error", "Home address is required");
       return false;
     }
 
@@ -117,6 +170,9 @@ const RegisterScreen = ({ navigation }) => {
         confirmPassword: confirmPassword,
         contactNumber: registrationData.contact_number,
         address: registrationData.address,
+        birthdate: registrationData.birthdate,
+        homeLatitude: registrationData.home_latitude,
+        homeLongitude: registrationData.home_longitude,
       };
 
       console.log("Attempting registration with:", requestData);
@@ -174,7 +230,7 @@ const RegisterScreen = ({ navigation }) => {
             style={styles.backButton}
             onPress={handleBackToLogin}
           >
-            <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+            <Ionicons name="chevron-back-outline" size={28} color="#333" />
           </TouchableOpacity>
 
           {/* Logo */}
@@ -185,6 +241,7 @@ const RegisterScreen = ({ navigation }) => {
           />
 
           <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Please enter your details below</Text>
 
           {/* Username Input */}
           <View style={styles.inputContainer}>
@@ -261,7 +318,90 @@ const RegisterScreen = ({ navigation }) => {
             />
           </View>
 
-          {/* Address Input (Optional) */}
+          {/* Birthdate Picker */}
+          <TouchableOpacity
+            style={styles.inputContainer}
+            onPress={openBirthdatePicker}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={20}
+              color="#666"
+              style={styles.inputIcon}
+            />
+            <View style={styles.pickerTextContainer}>
+              <Text
+                style={
+                  formData.birthdate
+                    ? styles.pickerText
+                    : styles.placeholderText
+                }
+                numberOfLines={1}
+              >
+                {formData.birthdate
+                  ? formatBirthdate(formData.birthdate)
+                  : "Birthdate"}
+              </Text>
+            </View>
+            <Ionicons name="chevron-down" size={18} color="#666" />
+          </TouchableOpacity>
+
+          {/* Birthdate Picker (Calendar Modal) */}
+          <Modal
+            visible={showBirthdatePicker}
+            transparent
+            animationType="fade"
+            onRequestClose={closeBirthdatePicker}
+          >
+            <Pressable
+              style={styles.birthdateModalOverlay}
+              onPress={closeBirthdatePicker}
+            >
+              <Pressable style={styles.birthdateModalCard} onPress={() => {}}>
+                <View style={styles.birthdateModalHeader}>
+                  <TouchableOpacity
+                    onPress={closeBirthdatePicker}
+                    style={styles.birthdateModalHeaderButton}
+                  >
+                    <Text style={styles.birthdateModalHeaderTextSecondary}>
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={applyBirthdateDraft}
+                    style={styles.birthdateModalHeaderButton}
+                  >
+                    <Text style={styles.birthdateModalHeaderTextPrimary}>
+                      Done
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Calendar
+                  current={birthdateDraft}
+                  markedDates={{
+                    [birthdateDraft]: {
+                      selected: true,
+                      selectedColor: "#FA8630",
+                    },
+                  }}
+                  maxDate={new Date().toISOString().slice(0, 10)}
+                  onDayPress={(day) => {
+                    if (day?.dateString) setBirthdateDraft(day.dateString);
+                  }}
+                  theme={{
+                    todayTextColor: "#FA8630",
+                    arrowColor: "#FA8630",
+                    selectedDayBackgroundColor: "#FA8630",
+                    selectedDayTextColor: "#ffffff",
+                  }}
+                />
+              </Pressable>
+            </Pressable>
+          </Modal>
+
+          {/* Home Address */}
           <View style={styles.inputContainer}>
             <Ionicons
               name="location-outline"
@@ -271,12 +411,20 @@ const RegisterScreen = ({ navigation }) => {
             />
             <TextInput
               style={styles.input}
-              placeholder="Address (Optional)"
+              placeholder="Home Address"
               placeholderTextColor="#999"
               value={formData.address}
               onChangeText={(value) => updateField("address", value)}
               autoCapitalize="words"
             />
+
+            <TouchableOpacity
+              onPress={() => setIsLocationPickerVisible(true)}
+              style={styles.mapButton}
+            >
+              <Ionicons name="location" size={18} color="#FFF" />
+              <Text style={styles.mapButtonText}>Map</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Password Input */}
@@ -360,6 +508,12 @@ const RegisterScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      <LocationPickerModal
+        visible={isLocationPickerVisible}
+        onClose={() => setIsLocationPickerVisible(false)}
+        onSelectLocation={handleLocationSelect}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -380,19 +534,9 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: "absolute",
-    top: 40,
+    top: Platform.OS === "ios" ? 55 : 40,
     left: 20,
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    padding: 4,
     zIndex: 10,
   },
   logo: {
@@ -412,7 +556,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#666",
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 20,
   },
   inputContainer: {
     flexDirection: "row",
@@ -437,6 +581,35 @@ const styles = StyleSheet.create({
     height: 50,
     color: "#1a1a1a",
     fontSize: 16,
+  },
+  pickerTextContainer: {
+    flex: 1,
+    height: 50,
+    justifyContent: "center",
+  },
+  pickerText: {
+    color: "#1a1a1a",
+    fontSize: 16,
+  },
+  placeholderText: {
+    color: "#999",
+    fontSize: 16,
+  },
+  mapButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FA8630",
+    paddingHorizontal: 10,
+    height: 36,
+    borderRadius: 10,
+    marginLeft: 10,
+  },
+  mapButtonText: {
+    color: "#FFF",
+    fontWeight: "bold",
+    marginLeft: 6,
+    fontSize: 12,
   },
   eyeIcon: {
     padding: 10,
@@ -475,6 +648,41 @@ const styles = StyleSheet.create({
     color: "#FA8630",
     fontSize: 15,
     fontWeight: "bold",
+  },
+
+  birthdateModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+    padding: 12,
+  },
+  birthdateModalCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  birthdateModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  birthdateModalHeaderButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  birthdateModalHeaderTextPrimary: {
+    color: "#FA8630",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  birthdateModalHeaderTextSecondary: {
+    color: "#666",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
 

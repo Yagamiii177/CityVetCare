@@ -22,6 +22,11 @@ const RedemptionRequestProfile = ({
   const [stray, setStray] = useState(null);
   const [captureCount, setCaptureCount] = useState(null);
   const [proofImages, setProofImages] = useState([]);
+
+  const openImageFullSize = (url) => {
+    if (!url || typeof url !== "string") return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
   const [decisionType, setDecisionType] = useState(null); // 'approve' | 'reject'
   const [decisionNotes, setDecisionNotes] = useState("");
   const [claimModalOpen, setClaimModalOpen] = useState(false);
@@ -494,6 +499,7 @@ const RedemptionRequestProfile = ({
                       src={image}
                       alt={`Proof ${index + 1}`}
                       className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => openImageFullSize(image)}
                       onError={(e) => {
                         e.currentTarget.style.display = "none";
                         const fb =

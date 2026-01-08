@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/StrayAnimalManagement/Drawer";
-import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  MagnifyingGlassIcon,
+  XMarkIcon,
+  IdentificationIcon,
+  TagIcon,
+  CalendarDaysIcon,
+  MapPinIcon,
+  InformationCircleIcon,
+  UserCircleIcon,
+  PhoneIcon,
+  EnvelopeIcon,
+  HomeModernIcon,
+} from "@heroicons/react/24/outline";
 import { apiService } from "../../utils/api";
 
 const EuthanizedListPage = () => {
@@ -54,7 +66,7 @@ const EuthanizedListPage = () => {
         );
         const ownerData = res?.data?.owner || res?.owner || null;
         setOwnerInfo(ownerData);
-      } catch (_e) {
+      } catch {
         setOwnerInfo(null);
       } finally {
         setLoadingOwner(false);
@@ -329,102 +341,199 @@ const EuthanizedListPage = () => {
       {/* Detail Modal (optional - you can expand this) */}
       {selectedAnimal && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedAnimal(null)}
         >
           <div
-            className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-bold mb-4">
-              Euthanized Animal Details
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-500">ID</p>
-                <p className="font-medium">#{selectedAnimal.id}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">RFID</p>
-                <p className="font-medium">{selectedAnimal.rfid || "N/A"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Name</p>
-                <p className="font-medium">{selectedAnimal.name || "N/A"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Species</p>
-                <p className="font-medium">{selectedAnimal.species}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Breed</p>
-                <p className="font-medium">{selectedAnimal.breed || "N/A"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Had Owner</p>
-                <p className="font-medium">
-                  {selectedAnimal.hadOwner ? "Yes" : "No"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Date Captured</p>
-                <p className="font-medium">
-                  {formatDate(selectedAnimal.dateCaptured)}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Date Euthanized</p>
-                <p className="font-medium">
-                  {formatDate(selectedAnimal.dateEuthanized)}
-                </p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-sm text-gray-500">Location Captured</p>
-                <p className="font-medium">{selectedAnimal.locationCaptured}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-sm text-gray-500">Reason</p>
-                <p className="font-medium">{selectedAnimal.reason || "N/A"}</p>
-              </div>
-              {loadingOwner && (
-                <div className="col-span-2 py-2 text-center text-sm text-gray-500">
-                  Loading owner information...
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-[#FA8630] to-[#E87928] p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="flex flex-col gap-2 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-3xl font-bold text-white">
+                      Euthanized Animal
+                    </h2>
+                    <span className="inline-flex items-center rounded-full bg-white/20 text-white text-xs font-semibold px-3 py-1 backdrop-blur-sm border border-white/30">
+                      ID #{selectedAnimal.id}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-red-100 text-red-700 text-xs font-semibold px-3 py-1">
+                      Euthanized
+                    </span>
+                  </div>
+                  <p className="text-sm text-white/85 flex items-center gap-1">
+                    📍{" "}
+                    {selectedAnimal.locationCaptured || "Location unavailable"}
+                  </p>
                 </div>
-              )}
-              {ownerInfo && (
-                <>
-                  <div className="col-span-2 pt-4 border-t border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
+
+                <button
+                  onClick={() => setSelectedAnimal(null)}
+                  className="h-10 w-10 flex items-center justify-center rounded-lg bg-white/20 backdrop-blur-sm border border-white/40 text-white hover:bg-white/30 transition-all hover:scale-105"
+                  aria-label="Close"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="overflow-y-auto flex-1">
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <IdentificationIcon className="h-5 w-5 text-[#FA8630]" />
+                      Animal Details
+                    </h3>
+
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-500">RFID</p>
+                          <p className="font-medium font-mono">
+                            {selectedAnimal.rfid || "N/A"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Had Owner</p>
+                          <p className="font-medium">
+                            {selectedAnimal.hadOwner ? "Yes" : "No"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Name</p>
+                          <p className="font-medium">
+                            {selectedAnimal.name || "N/A"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Species</p>
+                          <p className="font-medium">
+                            {selectedAnimal.species}
+                          </p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-500">Breed</p>
+                          <p className="font-medium">
+                            {selectedAnimal.breed || "N/A"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <CalendarDaysIcon className="h-5 w-5 text-[#FA8630]" />
+                      Dates & Location
+                    </h3>
+
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-500 flex items-center gap-1">
+                            <CalendarDaysIcon className="h-4 w-4 text-gray-400" />
+                            Date Captured
+                          </p>
+                          <p className="font-medium">
+                            {formatDate(selectedAnimal.dateCaptured)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500 flex items-center gap-1">
+                            <CalendarDaysIcon className="h-4 w-4 text-gray-400" />
+                            Date Euthanized
+                          </p>
+                          <p className="font-medium">
+                            {formatDate(selectedAnimal.dateEuthanized)}
+                          </p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-500 flex items-center gap-1">
+                            <MapPinIcon className="h-4 w-4 text-gray-400" />
+                            Location Captured
+                          </p>
+                          <p className="font-medium">
+                            {selectedAnimal.locationCaptured || "-"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <InformationCircleIcon className="h-5 w-5 text-[#FA8630]" />
+                    Reason
+                  </h3>
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                    {selectedAnimal.reason || "N/A"}
+                  </div>
+                </div>
+
+                {loadingOwner && (
+                  <div className="py-2 text-center text-sm text-gray-500">
+                    Loading owner information...
+                  </div>
+                )}
+
+                {ownerInfo && (
+                  <div className="pt-2 border-t border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <UserCircleIcon className="h-5 w-5 text-[#FA8630]" />
                       Registered Owner
                     </h3>
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-500">Owner Name</p>
+                          <p className="font-medium">
+                            {ownerInfo.full_name || "N/A"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500 flex items-center gap-1">
+                            <PhoneIcon className="h-4 w-4 text-gray-400" />
+                            Contact Number
+                          </p>
+                          <p className="font-medium">
+                            {ownerInfo.contact_number || "N/A"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500 flex items-center gap-1">
+                            <EnvelopeIcon className="h-4 w-4 text-gray-400" />
+                            Email
+                          </p>
+                          <p className="font-medium">
+                            {ownerInfo.email || "N/A"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500 flex items-center gap-1">
+                            <HomeModernIcon className="h-4 w-4 text-gray-400" />
+                            Address
+                          </p>
+                          <p className="font-medium">
+                            {ownerInfo.address || "N/A"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Owner Name</p>
-                    <p className="font-medium">
-                      {ownerInfo.full_name || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Contact Number</p>
-                    <p className="font-medium">
-                      {ownerInfo.contact_number || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Email</p>
-                    <p className="font-medium">{ownerInfo.email || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Address</p>
-                    <p className="font-medium">{ownerInfo.address || "N/A"}</p>
-                  </div>
-                </>
-              )}
+                )}
+              </div>
             </div>
-            <div className="mt-6 flex justify-end">
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-gray-50 border-t flex justify-end">
               <button
                 onClick={() => setSelectedAnimal(null)}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                className="px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-100"
               >
                 Close
               </button>

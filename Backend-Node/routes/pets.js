@@ -100,4 +100,123 @@ router.get("/rfid/:rfid", authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/pets
+ * Register a pet (matches `pet` table)
+ * Body: { owner_id, rfid?, name, species, breed?, age?, sex?, color?, markings?, photo, status? }
+ */
+router.post("/", authenticateToken, async (req, res) => {
+  try {
+    const {
+      owner_id,
+      rfid,
+      name,
+      species,
+      breed,
+      age,
+      sex,
+      color,
+      markings,
+      photo,
+      status,
+    } = req.body || {};
+
+    if (!owner_id || Number.isNaN(Number(owner_id))) {
+      return res.status(400).json({
+        success: false,
+        message: "owner_id is required and must be a number.",
+      });
+    }
+
+    if (!name || String(name).trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "name is required.",
+      });
+    }
+
+    if (!species || String(species).trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "species is required.",
+      });
+    }
+
+    if (rfid && !/^\d{9}$/.test(String(rfid).trim())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid RFID format. Must be exactly 9 digits.",
+      });
+    }
+
+    if (!photo || String(photo).trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "photo is required.",
+      });
+    }
+
+    const ageValue =
+      age === null || age === undefined || String(age).trim?.() === ""
+        ? null
+        : Number(age);
+
+    if (ageValue !== null && (Number.isNaN(ageValue) || ageValue < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "age must be a non-negative number.",
+      });
+    }
+
+    const insertQuery = `
+      INSERT INTO pet
+        (owner_id, rfid, name, species, breed, age, sex, color, markings, photo, status)
+      VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const connection = await pool.getConnection();
+    const [result] = await connection.execute(insertQuery, [
+      Number(owner_id),
+      rfid ? String(rfid).trim() : null,
+      String(name).trim(),
+      String(species).trim(),
+      breed ? String(breed).trim() : null,
+      ageValue,
+      sex ? String(sex).trim() : null,
+      color ? String(color).trim() : null,
+      markings ? String(markings).trim() : null,
+      String(photo).trim(),
+      status ? String(status).trim() : "active",
+    ]);
+    connection.release();
+
+    return res.status(201).json({
+      success: true,
+      message: "Pet registered successfully.",
+      pet: {
+        pet_id: result.insertId,
+        owner_id: Number(owner_id),
+        rfid: rfid ? String(rfid).trim() : null,
+        name: String(name).trim(),
+        species: String(species).trim(),
+        breed: breed ? String(breed).trim() : null,
+        age: ageValue,
+        sex: sex ? String(sex).trim() : null,
+        color: color ? String(color).trim() : null,
+        markings: markings ? String(markings).trim() : null,
+        photo: String(photo).trim(),
+        status: status ? String(status).trim() : "active",
+      },
+    });
+  } catch (error) {
+    console.error("Error registering pet:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error registering pet",
+      error: error.message,
+    });
+  }
+});
+
 export default router;

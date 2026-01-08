@@ -154,7 +154,9 @@ const Dashboard = () => {
 
   const capturedCount = Number(metrics?.statusCounts?.captured) || 0;
   const adoptionListCount = Number(metrics?.statusCounts?.adoption) || 0;
-  const adoptedCount = Number(metrics?.statusCounts?.adopted) || 0;
+  const adoptedCount =
+    (Number(metrics?.statusCounts?.adopted) || 0) +
+    (Number(metrics?.statusCounts?.claimed) || 0);
   const pendingAdoptionRequests =
     Number(metrics?.adoptionRequestCounts?.pending) || 0;
   const pendingRedemptionRequests =

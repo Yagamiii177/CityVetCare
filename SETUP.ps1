@@ -48,6 +48,12 @@ try {
     Write-Host "✓ Database created successfully" -ForegroundColor Green
     Write-Host ""
 
+    # Apply migrations (safe to rerun)
+    Write-Host "Applying database migrations..." -ForegroundColor Yellow
+    npm run migrate
+    Write-Host "✓ Migrations applied" -ForegroundColor Green
+    Write-Host ""
+
     # Step 4: Verify Setup
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host "Step 4: Verifying Setup" -ForegroundColor Yellow

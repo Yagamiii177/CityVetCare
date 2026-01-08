@@ -70,6 +70,11 @@ const AdoptionProfile = ({
     [request?.applicant_details]
   );
 
+  const openImageFullSize = (url) => {
+    if (!url || typeof url !== "string") return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   useEffect(() => {
     let mounted = true;
     const loadStray = async () => {
@@ -383,7 +388,12 @@ const AdoptionProfile = ({
                     <img
                       src={getImageUrl(applicantDetails.validIdImage)}
                       alt="Valid ID"
-                      className="max-h-64 w-auto rounded-md border border-gray-200"
+                      className="max-h-64 w-auto rounded-md border border-gray-200 cursor-pointer"
+                      onClick={() =>
+                        openImageFullSize(
+                          getImageUrl(applicantDetails.validIdImage)
+                        )
+                      }
                     />
                   </div>
                 ) : null}

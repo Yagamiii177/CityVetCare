@@ -26,6 +26,24 @@ const RedemptionForm = () => {
   const [proofImages, setProofImages] = useState([]);
   const [confirmVisible, setConfirmVisible] = useState(false);
 
+  const computeAgeFromBirthdate = (birthdateValue) => {
+    if (!birthdateValue) return "";
+    const birthdate = new Date(birthdateValue);
+    if (Number.isNaN(birthdate.getTime())) return "";
+
+    const today = new Date();
+    let age = today.getFullYear() - birthdate.getFullYear();
+    const monthDiff = today.getMonth() - birthdate.getMonth();
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthdate.getDate())
+    ) {
+      age -= 1;
+    }
+    if (age < 0) return "";
+    return String(age);
+  };
+
   const [formData, setFormData] = useState({
     fullName: "",
     age: "",
@@ -37,17 +55,69 @@ const RedemptionForm = () => {
   const autofillFromAccount = async () => {
     try {
       const raw = await AsyncStorage.getItem("@cityvetcare_user");
-      const user = raw ? JSON.parse(raw) : null;
+      let user = raw ? JSON.parse(raw) : null;
       if (!user) {
         Alert.alert("Not logged in", "Please login to autofill your details.");
         return;
       }
+
+      const hasAddress = Boolean(
+        user.address || user.homeAddress || user.home_address || user.home
+      );
+      const hasBirthdate = Boolean(
+        user.birthdate ||
+          user.birth_date ||
+          user.dateOfBirth ||
+          user.birthDate ||
+          user.dob ||
+          user.birthday
+      );
+      const hasAge =
+        user.age !== undefined && user.age !== null && String(user.age) !== "";
+
+      // Fetch fresh profile if important fields are missing.
+      // This fixes cases where AsyncStorage has address but not birthdate/age.
+      const needsProfileFetch = !hasAddress || (!hasBirthdate && !hasAge);
+
+      if (needsProfileFetch) {
+        try {
+          const me = await api.auth.getCurrentUser();
+          const fetchedUser = me?.user || me?.data?.user || me || null;
+          if (fetchedUser && typeof fetchedUser === "object") {
+            user = { ...user, ...fetchedUser };
+            await AsyncStorage.setItem(
+              "@cityvetcare_user",
+              JSON.stringify(user)
+            );
+          }
+        } catch (fetchErr) {
+          console.warn("Failed to refresh user profile for autofill", fetchErr);
+        }
+      }
+
+      const birthdate =
+        user.birthdate ||
+        user.birth_date ||
+        user.dateOfBirth ||
+        user.birthDate ||
+        user.dob ||
+        user.birthday;
+      const computedAge = computeAgeFromBirthdate(birthdate);
+      const resolvedAge =
+        user.age !== undefined && user.age !== null && String(user.age) !== ""
+          ? String(user.age)
+          : computedAge;
+      const address =
+        user.address || user.homeAddress || user.home_address || user.home;
+      const phone =
+        user.contactNumber || user.contact_number || user.phone || user.mobile;
       setFormData((prev) => ({
         ...prev,
         fullName: prev.fullName || user.fullName || user.full_name || "",
-        phone: prev.phone || user.contactNumber || "",
+        phone: prev.phone || phone || "",
         email: prev.email || user.email || "",
-        address: prev.address || user.address || "",
+        address: prev.address || address || "",
+        age: prev.age || resolvedAge || "",
       }));
       Alert.alert("Autofilled", "We filled available account details.");
     } catch (e) {

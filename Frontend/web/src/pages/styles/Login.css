@@ -47,6 +47,17 @@
   }
 }
 
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Animation Classes */
 .animate-float-slow {
   animation: float-slow 8s ease-in-out infinite;
@@ -62,6 +73,17 @@
 
 .animate-pan {
   animation: pan 20s linear infinite;
+}
+
+.animate-scale-in {
+  animation: scale-in 180ms ease-out;
+}
+
+/* Moving dots overlay used by Login.jsx */
+.moving-dots {
+  background-image: radial-gradient(#fa863012 1px, transparent 1px);
+  background-size: 18px 18px;
+  opacity: 0.55;
 }
 
 /* Paw Print Background Pattern */
@@ -153,11 +175,17 @@
 }
 
 .login-card {
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(16px);
-  border-radius: 1rem;
+  border-radius: 1.25rem;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(250, 134, 48, 0.1);
+  border: 1px solid rgba(250, 134, 48, 0.14);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.login-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 28px 60px -14px rgba(0, 0, 0, 0.28);
 }
 
 .login-header {

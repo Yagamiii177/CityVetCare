@@ -5,6 +5,7 @@ import { pool } from "../config/database.js";
 import Logger from "../utils/logger.js";
 import Admin from "../models/Admin.js";
 import PetOwner from "../models/PetOwner.js";
+import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 const logger = new Logger("AUTH_ROUTES");
@@ -125,6 +126,12 @@ router.post("/login", async (req, res) => {
         email: user.email,
         fullName: user.full_name,
         contactNumber: user.contact_number,
+        // Include profile fields so mobile can autofill forms
+        address: user.address,
+        homeAddress: user.address,
+        birthdate: user.birthdate || null,
+        homeLatitude: user.home_latitude ?? null,
+        homeLongitude: user.home_longitude ?? null,
       });
     }
   } catch (error) {
@@ -214,6 +221,9 @@ router.post("/register", async (req, res) => {
       confirmPassword,
       contactNumber,
       address,
+      birthdate,
+      homeLatitude,
+      homeLongitude,
     } = req.body;
 
     // Validation
@@ -223,6 +233,17 @@ router.post("/register", async (req, res) => {
         message:
           "Full name, email, password, contact number, and address are required",
       });
+    }
+
+    // Optional birthdate validation (accept YYYY-MM-DD)
+    if (birthdate) {
+      const d = new Date(birthdate);
+      if (Number.isNaN(d.getTime())) {
+        return res.status(400).json({
+          error: true,
+          message: "Birthdate must be a valid date (YYYY-MM-DD)",
+        });
+      }
     }
 
     if (password !== confirmPassword) {
@@ -257,7 +278,10 @@ router.post("/register", async (req, res) => {
       email,
       hashedPassword,
       contactNumber,
-      address
+      address,
+      birthdate || null,
+      homeLatitude ?? null,
+      homeLongitude ?? null
     );
 
     logger.info(`Pet owner registered: ${email}`);
@@ -272,6 +296,79 @@ router.post("/register", async (req, res) => {
     res.status(500).json({
       error: true,
       message: "Failed to create account",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+/**
+ * GET /api/auth/me
+ * Return current authenticated user profile.
+ */
+router.get("/me", authenticateToken, async (req, res) => {
+  try {
+    const { id, userType } = req.user || {};
+
+    if (!id || !userType) {
+      return res.status(400).json({
+        error: true,
+        message: "Invalid token payload",
+      });
+    }
+
+    if (userType === "admin") {
+      return res.json({
+        success: true,
+        user: {
+          id,
+          userType: "admin",
+          username: req.user.username,
+          role: req.user.role,
+          fullName: req.user.fullName,
+        },
+      });
+    }
+
+    if (userType === "pet_owner") {
+      const owner = await PetOwner.findById(id);
+      if (!owner) {
+        return res.status(404).json({
+          error: true,
+          message: "User not found",
+        });
+      }
+
+      return res.json({
+        success: true,
+        user: {
+          id: owner.owner_id,
+          userType: "pet_owner",
+          fullName: owner.full_name,
+          full_name: owner.full_name,
+          email: owner.email,
+          contactNumber: owner.contact_number,
+          contact_number: owner.contact_number,
+          address: owner.address,
+          homeAddress: owner.address,
+          home_address: owner.address,
+          birthdate: owner.birthdate || null,
+          birth_date: owner.birthdate || null,
+          homeLatitude: owner.home_latitude ?? null,
+          homeLongitude: owner.home_longitude ?? null,
+        },
+      });
+    }
+
+    return res.status(400).json({
+      error: true,
+      message: "Unsupported user type",
+    });
+  } catch (error) {
+    logger.error("Auth me error", error);
+    return res.status(500).json({
+      error: true,
+      message: "Failed to load current user",
       details:
         process.env.NODE_ENV === "development" ? error.message : undefined,
     });

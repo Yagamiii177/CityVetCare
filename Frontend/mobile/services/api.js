@@ -278,6 +278,24 @@ export const authAPI = {
     } else if (data.userType === "pet_owner") {
       user.email = data.email;
       user.contactNumber = data.contactNumber;
+      // Optional fields (used by "Autofill from my account")
+      const resolvedAddress =
+        data.address || data.homeAddress || data.home_address || data.home;
+      const resolvedBirthdate =
+        data.birthdate || data.dateOfBirth || data.dob || data.birth_date;
+
+      user.address = resolvedAddress;
+      user.homeAddress = resolvedAddress;
+      user.home_address = resolvedAddress;
+
+      user.birthdate = resolvedBirthdate;
+      user.birth_date = resolvedBirthdate;
+      user.dateOfBirth = resolvedBirthdate;
+      user.dob = resolvedBirthdate;
+      user.homeLatitude =
+        data.homeLatitude ?? data.home_latitude ?? data.home_lat;
+      user.homeLongitude =
+        data.homeLongitude ?? data.home_longitude ?? data.home_lng;
     }
 
     // Store user data
@@ -664,6 +682,13 @@ const adoptionRequestsAPI = {
 const petsAPI = {
   getByRfid: async (rfid) => {
     return await apiRequest(API_ENDPOINTS.PETS.BY_RFID(rfid));
+  },
+
+  create: async (data) => {
+    return await apiRequest(API_ENDPOINTS.PETS.CREATE, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   },
 };
 

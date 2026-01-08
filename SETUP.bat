@@ -71,6 +71,17 @@ if errorlevel 1 (
 echo ✓ Database created successfully
 echo.
 
+echo Applying database migrations...
+call npm run migrate
+if errorlevel 1 (
+    echo ERROR: Failed to run migrations
+    echo Please check your database connection and .env configuration
+    pause
+    exit /b 1
+)
+echo ✓ Migrations applied successfully
+echo.
+
 echo ========================================
 echo Step 5: Verifying Setup
 echo ========================================

@@ -82,6 +82,7 @@ export const API_ENDPOINTS = {
   // Pets
   PETS: {
     BY_RFID: (rfid) => `${API_BASE_URL}/pets/rfid/${rfid}`,
+    CREATE: `${API_BASE_URL}/pets`,
   },
 
   // Stray Animals

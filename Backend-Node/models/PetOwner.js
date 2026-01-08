@@ -4,6 +4,31 @@ import Logger from "../utils/logger.js";
 const logger = new Logger("PET_OWNER_MODEL");
 
 class PetOwner {
+  static _columns = null;
+
+  static async getColumns() {
+    try {
+      if (PetOwner._columns) return PetOwner._columns;
+      const [rows] = await pool.query("SHOW COLUMNS FROM pet_owner");
+      PetOwner._columns = new Set(rows.map((r) => r.Field));
+      return PetOwner._columns;
+    } catch (error) {
+      logger.error("Error reading pet_owner columns", error);
+      // Fall back to base columns only.
+      PetOwner._columns = new Set([
+        "owner_id",
+        "full_name",
+        "email",
+        "password",
+        "contact_number",
+        "address",
+        "date_registered",
+        "date_updated",
+      ]);
+      return PetOwner._columns;
+    }
+  }
+
   static async findByEmail(email) {
     try {
       const [rows] = await pool.query(
@@ -19,8 +44,21 @@ class PetOwner {
 
   static async findById(id) {
     try {
+      const columns = await PetOwner.getColumns();
+      const base = [
+        "owner_id",
+        "full_name",
+        "email",
+        "contact_number",
+        "address",
+        "date_registered",
+      ];
+      if (columns.has("birthdate")) base.push("birthdate");
+      if (columns.has("home_latitude")) base.push("home_latitude");
+      if (columns.has("home_longitude")) base.push("home_longitude");
+
       const [rows] = await pool.query(
-        "SELECT owner_id, full_name, email, contact_number, address, date_registered FROM pet_owner WHERE owner_id = ?",
+        `SELECT ${base.join(", ")} FROM pet_owner WHERE owner_id = ?`,
         [id]
       );
       return rows[0] || null;
@@ -30,11 +68,49 @@ class PetOwner {
     }
   }
 
-  static async create(fullName, email, password, contactNumber, address) {
+  static async create(
+    fullName,
+    email,
+    password,
+    contactNumber,
+    address,
+    birthdate = null,
+    homeLatitude = null,
+    homeLongitude = null
+  ) {
     try {
+      const columns = await PetOwner.getColumns();
+
+      const insertCols = [
+        "full_name",
+        "email",
+        "password",
+        "contact_number",
+        "address",
+      ];
+      const insertVals = [fullName, email, password, contactNumber, address];
+
+      if (columns.has("birthdate")) {
+        insertCols.push("birthdate");
+        insertVals.push(birthdate);
+      }
+
+      if (columns.has("home_latitude")) {
+        insertCols.push("home_latitude");
+        insertVals.push(homeLatitude);
+      }
+
+      if (columns.has("home_longitude")) {
+        insertCols.push("home_longitude");
+        insertVals.push(homeLongitude);
+      }
+
+      const placeholders = insertCols.map(() => "?").join(", ");
       const [result] = await pool.query(
-        "INSERT INTO pet_owner (full_name, email, password, contact_number, address) VALUES (?, ?, ?, ?, ?)",
-        [fullName, email, password, contactNumber, address]
+        `INSERT INTO pet_owner (${insertCols.join(
+          ", "
+        )}) VALUES (${placeholders})`,
+        insertVals
       );
       return result;
     } catch (error) {
@@ -84,8 +160,21 @@ class PetOwner {
 
   static async getAll() {
     try {
+      const columns = await PetOwner.getColumns();
+      const base = [
+        "owner_id",
+        "full_name",
+        "email",
+        "contact_number",
+        "address",
+        "date_registered",
+      ];
+      if (columns.has("birthdate")) base.push("birthdate");
+      if (columns.has("home_latitude")) base.push("home_latitude");
+      if (columns.has("home_longitude")) base.push("home_longitude");
+
       const [rows] = await pool.query(
-        "SELECT owner_id, full_name, email, contact_number, address, date_registered FROM pet_owner"
+        `SELECT ${base.join(", ")} FROM pet_owner`
       );
       return rows;
     } catch (error) {

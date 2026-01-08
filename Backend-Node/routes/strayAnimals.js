@@ -4,6 +4,7 @@ import EuthanizedAnimal from "../models/EuthanizedAnimal.js";
 import Logger from "../utils/logger.js";
 import { pool } from "../config/database.js";
 import { sendOwnerAlert } from "../services/notificationService.js";
+import { optionalAuth } from "../middleware/auth.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -191,7 +192,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // POST /api/stray-animals
-router.post("/", async (req, res) => {
+router.post("/", optionalAuth, async (req, res) => {
   try {
     const {
       rfid,
@@ -235,6 +236,15 @@ router.post("/", async (req, res) => {
 
     const persistedImages = await persistIncomingImages(images);
 
+    // Prefer authenticated user's full name (from JWT) for captured_by.
+    // Fall back to client-provided fields for backwards compatibility.
+    const tokenFullName = String(req.user?.fullName || "").trim();
+    const resolvedCapturedBy =
+      tokenFullName || String(registeredBy || capturedBy || "").trim();
+    const capturedBySafe = resolvedCapturedBy
+      ? resolvedCapturedBy.slice(0, 50)
+      : null;
+
     const payload = {
       rfid: normalizedRfid,
       name,
@@ -244,7 +254,7 @@ router.post("/", async (req, res) => {
       color,
       markings,
       sprayedNeutered: Boolean(sprayedNeutered),
-      capturedBy: registeredBy || capturedBy, // Use registeredBy if available, otherwise capturedBy
+      capturedBy: capturedBySafe,
       dateCaptured,
       registrationDate:
         registrationDate || new Date().toISOString().split("T")[0],

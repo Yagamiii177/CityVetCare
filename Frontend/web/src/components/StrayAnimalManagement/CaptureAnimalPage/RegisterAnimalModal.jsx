@@ -30,6 +30,7 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
   // Breed options by species - alphabetically sorted
   const breedOptions = {
     Dog: [
+      "Aspin",
       "Beagle",
       "Boxer",
       "Bulldog",
@@ -128,10 +129,33 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
       setPetOwnerData(null);
       setMapInitialLocation(null);
 
+      const parseJwtPayload = (token) => {
+        try {
+          const parts = String(token || "").split(".");
+          if (parts.length < 2) return null;
+          const base64Url = parts[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const json = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          return JSON.parse(json);
+        } catch {
+          return null;
+        }
+      };
+
       // Get admin's full name from localStorage
+      const token = localStorage.getItem("auth_token");
+      const tokenPayload = token ? parseJwtPayload(token) : null;
+      const tokenFullName = String(tokenPayload?.fullName || "").trim();
+
       const adminName =
-        localStorage.getItem("userName") ||
         localStorage.getItem("fullName") ||
+        tokenFullName ||
+        localStorage.getItem("userName") ||
         "Admin";
 
       setFormData({ ...initialFormData, registeredBy: adminName });
@@ -250,8 +274,8 @@ const RegisterAnimalModal = ({ isOpen, onClose, onRegister }) => {
 
   const handleClearForm = () => {
     const adminName =
-      localStorage.getItem("userName") ||
       localStorage.getItem("fullName") ||
+      localStorage.getItem("userName") ||
       formData.registeredBy ||
       "Admin";
 

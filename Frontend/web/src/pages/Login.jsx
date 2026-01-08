@@ -43,6 +43,12 @@ const Login = () => {
         if (data.token) {
           localStorage.setItem("auth_token", data.token);
         }
+        if (data.fullName) {
+          localStorage.setItem("fullName", data.fullName);
+        }
+        if (data.username) {
+          localStorage.setItem("userName", data.username);
+        }
         if (data.role) {
           localStorage.setItem("role", data.role);
         }
@@ -161,7 +167,7 @@ const Login = () => {
   };
 
   return (
-    <div className="login-container flex items-center justify-center p-4 overflow-hidden">
+    <div className="login-container relative flex items-center justify-center px-4 py-10 overflow-y-auto">
       {/* Modern background pattern */}
       <div className="absolute inset-0 login-bg-pattern"></div>
 
@@ -212,11 +218,11 @@ const Login = () => {
       {/* Moving background dots pattern */}
       <div className="absolute inset-0 moving-dots animate-pan"></div>
 
-      <div className="max-w-sm w-full relative z-10">
+      <div className="max-w-md w-full relative z-10">
         {/* Header Section - Improved Logo */}
         <div className="text-center mb-8">
           {/* Logo Container with Better Styling */}
-          <div className="flex justify-center mb-4">
+          <div className="flex justify-center mb-3">
             <div className="relative logo-container">
               {/* Main Logo Container */}
               <div className="">
@@ -224,7 +230,7 @@ const Login = () => {
                 <img
                   src={logo}
                   alt="City Vet Care Logo"
-                  className="w-16 h-16 object-contain drop-shadow-sm"
+                  className="w-14 h-14 object-contain drop-shadow-sm"
                   onError={(e) => {
                     // Fallback to SVG if image fails to load
                     e.target.style.display = "none";
@@ -248,7 +254,7 @@ const Login = () => {
           </div>
 
           {/* Title and Subtitle */}
-          <h1 className="text-5xl font-bold gradient-text mb-3">
+          <h1 className="text-4xl md:text-5xl font-bold gradient-text mb-2">
             City Vet Care
           </h1>
           <div className="space-y-1">
@@ -271,7 +277,7 @@ const Login = () => {
             </p>
           </div>
 
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-5">
             {/* Error Message */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
@@ -355,7 +361,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full py-3 px-4 border border-transparent rounded-xl text-white font-semibold login-btn mt-4 ${
+              className={`w-full py-3 px-4 border border-transparent rounded-xl text-white font-semibold login-btn ${
                 isLoading ? "cursor-not-allowed" : ""
               }`}
             >
@@ -392,7 +398,7 @@ const Login = () => {
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
-              className="w-full py-3 px-4 border-2 border-[#FA8630] rounded-xl text-[#FA8630] font-semibold hover:bg-[#FA8630]/10 transition-colors mt-3"
+              className="w-full py-3 px-4 border-2 border-[#FA8630] rounded-xl text-[#FA8630] font-semibold hover:bg-[#FA8630]/10 transition-colors"
             >
               Create Account
             </button>
@@ -413,7 +419,7 @@ const Login = () => {
         </form>
 
         {/* Additional Info */}
-        <div className="text-center mt-6">
+        <div className="text-center mt-8">
           <p className="text-xs text-gray-500">
             Secure access to Naga City's Anti Rabies Management System
           </p>

@@ -95,7 +95,8 @@ export default function App() {
             initialRouteName="Login"
             screenOptions={{
               headerShown: false,
-              animation: "fade",
+              animation: "none",
+              animationDuration: 0,
             }}
           >
             <Stack.Screen name="Login" component={LoginScreen} />
@@ -155,6 +156,7 @@ function MainStackScreen() {
       screenOptions={{
         headerShown: false,
         animation: "none",
+        animationDuration: 0,
       }}
     >
       <Stack.Screen name="HomePage" component={HomePageScreen} />
@@ -164,8 +166,8 @@ function MainStackScreen() {
         name="QR"
         component={QRScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
@@ -175,8 +177,8 @@ function MainStackScreen() {
         name="PetVaccination"
         component={PetVaccinationScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
 
@@ -187,8 +189,8 @@ function MainStackScreen() {
         name="PetProfile"
         component={PetProfile}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
 
@@ -196,96 +198,96 @@ function MainStackScreen() {
         name="AdoptionList"
         component={AdoptionScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="ReportStatus"
         component={ReportStatus}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="AdoptionForm"
         component={AdoptionFormScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="StrayListProfile"
         component={StrayListProfileScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="RedemptionForm"
         component={RedemptionFormScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="AdoptionRequestsList"
         component={AdoptionRequestsListScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="AdoptionRequestDetail"
         component={AdoptionRequestDetailScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="RedemptionRequestsList"
         component={RedemptionRequestsListScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="RedemptionRequestDetail"
         component={RedemptionRequestDetailScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="AboutUs"
         component={AboutUsScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="ReportIncident"
         component={ReportIncidentScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen
         name="LocationPicker"
         component={LocationPickerScreen}
         options={{
-          animation: "slide_from_bottom",
-          animationDuration: 300,
+          animation: "none",
+          animationDuration: 0,
         }}
       />
       <Stack.Screen name="PetDetails" component={PetProfile} />

@@ -48,6 +48,7 @@ const CaptureAnimalPage = () => {
   // Breed options by species
   const breedOptions = {
     Dog: [
+      "Aspin",
       "Beagle",
       "Boxer",
       "Bulldog",
@@ -185,6 +186,7 @@ const CaptureAnimalPage = () => {
     } finally {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -910,13 +912,7 @@ const CaptureAnimalPage = () => {
                                 </div>
 
                                 {showDropdown === animal.id && (
-                                  <div
-                                    className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
-                                    style={{
-                                      position: "fixed",
-                                      minWidth: "14rem",
-                                    }}
-                                  >
+                                  <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
                                     <div
                                       className="py-1"
                                       role="menu"

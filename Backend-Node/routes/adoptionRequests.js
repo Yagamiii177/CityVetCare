@@ -6,6 +6,8 @@ import { persistIncomingImage } from "../utils/imageStorage.js";
 const router = express.Router();
 const logger = new Logger("ADOPTION_REQUEST_ROUTES");
 
+let attemptedApplicantDetailsColumnFix = false;
+
 const normalizeStrayImagesToPhoto = (images) => {
   if (!images) return null;
   try {
@@ -163,11 +165,68 @@ router.post("/", async (req, res) => {
       ? JSON.stringify(normalizedApplicantDetails)
       : null;
 
-    const [result] = await pool.query(
-      `INSERT INTO adoption_request (stray_id, adopter_id, status, applicant_details) 
-       VALUES (?, ?, 'pending', ?)`,
-      [stray_id, adopter_id, detailsJson]
-    );
+    let result;
+    try {
+      const [insertResult] = await pool.query(
+        `INSERT INTO adoption_request (stray_id, adopter_id, status, applicant_details) 
+         VALUES (?, ?, 'pending', ?)`,
+        [stray_id, adopter_id, detailsJson]
+      );
+      result = insertResult;
+    } catch (e) {
+      const msg = String(e?.message || "");
+      const isMissingApplicantDetailsColumn =
+        e?.code === "ER_BAD_FIELD_ERROR" && msg.includes("applicant_details");
+
+      if (
+        isMissingApplicantDetailsColumn &&
+        !attemptedApplicantDetailsColumnFix
+      ) {
+        attemptedApplicantDetailsColumnFix = true;
+        logger.warn(
+          "Missing applicant_details column on adoption_request; attempting to auto-fix via ALTER TABLE."
+        );
+
+        let altered = false;
+        try {
+          await pool.query(
+            "ALTER TABLE adoption_request ADD COLUMN applicant_details JSON NULL AFTER status"
+          );
+          altered = true;
+        } catch (alterErr) {
+          // Fallback for DBs that don't support JSON as a native type.
+          try {
+            await pool.query(
+              "ALTER TABLE adoption_request ADD COLUMN applicant_details TEXT NULL AFTER status"
+            );
+            altered = true;
+          } catch (alterErr2) {
+            logger.error(
+              "Failed to auto-add applicant_details column. Please run Backend-Node migrations.",
+              alterErr2
+            );
+          }
+        }
+
+        if (altered) {
+          const [retryResult] = await pool.query(
+            `INSERT INTO adoption_request (stray_id, adopter_id, status, applicant_details) 
+             VALUES (?, ?, 'pending', ?)`,
+            [stray_id, adopter_id, detailsJson]
+          );
+          result = retryResult;
+        } else {
+          const [fallbackResult] = await pool.query(
+            `INSERT INTO adoption_request (stray_id, adopter_id, status) 
+             VALUES (?, ?, 'pending')`,
+            [stray_id, adopter_id]
+          );
+          result = fallbackResult;
+        }
+      } else {
+        throw e;
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -242,6 +301,79 @@ router.put("/:id", async (req, res) => {
         "UPDATE stray_animals SET status = 'adopted' WHERE animal_id = ?",
         [ar.stray_id]
       );
+
+      // If this stray has an RFID (registered pet), transfer the pet record to the adopter
+      // and delete any old-owner pet rows for the same RFID.
+      try {
+        const [rfidRows] = await connection.query(
+          "SELECT rfid FROM stray_animals WHERE animal_id = ? FOR UPDATE",
+          [ar.stray_id]
+        );
+        const strayRfid = String(rfidRows?.[0]?.rfid || "").trim();
+        const adopterId = Number(ar.adopter_id);
+
+        if (strayRfid && Number.isFinite(adopterId)) {
+          const [petsByRfid] = await connection.query(
+            "SELECT pet_id, owner_id FROM pet WHERE rfid = ? FOR UPDATE",
+            [strayRfid]
+          );
+
+          if (petsByRfid?.length) {
+            const ownerCounts = new Map();
+            for (const row of petsByRfid) {
+              const ownerId = Number(row.owner_id);
+              if (!Number.isFinite(ownerId)) continue;
+              ownerCounts.set(ownerId, (ownerCounts.get(ownerId) || 0) + 1);
+            }
+
+            const transferCandidate = petsByRfid.find((p) => {
+              const ownerId = Number(p.owner_id);
+              return Number.isFinite(ownerId) && ownerId !== adopterId;
+            });
+
+            if (transferCandidate) {
+              const keepPetId = transferCandidate.pet_id;
+              await connection.query(
+                "UPDATE pet SET owner_id = ?, status = 'owned' WHERE pet_id = ?",
+                [adopterId, keepPetId]
+              );
+              await connection.query(
+                "DELETE FROM pet WHERE rfid = ? AND pet_id <> ?",
+                [strayRfid, keepPetId]
+              );
+
+              // Best-effort: keep pet_count consistent
+              try {
+                const adopterExisting = ownerCounts.get(adopterId) || 0;
+                const adopterDelta = 1 - adopterExisting;
+                if (adopterDelta !== 0) {
+                  await connection.query(
+                    "UPDATE pet_owner SET pet_count = GREATEST(pet_count + ?, 0) WHERE owner_id = ?",
+                    [adopterDelta, adopterId]
+                  );
+                }
+
+                for (const [ownerId, count] of ownerCounts.entries()) {
+                  if (ownerId === adopterId) continue;
+                  if (!count) continue;
+                  await connection.query(
+                    "UPDATE pet_owner SET pet_count = GREATEST(pet_count - ?, 0) WHERE owner_id = ?",
+                    [count, ownerId]
+                  );
+                }
+              } catch (countErr) {
+                logger.warn(
+                  "Failed to update pet_count during approval ownership transfer",
+                  countErr
+                );
+              }
+            }
+          }
+        }
+      } catch (transferErr) {
+        // Do not block approval if transfer fails; claim endpoint still handles transfer.
+        logger.warn("Ownership transfer on approval failed", transferErr);
+      }
 
       // Reject other pending requests for the same animal.
       await connection.query(
@@ -326,17 +458,29 @@ router.post("/:id/claim", async (req, res) => {
       );
     }
 
-    // Create pet record (avoid duplicates per owner+rfid)
-    const [existingPet] = await connection.query(
-      "SELECT pet_id FROM pet WHERE owner_id = ? AND rfid = ? LIMIT 1",
-      [ar.adopter_id, finalRfid]
-    );
-
-    let petId;
+    // If the stray already has an RFID, it may already exist in `pet` (old owner).
+    // On adoption, ownership should be transferred to the adopter and old pet records removed.
+    const adopterId = Number(ar.adopter_id);
     const photo = normalizeStrayImagesToPhoto(ar.images);
 
-    if (existingPet.length > 0) {
-      petId = existingPet[0].pet_id;
+    const [petsByRfid] = await connection.query(
+      "SELECT pet_id, owner_id FROM pet WHERE rfid = ? FOR UPDATE",
+      [finalRfid]
+    );
+
+    const ownerCounts = new Map();
+    for (const row of petsByRfid || []) {
+      const ownerId = Number(row.owner_id);
+      if (!Number.isFinite(ownerId)) continue;
+      ownerCounts.set(ownerId, (ownerCounts.get(ownerId) || 0) + 1);
+    }
+
+    const transferCandidate = (petsByRfid || []).find((p) => {
+      const ownerId = Number(p.owner_id);
+      return Number.isFinite(ownerId) && ownerId !== adopterId;
+    });
+
+    const updatePetFromStray = async (petId) => {
       await connection.query(
         `UPDATE pet
          SET name = COALESCE(?, name),
@@ -345,7 +489,8 @@ router.post("/:id/claim", async (req, res) => {
              sex = COALESCE(?, sex),
              color = COALESCE(?, color),
              markings = COALESCE(?, markings),
-             photo = COALESCE(?, photo)
+             photo = COALESCE(?, photo),
+             status = COALESCE(status, 'owned')
          WHERE pet_id = ?`,
         [
           ar.name || null,
@@ -358,29 +503,99 @@ router.post("/:id/claim", async (req, res) => {
           petId,
         ]
       );
-    } else {
-      const [insertPet] = await connection.query(
-        `INSERT INTO pet (owner_id, rfid, name, species, breed, age, sex, color, markings, photo, status)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'owned')`,
-        [
-          ar.adopter_id,
-          finalRfid,
-          ar.name || "Unnamed",
-          ar.species || "Unknown",
-          ar.breed || null,
-          ar.sex || null,
-          ar.color || null,
-          ar.markings || null,
-          photo,
-        ]
-      );
-      petId = insertPet.insertId;
+    };
 
-      // Best-effort: increment owner's pet_count
+    const applyPetCountDeltasBestEffort = async () => {
+      // Goal: ensure adopter ends up with exactly 1 pet record for this RFID.
+      // For other owners, subtract their duplicates.
+      try {
+        const adopterExisting = ownerCounts.get(adopterId) || 0;
+        const adopterDelta = 1 - adopterExisting;
+        if (adopterDelta !== 0) {
+          await connection.query(
+            "UPDATE pet_owner SET pet_count = GREATEST(pet_count + ?, 0) WHERE owner_id = ?",
+            [adopterDelta, adopterId]
+          );
+        }
+
+        for (const [ownerId, count] of ownerCounts.entries()) {
+          if (ownerId === adopterId) continue;
+          if (!count) continue;
+          await connection.query(
+            "UPDATE pet_owner SET pet_count = GREATEST(pet_count - ?, 0) WHERE owner_id = ?",
+            [count, ownerId]
+          );
+        }
+      } catch (countErr) {
+        logger.warn(
+          "Failed to update pet_count during adoption transfer",
+          countErr
+        );
+      }
+    };
+
+    let petId;
+    if (transferCandidate) {
+      // Transfer the existing pet record to the adopter
+      petId = transferCandidate.pet_id;
       await connection.query(
-        "UPDATE pet_owner SET pet_count = pet_count + 1 WHERE owner_id = ?",
-        [ar.adopter_id]
+        "UPDATE pet SET owner_id = ?, status = 'owned' WHERE pet_id = ?",
+        [adopterId, petId]
       );
+
+      // Remove any other pet rows that share this RFID (cleanup duplicates)
+      await connection.query("DELETE FROM pet WHERE rfid = ? AND pet_id <> ?", [
+        finalRfid,
+        petId,
+      ]);
+
+      await updatePetFromStray(petId);
+      await applyPetCountDeltasBestEffort();
+    } else {
+      // No old-owner pet exists. Keep a single adopter row if present; otherwise create one.
+      const adopterPets = (petsByRfid || [])
+        .filter((p) => Number(p.owner_id) === adopterId)
+        .sort((a, b) => Number(a.pet_id) - Number(b.pet_id));
+
+      if (adopterPets.length > 0) {
+        petId = adopterPets[0].pet_id;
+        await connection.query(
+          "DELETE FROM pet WHERE rfid = ? AND pet_id <> ?",
+          [finalRfid, petId]
+        );
+        await updatePetFromStray(petId);
+        await applyPetCountDeltasBestEffort();
+      } else {
+        const [insertPet] = await connection.query(
+          `INSERT INTO pet (owner_id, rfid, name, species, breed, age, sex, color, markings, photo, status)
+           VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'owned')`,
+          [
+            adopterId,
+            finalRfid,
+            ar.name || "Unnamed",
+            ar.species || "Unknown",
+            ar.breed || null,
+            ar.sex || null,
+            ar.color || null,
+            ar.markings || null,
+            photo,
+          ]
+        );
+        petId = insertPet.insertId;
+
+        // Best-effort: increment owner's pet_count
+        try {
+          await connection.query(
+            "UPDATE pet_owner SET pet_count = pet_count + 1 WHERE owner_id = ?",
+            [adopterId]
+          );
+        } catch (countErr) {
+          logger.warn(
+            "Failed to increment pet_count for adopter after claim",
+            countErr
+          );
+        }
+      }
     }
 
     // Archive adoption request and mark stray as claimed

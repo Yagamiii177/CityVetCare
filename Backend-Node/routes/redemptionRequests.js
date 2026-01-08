@@ -8,6 +8,41 @@ const logger = new Logger("REDEMPTION_REQUEST_ROUTES");
 
 const ADOPTION_STRAY_STATUSES = ["adoption", "adopted"];
 
+let ensureColumnsPromise = null;
+const ensureRedemptionRequestColumns = async () => {
+  if (ensureColumnsPromise) return ensureColumnsPromise;
+  ensureColumnsPromise = (async () => {
+    const [existingColumns] = await pool.query(
+      "SHOW COLUMNS FROM redemption_request"
+    );
+    const columnNames = new Set((existingColumns || []).map((c) => c.Field));
+
+    if (!columnNames.has("owner_contact")) {
+      try {
+        await pool.query(
+          "ALTER TABLE redemption_request ADD COLUMN owner_contact VARCHAR(50) NULL AFTER remarks"
+        );
+      } catch (e) {
+        const msg = String(e?.message || "");
+        if (!msg.toLowerCase().includes("duplicate column")) throw e;
+      }
+      columnNames.add("owner_contact");
+    }
+
+    if (!columnNames.has("proof_images")) {
+      try {
+        await pool.query(
+          "ALTER TABLE redemption_request ADD COLUMN proof_images TEXT NULL AFTER owner_contact"
+        );
+      } catch (e) {
+        const msg = String(e?.message || "");
+        if (!msg.toLowerCase().includes("duplicate column")) throw e;
+      }
+    }
+  })();
+  return ensureColumnsPromise;
+};
+
 const normalizeStrayImagesToPhoto = (images) => {
   if (!images) return null;
   try {
@@ -34,6 +69,7 @@ const normalizeStrayImagesToPhoto = (images) => {
 // GET /api/redemption-requests
 router.get("/", async (req, res) => {
   try {
+    await ensureRedemptionRequestColumns();
     const { owner_id, status } = req.query;
 
     // Auto-cleanup: if the related stray animal is already in adoption/adopted,
@@ -101,6 +137,7 @@ router.get("/", async (req, res) => {
 // GET /api/redemption-requests/:id
 router.get("/:id", async (req, res) => {
   try {
+    await ensureRedemptionRequestColumns();
     // If this request belongs to an adoption/adopted stray, delete it and return 404
     try {
       const placeholders = ADOPTION_STRAY_STATUSES.map(() => "?").join(",");
@@ -153,6 +190,7 @@ router.get("/:id", async (req, res) => {
 // POST /api/redemption-requests
 router.post("/", async (req, res) => {
   try {
+    await ensureRedemptionRequestColumns();
     const {
       stray_id,
       owner_id,
@@ -242,6 +280,7 @@ router.post("/", async (req, res) => {
 // PUT /api/redemption-requests/:id
 router.put("/:id", async (req, res) => {
   try {
+    await ensureRedemptionRequestColumns();
     const { status } = req.body;
 
     if (!status) {
@@ -275,6 +314,7 @@ router.put("/:id", async (req, res) => {
 router.post("/:id/claim", async (req, res) => {
   const connection = await pool.getConnection();
   try {
+    await ensureRedemptionRequestColumns();
     const { rfid, incrementCaptureCount } = req.body || {};
 
     await connection.beginTransaction();
