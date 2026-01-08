@@ -51,7 +51,7 @@ console.log("📱 Platform:", Platform.OS);
 
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
-  TIMEOUT: 15000, // 15 seconds for normal requests
+  TIMEOUT: 30000, // 30 seconds
   UPLOAD_TIMEOUT: 120000, // 2 minutes for image uploads
 };
 
@@ -76,7 +76,37 @@ export const API_ENDPOINTS = {
     DETAIL: (id) => `${API_BASE_URL}/incidents/${id}`,
     UPDATE: (id) => `${API_BASE_URL}/incidents/${id}`,
     DELETE: (id) => `${API_BASE_URL}/incidents/${id}`,
-    MY_REPORTS: `${API_BASE_URL}/incidents?user=me`,
+    MY_REPORTS: `${API_BASE_URL}/incidents/my-reports`,
+    BY_OWNER: (ownerId) => `${API_BASE_URL}/incidents/owner/${ownerId}`,
+  },
+
+  // Pets
+  PETS: {
+    BY_RFID: (rfid) => `${API_BASE_URL}/pets/rfid/${rfid}`,
+  },
+
+  // Stray Animals
+  STRAY_ANIMALS: {
+    LIST: `${API_BASE_URL}/stray-animals`,
+    DETAIL: (id) => `${API_BASE_URL}/stray-animals/${id}`,
+    CREATE: `${API_BASE_URL}/stray-animals`,
+    UPDATE: (id) => `${API_BASE_URL}/stray-animals/${id}`,
+  },
+
+  // Adoption Requests
+  ADOPTION_REQUESTS: {
+    LIST: `${API_BASE_URL}/adoption-requests`,
+    CREATE: `${API_BASE_URL}/adoption-requests`,
+    DETAIL: (id) => `${API_BASE_URL}/adoption-requests/${id}`,
+    UPDATE: (id) => `${API_BASE_URL}/adoption-requests/${id}`,
+  },
+
+  // Redemption Requests
+  REDEMPTION_REQUESTS: {
+    LIST: `${API_BASE_URL}/redemption-requests`,
+    CREATE: `${API_BASE_URL}/redemption-requests`,
+    DETAIL: (id) => `${API_BASE_URL}/redemption-requests/${id}`,
+    UPDATE: (id) => `${API_BASE_URL}/redemption-requests/${id}`,
   },
 
   // Notifications

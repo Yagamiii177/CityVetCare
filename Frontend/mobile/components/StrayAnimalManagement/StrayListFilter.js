@@ -67,21 +67,6 @@ const StrayFilterBar = ({ onFilter, activeFilter, onDateFilter }) => {
           )}
         </View>
 
-        {/* Location */}
-        <TouchableOpacity
-          style={[
-            styles.squareButton,
-            isActive("nearby") && styles.activeButton,
-          ]}
-          onPress={handleLocationPress}
-        >
-          <MaterialIcons
-            name="location-on"
-            size={18}
-            color={isActive("nearby") ? "#fff" : "#FA8630"}
-          />
-        </TouchableOpacity>
-
         {/* Dog */}
         <TouchableOpacity
           style={[styles.squareButton, isActive("dog") && styles.activeButton]}

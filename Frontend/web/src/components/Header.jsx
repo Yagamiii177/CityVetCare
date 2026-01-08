@@ -35,6 +35,7 @@ export const Header = ({ isDrawerOpen, toggleDrawer }) => {
       path.includes("/captured-animals") ||
       path.includes("/redemption-requests") ||
       path.includes("/adoption-list") ||
+      path.includes("/euthanized-list") ||
       path.includes("/statistics-logs") ||
       path.includes("/add-stray")
     ) {

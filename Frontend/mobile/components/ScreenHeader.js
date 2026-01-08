@@ -2,12 +2,21 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import BackButton from "./BackButton";
 
-const ScreenHeader = ({ title }) => {
+const ScreenHeader = ({
+  title,
+  showBackButton = false,
+  rightContent = null,
+}) => {
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.title}>{title}</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.side}>
+          {showBackButton ? <BackButton /> : null}
+        </View>
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+        <View style={[styles.side, styles.right]}>{rightContent}</View>
       </View>
       <View style={styles.divider} />
     </View>
@@ -16,35 +25,36 @@ const ScreenHeader = ({ title }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 50,
+    paddingTop: 40,
     backgroundColor: "#F1F1F1",
-    alignItems: "center",
   },
-  header: {
+  headerRow: {
     flexDirection: "row",
-    width: "100%",
-    paddingTop: 90,
-    paddingBottom: 15,
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
+  side: {
+    width: 48,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "flex-start",
+  },
+  right: { alignItems: "flex-end" },
   title: {
-    fontSize: 20,
-    fontWeight: "500",
-    color: "black",
-    textAlign: "center",
     flex: 1,
-    marginTop: 10,
-    marginBottom: 10,
+    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#111827",
   },
   divider: {
-    marginTop: 12,
     height: 3,
     backgroundColor: "#FD7E14",
-    width: "93%",
+    marginHorizontal: 16,
     borderRadius: 2,
-    marginBottom: 10,
+    marginBottom: 8,
   },
 });
 

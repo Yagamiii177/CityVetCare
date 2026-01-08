@@ -219,8 +219,6 @@ const ReportIncidentScreen = ({ navigation, route }) => {
                   ? "Incident/Bite Report"
                   : reportType === "stray"
                   ? "Stray Animal Report"
-                  : reportType === "lost"
-                  ? "Lost Pet Report"
                   : "Select report type"}
               </Text>
               <MaterialCommunityIcons
@@ -249,15 +247,6 @@ const ReportIncidentScreen = ({ navigation, route }) => {
                   }}
                 >
                   <Text>Stray Animal Report</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.dropdownOption}
-                  onPress={() => {
-                    setReportType("lost");
-                    setShowReportTypeDropdown(false);
-                  }}
-                >
-                  <Text>Lost Pet Report</Text>
                 </TouchableOpacity>
               </View>
             )}

@@ -84,7 +84,6 @@ const ReportDetailScreen = ({ navigation, route }) => {
     const typeMap = {
       bite: 'Incident Bite Report',
       stray: 'Stray Animal Report',
-      lost: 'Lost Pet Report',
     };
     return typeMap[type] || type;
   };
@@ -246,7 +245,7 @@ const ReportDetailScreen = ({ navigation, route }) => {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Patrol & Assignment</Text>
           
-          {report.assigned_catchers || report.assigned_team ? (
+          {(report.assigned_catchers && report.assigned_catchers.length > 0) || report.assigned_team ? (
             <View style={styles.assignmentInfo}>
               <View style={styles.assignmentRow}>
                 <MaterialCommunityIcons
@@ -256,20 +255,23 @@ const ReportDetailScreen = ({ navigation, route }) => {
                 />
                 <Text style={styles.assignmentLabel}>Assigned Catcher(s):</Text>
               </View>
-              <Text style={styles.assignmentValue}>
-                {report.assigned_catchers || report.assigned_team}
-              </Text>
-
-              {report.catcher_contacts && (
-                <>
-                  <View style={styles.assignmentRow}>
-                    <Ionicons name="call" size={18} color="#FD7E14" />
-                    <Text style={styles.assignmentLabel}>Contact:</Text>
+              {Array.isArray(report.assigned_catchers) && report.assigned_catchers.length > 0 ? (
+                report.assigned_catchers.map((catcher, index) => (
+                  <View key={catcher.catcher_id || index} style={styles.catcherItem}>
+                    <Text style={styles.assignmentValue}>
+                      {catcher.full_name}
+                    </Text>
+                    {catcher.contact_number && (
+                      <Text style={styles.catcherContact}>
+                        📞 {catcher.contact_number}
+                      </Text>
+                    )}
                   </View>
-                  <Text style={styles.assignmentValue}>
-                    {report.catcher_contacts}
-                  </Text>
-                </>
+                ))
+              ) : (
+                <Text style={styles.assignmentValue}>
+                  {report.assigned_team || 'Not assigned'}
+                </Text>
               )}
 
               {report.patrol_status && (
@@ -342,25 +344,51 @@ const ReportDetailScreen = ({ navigation, route }) => {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Incident Timeline</Text>
           <View style={styles.timeline}>
-            <TimelineItem
-              icon="calendar-check"
-              label="Incident Date"
-              value={formatDateTime(report.incident_date)}
-            />
+            {/* Incident Date */}
+            {report.incident_date && (
+              <TimelineItem
+                icon="calendar-check"
+                label="Incident Date"
+                value={formatDateTime(report.incident_date)}
+              />
+            )}
+            
+            {/* Report Submitted */}
             <TimelineItem
               icon="file-document"
               label="Report Submitted"
               value={formatDateTime(report.created_at || report.reported_at)}
             />
-            {report.updated_at &&
-              report.updated_at !== report.created_at &&
-              report.updated_at !== report.reported_at && (
-                <TimelineItem
-                  icon="update"
-                  label="Last Updated"
-                  value={formatDateTime(report.updated_at)}
-                />
-              )}
+            
+            {/* Scheduled - Show if patrol was scheduled */}
+            {report.patrol_scheduled_at && (
+              <TimelineItem
+                icon="calendar-clock"
+                label="Scheduled for Patrol"
+                value={formatDateTime(report.patrol_scheduled_at)}
+              />
+            )}
+            
+            {/* In Progress - Show if patrol was updated to in progress */}
+            {report.patrol_updated_at && 
+             report.patrol_status === 'In Progress' && (
+              <TimelineItem
+                icon="progress-clock"
+                label="Patrol Started"
+                value={formatDateTime(report.patrol_updated_at)}
+              />
+            )}
+            
+            {/* Resolved or Rejected - Show final update if status is terminal */}
+            {(report.status === 'Resolved' || report.status === 'Rejected') &&
+             report.updated_at &&
+             report.updated_at !== report.created_at && (
+              <TimelineItem
+                icon={report.status === 'Resolved' ? 'check-circle' : 'close-circle'}
+                label={report.status === 'Resolved' ? 'Resolved' : 'Rejected'}
+                value={formatDateTime(report.updated_at)}
+              />
+            )}
           </View>
         </View>
 
@@ -526,6 +554,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     marginLeft: 28,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  catcherItem: {
+    marginLeft: 28,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  catcherContact: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 4,
   },
   noAssignmentText: {
     fontSize: 14,

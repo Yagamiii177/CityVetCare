@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/ReportManagement/Drawer";
 import MultiSelectCheckbox from "../../components/MultiSelectCheckbox";
@@ -36,8 +36,17 @@ const AnimalCatcherSchedule = () => {
   
   // Filter states - UPDATED to match first component
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Filter states for staff search
+  const [staffSearchTerm, setStaffSearchTerm] = useState("");
+  const [debouncedStaffSearchTerm, setDebouncedStaffSearchTerm] = useState("");
+  
+  // Refs for debounce cleanup
+  const debounceTimerRef = useRef(null);
+  const staffDebounceTimerRef = useRef(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -66,6 +75,52 @@ const AnimalCatcherSchedule = () => {
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
+  // Debounce search term with 300ms delay
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchTerm]);
+
+  // Debounce staff search term with 300ms delay
+  useEffect(() => {
+    if (staffDebounceTimerRef.current) {
+      clearTimeout(staffDebounceTimerRef.current);
+    }
+
+    staffDebounceTimerRef.current = setTimeout(() => {
+      setDebouncedStaffSearchTerm(staffSearchTerm);
+    }, 300);
+
+    return () => {
+      if (staffDebounceTimerRef.current) {
+        clearTimeout(staffDebounceTimerRef.current);
+      }
+    };
+  }, [staffSearchTerm]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      if (staffDebounceTimerRef.current) {
+        clearTimeout(staffDebounceTimerRef.current);
+      }
+    };
+  }, []);
+
   // Fetch data on component mount
   useEffect(() => {
     fetchAllData();
@@ -87,7 +142,7 @@ const AnimalCatcherSchedule = () => {
     setLoading(true);
     try {
       const [incidentsRes, schedulesRes, staffRes] = await Promise.all([
-        apiService.incidents.getAll({ status: 'verified' }),
+        apiService.incidents.getAll({ status: 'Verified' }),
         apiService.patrolSchedules.getAll(),
         apiService.patrolStaff.getAll({ status: 'active' }),
       ]);
@@ -239,7 +294,7 @@ const AnimalCatcherSchedule = () => {
         incident_id: formData.incident_id,
         schedule_date: `${formData.scheduled_date} ${formData.scheduled_time}:00`,
         schedule_time: formData.scheduled_time,
-        status: "scheduled",
+        status: "Scheduled",
         notes: formData.notes,
       };
 
@@ -256,7 +311,7 @@ const AnimalCatcherSchedule = () => {
         location: incident.location,
         latitude: incident.latitude,
         longitude: incident.longitude,
-        status: "verified",
+        status: "Verified",
         assigned_catcher_id: incident.assigned_catcher_id,
       });
 
@@ -283,7 +338,7 @@ const AnimalCatcherSchedule = () => {
     }
   };
 
-  const updateScheduleStatus = async (scheduleId, newStatus, incidentId) => {
+  const updateScheduleStatus = async (scheduleId, newStatus) => {
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
@@ -329,19 +384,6 @@ const AnimalCatcherSchedule = () => {
       setError(errorMessage);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "scheduled":
-        return "bg-blue-100 text-blue-800 border border-blue-200";
-      case "in_progress":
-        return "bg-yellow-100 text-yellow-800 border border-yellow-200";
-      case "completed":
-        return "bg-green-100 text-green-800 border border-green-200";
-      default:
-        return "bg-gray-100 text-gray-800 border border-gray-200";
     }
   };
   
@@ -406,16 +448,36 @@ const AnimalCatcherSchedule = () => {
     }
   };
 
-  // Filter schedules
+  // Filter schedules with debounced search
+  // Searches: schedule_id, incident_id, patrol_status, assigned_staff_name, scheduled_date
   const filteredSchedules = schedules.filter((schedule) => {
-    const matchesSearch = searchTerm === "" || 
-      schedule.incident_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      schedule.assigned_staff_names?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      schedule.incident_location?.toLowerCase().includes(searchTerm.toLowerCase());
+    // Apply debounced search filter (case-insensitive, partial matches)
+    const searchLower = debouncedSearchTerm.toLowerCase().trim();
+    const matchesSearch = searchLower === "" || 
+      schedule.id?.toString().includes(searchLower) || // schedule_id
+      schedule.incident_id?.toString().includes(searchLower) || // incident_id
+      schedule.status?.toLowerCase().includes(searchLower) || // patrol_status
+      schedule.assigned_staff_names?.toLowerCase().includes(searchLower) || // assigned_staff_name
+      schedule.incident_title?.toLowerCase().includes(searchLower) ||
+      schedule.incident_location?.toLowerCase().includes(searchLower) ||
+      (schedule.schedule_date && new Date(schedule.schedule_date).toLocaleDateString().toLowerCase().includes(searchLower)); // scheduled_date
     
+    // Apply status filter
     const matchesStatus = statusFilter === "all" || schedule.status === statusFilter;
     
     return matchesSearch && matchesStatus;
+  });
+
+  // Filter staff with debounced search
+  // Searches: staff_id, full_name, role, availability_status
+  const filteredStaff = patrolStaff.filter((staff) => {
+    const searchLower = debouncedStaffSearchTerm.toLowerCase().trim();
+    return searchLower === "" || 
+      staff.id?.toString().includes(searchLower) || // staff_id
+      staff.team_name?.toLowerCase().includes(searchLower) || // full_name
+      staff.leader_name?.toLowerCase().includes(searchLower) || // full_name
+      staff.contact_number?.toLowerCase().includes(searchLower) ||
+      staff.status?.toLowerCase().includes(searchLower); // availability_status
   });
 
   // Get status badge - UPDATED to match first component style
@@ -425,9 +487,15 @@ const AnimalCatcherSchedule = () => {
       in_progress: "bg-purple-100 text-purple-800",
       completed: "bg-green-100 text-green-800",
     };
+
+    const normalizedStatus = String(status ?? "scheduled")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_");
+
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.scheduled}`}>
-        {status.replace('_', ' ').toUpperCase()}
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[normalizedStatus] || styles.scheduled}`}>
+        {normalizedStatus.replace(/_/g, ' ').toUpperCase()}
       </span>
     );
   };
@@ -674,11 +742,11 @@ const AnimalCatcherSchedule = () => {
                     <input
                       id="search-input"
                       type="text"
-                      placeholder="Search schedules (incident title, staff names, location)..."
+                      placeholder="Search by schedule ID, incident ID, status, assigned staff, or date..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10 pr-4 py-2 border w-full rounded-lg focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                      aria-label="Search schedules by incident title, staff names, or location"
+                      aria-label="Search schedules by schedule ID, incident ID, status, assigned staff, or date"
                     />
                     {searchTerm && (
                       <button 
@@ -1055,8 +1123,7 @@ const AnimalCatcherSchedule = () => {
                                     onClick={() =>
                                       updateScheduleStatus(
                                         schedule.id,
-                                        "in_progress",
-                                        schedule.incident_id
+                                        "in_progress"
                                       )
                                     }
                                     disabled={loading}
@@ -1070,8 +1137,7 @@ const AnimalCatcherSchedule = () => {
                                     onClick={() =>
                                       updateScheduleStatus(
                                         schedule.id,
-                                        "completed",
-                                        schedule.incident_id
+                                        "completed"
                                       )
                                     }
                                     disabled={loading}
@@ -1096,6 +1162,109 @@ const AnimalCatcherSchedule = () => {
                               >
                                 Clear all filters
                               </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Dog Catcher / Staff Management Table */}
+              <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-800">
+                    Dog Catcher / Staff Management ({filteredStaff.length})
+                  </h2>
+                </div>
+
+                {/* Staff Search Bar */}
+                <div className="p-4 border-b border-gray-200 bg-gray-50">
+                  <div className="relative">
+                    <label htmlFor="staff-search-input" className="sr-only">Search staff</label>
+                    <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
+                    <input
+                      id="staff-search-input"
+                      type="text"
+                      placeholder="Search by staff ID, name, contact number, or status..."
+                      value={staffSearchTerm}
+                      onChange={(e) => setStaffSearchTerm(e.target.value)}
+                      className="pl-10 pr-10 py-2 border w-full rounded-lg focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+                      aria-label="Search staff by ID, name, contact number, or status"
+                    />
+                    {staffSearchTerm && (
+                      <button 
+                        onClick={() => setStaffSearchTerm("")}
+                        className="absolute right-3 top-3"
+                        aria-label="Clear staff search"
+                      >
+                        <XMarkIcon className="h-5 w-5 text-gray-500 hover:text-gray-700" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full" role="table" aria-label="Dog catcher staff">
+                    <caption className="sr-only">List of dog catcher staff with details</caption>
+                    <thead className="bg-[#FA8630]/10">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Staff ID</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Full Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Contact Number</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Role</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">Availability Status</th>
+                      </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredStaff.length ? (
+                        filteredStaff.map((staff) => (
+                          <tr key={staff.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4">
+                              <span className="text-sm font-medium text-gray-900">#{staff.id}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="text-sm font-medium text-gray-900">
+                                {staff.team_name || staff.leader_name || `Staff ${staff.id}`}
+                              </p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="text-sm text-gray-900">
+                                {staff.contact_number || "N/A"}
+                              </p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="text-sm text-gray-900">
+                                Animal Catcher
+                              </p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                staff.status === 'active' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {staff.status ? staff.status.toUpperCase() : 'ACTIVE'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-8 text-center">
+                            <div className="text-gray-500">
+                              <UserGroupIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                              <p>No staff members found matching your criteria</p>
+                              {staffSearchTerm && (
+                                <button 
+                                  onClick={() => setStaffSearchTerm("")} 
+                                  className="text-[#FA8630] hover:text-[#E87928] mt-2 underline"
+                                >
+                                  Clear search
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

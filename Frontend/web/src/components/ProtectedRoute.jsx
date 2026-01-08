@@ -1,5 +1,5 @@
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -17,14 +17,14 @@ const ProtectedRoute = ({ children }) => {
   }
 
   // Check if token exists in localStorage
-  const token = localStorage.getItem('accessToken');
-  
+  const token = localStorage.getItem("accessToken");
+
   // Redirect to login if not authenticated
   if (!user || !token) {
     return <Navigate to="/login" replace />;
   }
 
-  return children;
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

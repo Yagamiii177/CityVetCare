@@ -111,7 +111,7 @@ const NewReportModal = ({ isOpen, onClose, onSubmit }) => {
       pet_gender: formData.petGender,
       pet_size: formData.petSize,
       imageFiles: formData.imageFiles, // Pass File objects instead of blob URLs
-      status: "pending",
+      status: "Pending",
       reporter_name: "Admin Portal",
       // Also include camelCase for frontend compatibility
       reportType: formData.reportType,

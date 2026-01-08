@@ -1,109 +1,121 @@
 /**
- * Test authenticated incident report submission
+ * Test authenticated pet owner incident report submission
+ * This test validates the critical path that is failing
  */
 
-const BASE_URL = 'http://192.168.0.108:3000/api';
+import axios from 'axios';
+
+const API_BASE = 'http://localhost:3000/api';
+
+// Test data
+const TEST_CREDENTIALS = {
+  username: 'test@owner.com', // Test owner created with proper bcrypt hash
+  password: 'testpass123',
+  userType: 'pet_owner'
+};
 
 async function testAuthenticatedReport() {
-  console.log('\n🔐 Testing Authenticated Incident Report');
-  console.log('=========================================\n');
-
-  // Step 1: Login to get token
-  console.log('Step 1: Login...');
+  console.log('\n🔬 Testing Authenticated Incident Report Submission\n');
+  console.log('=' .repeat(60));
+  
   try {
-    const loginResponse = await fetch(`${BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: 'iphoneuser',
-        password: 'iphone123'
-      })
-    });
-
-    const loginData = await loginResponse.json();
+    // Step 1: Login as pet owner
+    console.log('\n📝 Step 1: Logging in as pet owner...');
+    const loginResponse = await axios.post(`${API_BASE}/auth/login`, TEST_CREDENTIALS);
     
-    if (!loginResponse.ok) {
-      console.log('❌ Login failed:', loginData.message);
-      return;
-    }
-
-    const token = loginData.accessToken;
-    console.log('✅ Logged in as:', loginData.user.username);
-    console.log('   Token:', token ? 'Present ✓' : 'Missing ✗');
-
-    // Step 2: Submit incident WITH token
-    console.log('\nStep 2: Submit report WITH authentication...');
+    const loginData = loginResponse.data;
+    
+    console.log('✅ Login successful');
+    console.log('   User ID:', loginData.userId);
+    console.log('   User Type:', loginData.userType);
+    console.log('   Token:', loginData.token ? 'Present' : 'Missing');
+    
+    // Decode token to inspect payload
+    const tokenParts = loginData.token.split('.');
+    const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+    console.log('   Token Payload:', JSON.stringify(payload, null, 2));
+    
+    // Step 2: Submit incident report as authenticated user
+    console.log('\n📝 Step 2: Submitting incident report...');
     
     const reportData = {
-      title: 'Authenticated Mobile Report',
-      description: 'Testing authenticated incident submission',
-      location: '14.5995,120.9842',
+      incident_type: 'stray',
+      description: 'Test authenticated report - stray dog in neighborhood',
+      location: 'Test Location via Authenticated API',
       latitude: 14.5995,
       longitude: 120.9842,
-      status: 'pending',
-      reporter_name: 'iPhone User',
+      reporter_name: 'Authenticated Test User',
       reporter_contact: '09123456789',
-      incident_date: new Date().toISOString().replace('T', ' ').split('.')[0],
-      incident_type: 'incident',
-      pet_color: 'Brown',
-      pet_breed: 'Aspin',
       animal_type: 'dog',
-      pet_gender: 'male',
-      pet_size: 'medium',
-      images: '[]'
+      pet_color: 'brown',
+      pet_size: 'medium'
     };
-
-    const reportResponse = await fetch(`${BASE_URL}/incidents`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(reportData)
-    });
-
-    const reportResult = await reportResponse.json();
-
-    if (reportResponse.ok) {
-      console.log('✅ Report submitted successfully!');
-      console.log('   Report ID:', reportResult.id);
-      console.log('   Status:', reportResult.data?.status || 'unknown');
-    } else {
-      console.log('❌ Report submission failed:', reportResult.message);
-      console.log('   Details:', reportResult.details || 'No details');
-    }
-
-    // Step 3: Submit incident WITHOUT token (emergency report)
-    console.log('\nStep 3: Submit report WITHOUT authentication (emergency)...');
     
-    const emergencyResponse = await fetch(`${BASE_URL}/incidents`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        ...reportData,
-        title: 'Emergency Mobile Report',
-        reporter_name: 'Anonymous User'
-      })
+    const reportResponse = await axios.post(`${API_BASE}/incidents`, reportData, {
+      headers: { 'Authorization': `Bearer ${loginData.token}` }
     });
-
-    const emergencyResult = await emergencyResponse.json();
-
-    if (emergencyResponse.ok) {
-      console.log('✅ Emergency report submitted successfully!');
-      console.log('   Report ID:', emergencyResult.id);
+    
+    const reportResult = reportResponse.data;
+    
+    console.log('✅ Report submission successful');
+    console.log('   Report ID:', reportResult.id);
+    console.log('   Response:', JSON.stringify(reportResult, null, 2));
+    
+    // Step 3: Verify report appears in "My Reports"
+    console.log('\n📝 Step 3: Fetching "My Reports"...');
+    
+    const myReportsResponse = await axios.get(`${API_BASE}/incidents/my-reports`, {
+      headers: { 'Authorization': `Bearer ${loginData.token}` }
+    });
+    
+    const myReportsData = myReportsResponse.data;
+    
+    console.log('✅ My Reports fetched successfully');
+    console.log('   Total Reports:', myReportsData.total || myReportsData.data?.length || 0);
+    
+    // Check if our report appears
+    const ourReport = myReportsData.data?.find(r => r.id === reportResult.id);
+    if (ourReport) {
+      console.log('   ✅ Our report appears in My Reports');
+      console.log('   Report:', JSON.stringify(ourReport, null, 2));
     } else {
-      console.log('❌ Emergency report failed:', emergencyResult.message);
+      console.log('   ⚠️  Our report NOT found in My Reports');
+      console.log('   All Reports:', JSON.stringify(myReportsData.data, null, 2));
     }
-
-    console.log('\n=========================================');
-    console.log('📊 Test Complete');
-    console.log('=========================================\n');
-
+    
+    // Step 4: Test Emergency (anonymous) submission still works
+    console.log('\n📝 Step 4: Testing emergency (anonymous) submission...');
+    
+    const emergencyData = {
+      incident_type: 'stray',
+      description: 'Test emergency anonymous report',
+      location: 'Emergency Location',
+      latitude: 14.5995,
+      longitude: 120.9842,
+      reporter_name: 'Anonymous Reporter',
+      reporter_contact: '09999999999',
+      animal_type: 'dog'
+    };
+    
+    const emergencyResponse = await axios.post(`${API_BASE}/incidents`, emergencyData);
+    
+    const emergencyResult = emergencyResponse.data;
+    
+    console.log('✅ Emergency submission successful');
+    console.log('   Report ID:', emergencyResult.id);
+    
+    console.log('\n' + '='.repeat(60));
+    console.log('✅ ALL TESTS COMPLETED');
+    
   } catch (error) {
-    console.log('❌ Error:', error.message);
+    console.error('\n❌ Test failed with error:', error.message);
+    if (error.response) {
+      console.error('   Status:', error.response.status);
+      console.error('   Data:', JSON.stringify(error.response.data, null, 2));
+    }
+    console.error('Stack:', error.stack);
   }
 }
 
+// Run test
 testAuthenticatedReport();

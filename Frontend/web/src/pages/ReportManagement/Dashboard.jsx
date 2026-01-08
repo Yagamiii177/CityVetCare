@@ -97,11 +97,18 @@ const IncidentDashboard = () => {
               s.status === 'Assigned' || s.status === 'Scheduled'
             ).length || 0;
           
+          // Calculate pending verification count from actual incidents
+          const allIncidents = incidentsResponse.data?.records || [];
+          const pendingCount = allIncidents.filter(incident => {
+            const status = incident.status?.toLowerCase();
+            return status === 'pending' || status === 'pending_verification';
+          }).length;
+          
           setDashboardData({
             totalReports: incidents.total_incidents || summary.total_incidents || 0,
             resolvedReports: incidents.resolved || summary.resolved_incidents || 0,
-            // Pending status represents incidents awaiting verification
-            pendingReports: incidents.pending_verification || incidents.pending || summary.pending_incidents || 0,
+            // Use calculated pending count from actual data
+            pendingReports: pendingCount,
             reportsThisWeek: incidents.in_progress || summary.in_progress_incidents || 0,
             scheduledPatrols: scheduledCount,
             inProgressReports: incidents.in_progress || summary.in_progress_incidents || 0,

@@ -153,7 +153,50 @@ export const apiService = {
     getById: (id) => api.get(`/stray-animals/${id}`),
     create: (data) => api.post("/stray-animals", data),
     update: (id, data) => api.put(`/stray-animals/${id}`, data),
-    updateStatus: (id, data) => api.put(`/stray-animals/${id}/status`, data),
+    putToAdoption: (id) => api.post(`/stray-animals/${id}/adopt`),
+    euthanize: (id, data) => api.post(`/stray-animals/${id}/euthanize`, data),
+    alertOwner: (id) => api.post(`/stray-animals/${id}/alert-owner`),
+  },
+
+  // Euthanized Animals
+  euthanizedAnimals: {
+    list: (filters = {}) => api.get("/euthanized-animals", { params: filters }),
+    getById: (id) => api.get(`/euthanized-animals/${id}`),
+  },
+
+  // Pets (lookup by RFID)
+  pets: {
+    getByRfid: (rfid) => api.get(`/pets/rfid/${rfid}`),
+  },
+
+  // Adoption Requests
+  adoptionRequests: {
+    list: (filters = {}) => api.get("/adoption-requests", { params: filters }),
+    getById: (id) => api.get(`/adoption-requests/${id}`),
+    update: (id, data) => api.put(`/adoption-requests/${id}`, data),
+    claim: (id, data) => api.post(`/adoption-requests/${id}/claim`, data),
+  },
+
+  // Redemption Requests
+  redemptionRequests: {
+    list: (filters = {}) =>
+      api.get("/redemption-requests", { params: filters }),
+    getById: (id) => api.get(`/redemption-requests/${id}`),
+    create: (data) => api.post("/redemption-requests", data),
+    update: (id, data) => api.put(`/redemption-requests/${id}`, data),
+    claim: (id, data) => api.post(`/redemption-requests/${id}/claim`, data),
+  },
+
+  // Notifications (admin)
+  notifications: {
+    createForUser: ({ userId, userType = "owner", title, message, type }) =>
+      api.post("/notifications/admin", {
+        userId,
+        userType,
+        title,
+        message,
+        type,
+      }),
   },
 
   // Dashboard

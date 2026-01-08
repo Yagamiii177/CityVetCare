@@ -17,6 +17,11 @@ import schedulesRouter from "./routes/schedules.js";
 import strayAnimalsRouter from "./routes/strayAnimals.js";
 import patrolStaffRouter from "./routes/patrol-staff.js";
 import patrolSchedulesRouter from "./routes/patrol-schedules.js";
+import petsRouter from "./routes/pets.js";
+import euthanizedAnimalsRouter from "./routes/euthanizedAnimals.js";
+import adoptionRequestsRouter from "./routes/adoptionRequests.js";
+import notificationsRouter from "./routes/notifications.js";
+import redemptionRequestsRouter from "./routes/redemptionRequests.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -105,6 +110,25 @@ app.use("/api/schedules", schedulesRouter);
 app.use("/api/patrol-staff", patrolStaffRouter);
 app.use("/api/patrol-schedules", patrolSchedulesRouter);
 app.use("/api/stray-animals", strayAnimalsRouter);
+app.use("/api/pets", petsRouter);
+app.use("/api/euthanized-animals", euthanizedAnimalsRouter);
+app.use("/api/adoption-requests", adoptionRequestsRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/redemption-requests", redemptionRequestsRouter);
+
+// Debug: Log registered routes
+if (process.env.NODE_ENV === "development") {
+  console.log("📡 Registered API routes:");
+  console.log("  - /api/health");
+  console.log("  - /api/auth");
+  console.log("  - /api/stray-animals");
+  console.log("  - /api/pets");
+  console.log("  - /api/euthanized-animals");
+  console.log("  - /api/adoption-requests");
+  console.log("  - /api/notifications");
+  console.log("  - /api/redemption-requests");
+  console.log("  - /api/dashboard");
+}
 
 // 404 handler
 app.use((req, res) => {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons, MaterialIcons, FontAwesome } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { resolveImageUri } from "../../utils/resolveImageUri";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -23,22 +24,29 @@ const AnimalProfileScreen = ({ route }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [currentZoomImage, setCurrentZoomImage] = useState(null);
+  const [failedImages, setFailedImages] = useState(() => new Set());
 
-  // Corrected image handling logic
-  const getImages = () => {
-    if (pet.imagesUrls?.length > 0) return pet.imagesUrls;
-    if (Array.isArray(pet.imageUrls) && pet.imageUrls.length > 0)
-      return pet.imageUrls;
-    if (typeof pet.imageUrls === "string") return [pet.imageUrls];
-    return [require("../../assets/icons/logo.png")];
-  };
+  const images = useMemo(() => {
+    const raw = [];
+    if (Array.isArray(pet?.imageUrls) && pet.imageUrls.length > 0) {
+      raw.push(...pet.imageUrls);
+    } else if (typeof pet?.imageUrls === "string" && pet.imageUrls) {
+      raw.push(pet.imageUrls);
+    }
 
-  const images = getImages();
+    const resolved = raw
+      .filter(Boolean)
+      .map((item) => (typeof item === "string" ? resolveImageUri(item) : item));
+
+    return resolved.length > 0
+      ? resolved
+      : [require("../../assets/icons/logo.png")];
+  }, [pet?.imageUrls]);
 
   const displayValue = (value) => value || "N/A";
 
   const handleAdoptPress = () => {
-    navigation.navigate("AdoptionForm", { pet });
+    navigation.navigate("Main", { screen: "AdoptionForm", params: { pet } });
   };
 
   const openImageZoom = (image) => {
@@ -50,13 +58,28 @@ const AnimalProfileScreen = ({ route }) => {
     setZoomVisible(false);
   };
 
-  const renderImageItem = ({ item }) => {
-    const source = typeof item === "string" ? { uri: item } : item;
+  const renderImageItem = ({ item, index }) => {
+    const isFailed = failedImages.has(index);
+    const source =
+      !isFailed && typeof item === "string"
+        ? { uri: item }
+        : require("../../assets/icons/logo.png");
 
     return (
       <TouchableWithoutFeedback onPress={() => openImageZoom(item)}>
         <View style={styles.imageContainer}>
-          <Image source={source} style={styles.image} resizeMode="fill" />
+          <Image
+            source={source}
+            style={styles.image}
+            resizeMode="fill"
+            onError={() =>
+              setFailedImages((prev) => {
+                const next = new Set(prev);
+                next.add(index);
+                return next;
+              })
+            }
+          />
         </View>
       </TouchableWithoutFeedback>
     );

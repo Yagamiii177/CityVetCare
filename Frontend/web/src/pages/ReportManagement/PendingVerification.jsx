@@ -55,54 +55,60 @@ const PendingVerification = () => {
       
       // Transform backend data to frontend format with new mobile fields
       const transformedReports = pendingReports.map(incident => {
-        // Parse date/time properly
-        const getDateTime = (dateTimeStr) => {
-          try {
-            if (!dateTimeStr) return { date: 'Not specified', time: 'Not specified' };
-            const dateObj = new Date(dateTimeStr);
-            if (isNaN(dateObj.getTime())) {
-              const parts = dateTimeStr.split(' ');
-              return { date: parts[0] || 'Not specified', time: parts[1] || 'Not specified' };
+        // Format time properly
+        let formattedTime = 'Not specified';
+        
+        // Try to extract time from incident_date or created_at
+        const dateTimeStr = incident.incident_date || incident.created_at;
+        if (dateTimeStr) {
+          // Handle both "YYYY-MM-DD HH:MM:SS" and ISO format
+          let timePart = '';
+          
+          if (dateTimeStr.includes(' ')) {
+            // Format: "YYYY-MM-DD HH:MM:SS"
+            timePart = dateTimeStr.split(' ')[1];
+          } else if (dateTimeStr.includes('T')) {
+            // ISO format: "YYYY-MM-DDTHH:MM:SS.000Z"
+            const isoTimePart = dateTimeStr.split('T')[1];
+            if (isoTimePart) {
+              timePart = isoTimePart.split('.')[0]; // Remove milliseconds and Z
             }
-            const year = dateObj.getFullYear();
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            const hours = String(dateObj.getHours()).padStart(2, '0');
-            const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-            const seconds = String(dateObj.getSeconds()).padStart(2, '0');
-            return { date: `${year}-${month}-${day}`, time: `${hours}:${minutes}:${seconds}` };
-          } catch (error) {
-            return { date: 'Not specified', time: 'Not specified' };
           }
-        };
-        
-        const { date, time } = getDateTime(incident.incident_date || incident.created_at);
-        
+          
+          // Extract HH:MM from time string
+          if (timePart) {
+            const timeComponents = timePart.split(':');
+            if (timeComponents.length >= 2) {
+              formattedTime = `${timeComponents[0]}:${timeComponents[1]}`;
+            }
+          }
+        }
+
         return {
-        id: incident.id,
-        reporter: incident.reporter_name,
-        reporterContact: incident.reporter_contact,
-        reporterAddress: incident.location,
-        type: incident.title || 'Unknown Incident',
-        address: incident.location,
-        date,
-        time,
-        status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
-        description: incident.description,
-        images: incident.images || [], // Add images field
-        // NEW: Use database fields directly from mobile form
-        reportType: incident.report_type ? (incident.report_type === 'bite' ? 'Incident/Bite Report' : incident.report_type === 'stray' ? 'Stray Animal Report' : incident.report_type === 'lost' ? 'Lost Pet Report' : 'Animal Report') : 'Animal Report',
-        animalType: incident.animal_type ? (incident.animal_type.charAt(0).toUpperCase() + incident.animal_type.slice(1)) : extractAnimalType(incident.description),
-        petBreed: incident.pet_breed || 'Not specified',
-        petColor: incident.pet_color || 'Not specified',
-        petGender: incident.pet_gender ? (incident.pet_gender.charAt(0).toUpperCase() + incident.pet_gender.slice(1)) : 'Unknown',
-        petSize: incident.pet_size ? (incident.pet_size.charAt(0).toUpperCase() + incident.pet_size.slice(1)) : 'Unknown',
-        animalCount: extractAnimalCount(incident.description),
-        injuries: extractInjuries(incident.description),
-        submittedBy: "System",
-        submissionDate: incident.created_at,
-        verificationNotes: "",
-      };
+          id: incident.id,
+          reporter: incident.reporter_name,
+          reporterContact: incident.reporter_contact,
+          reporterAddress: incident.location,
+          type: incident.title,
+          address: incident.location,
+          date: incident.incident_date ? incident.incident_date.split(' ')[0] : incident.created_at.split(' ')[0],
+          time: formattedTime,
+          status: incident.status.charAt(0).toUpperCase() + incident.status.slice(1).replace('_', ' '),
+          description: incident.description,
+          images: incident.images || [], // Add images field
+          // NEW: Use database fields directly from mobile form
+          reportType: incident.report_type ? (incident.report_type === 'incident' || incident.report_type === 'bite' ? 'Incident/Bite Report' : incident.report_type === 'stray' ? 'Stray Animal Report' : incident.report_type === 'lost' ? 'Lost Pet Report' : 'Animal Report') : 'Animal Report',
+          animalType: incident.animal_type ? (incident.animal_type.charAt(0).toUpperCase() + incident.animal_type.slice(1)) : extractAnimalType(incident.description),
+          petBreed: incident.pet_breed || 'Not specified',
+          petColor: incident.pet_color || 'Not specified',
+          petGender: incident.pet_gender ? (incident.pet_gender.charAt(0).toUpperCase() + incident.pet_gender.slice(1)) : 'Unknown',
+          petSize: incident.pet_size ? (incident.pet_size.charAt(0).toUpperCase() + incident.pet_size.slice(1)) : 'Unknown',
+          animalCount: extractAnimalCount(incident.description),
+          injuries: extractInjuries(incident.description),
+          submittedBy: "System",
+          submissionDate: incident.created_at,
+          verificationNotes: "",
+        };
       });
 
       setReports(transformedReports);
@@ -200,7 +206,7 @@ const PendingVerification = () => {
         location: incident.location,
         latitude: incident.latitude,
         longitude: incident.longitude,
-        status: 'verified',
+        status: 'Verified',
         assigned_catcher_id: incident.assigned_catcher_id,
         // Include mobile report fields
         incident_type: incident.incident_type,
@@ -313,7 +319,6 @@ const PendingVerification = () => {
     bite: pendingReports.filter(r => r.type === "Bite Incident").length,
     stray: pendingReports.filter(r => r.type === "Stray Animal").length,
     rabies: pendingReports.filter(r => r.type === "Rabies Suspected").length,
-    nuisance: pendingReports.filter(r => r.type === "Animal Nuisance").length,
   };
 
   return (
@@ -345,14 +350,10 @@ const PendingVerification = () => {
               <h1 className="text-2xl font-bold text-gray-800">Pending Verification</h1>
               <p className="text-gray-600">Review and verify incident reports</p>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-500">Pending Reports</p>
-              <p className="text-2xl font-bold text-[#FA8630]">{stats.total}</p>
-            </div>
           </div>
 
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
@@ -378,15 +379,6 @@ const PendingVerification = () => {
                   <p className="text-xl font-bold text-gray-800">{stats.rabies}</p>
                 </div>
                 <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
-              </div>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Nuisance</p>
-                  <p className="text-xl font-bold text-gray-800">{stats.nuisance}</p>
-                </div>
-                <ClockIcon className="h-6 w-6 text-blue-500" />
               </div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
@@ -434,7 +426,6 @@ const PendingVerification = () => {
                   <option value="Bite Incident">Bite Incidents</option>
                   <option value="Stray Animal">Stray Animals</option>
                   <option value="Rabies Suspected">Rabies Suspected</option>
-                  <option value="Animal Nuisance">Animal Nuisance</option>
                 </select>
               </div>
             </div>
@@ -567,7 +558,7 @@ const PendingVerification = () => {
 
           {/* Enhanced Detail Modal - Matching MonitoringIncidents */}
           {selectedReport && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9998] p-4 overflow-y-auto">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-y-auto">
               <div className="bg-white w-full max-w-4xl my-8 rounded-xl shadow-2xl relative animate-fadeIn">
                 {/* Close Button - Fixed at top */}
                 <button
@@ -676,8 +667,9 @@ const PendingVerification = () => {
                               <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
                                 Time
                               </label>
-                              <div className="p-3 bg-white rounded-lg border border-gray-200">
-                                <span className="text-gray-900 font-medium text-sm">{selectedReport.time}</span>
+                              <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                                <ClockIcon className="h-4 w-4 text-gray-400" />
+                                <span className="text-gray-900 font-medium text-sm">{selectedReport.time || 'Not specified'}</span>
                               </div>
                             </div>
                           </div>
@@ -698,6 +690,15 @@ const PendingVerification = () => {
                             </label>
                             <div className="p-3 bg-white rounded-lg border border-gray-200">
                               <span className="text-gray-900 font-medium">{selectedReport.reportType || 'Animal Report'}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                              Incident Type
+                            </label>
+                            <div className="p-3 bg-white rounded-lg border border-gray-200">
+                              <span className="text-gray-900 font-medium">{selectedReport.type || selectedReport.reportType || 'Animal Incident'}</span>
                             </div>
                           </div>
 

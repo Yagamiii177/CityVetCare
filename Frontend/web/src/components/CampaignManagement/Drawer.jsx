@@ -34,7 +34,7 @@ export const Drawer = ({ isOpen, onItemClick, setIsDrawerOpen }) => {
       path: "/redemption-requests",
     },
     {
-      name: "Adoption List",
+      name: "Adoption Requests",
       icon: <HomeModernIcon className="h-5 w-5 mr-3" />,
       path: "/adoption-list",
     },

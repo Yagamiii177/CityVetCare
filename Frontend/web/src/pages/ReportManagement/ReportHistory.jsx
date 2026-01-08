@@ -12,6 +12,7 @@ import {
   PhoneIcon,
   ExclamationTriangleIcon,
   ClockIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 
 const ReportHistory = () => {
@@ -21,6 +22,7 @@ const ReportHistory = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all"); // all, resolved, rejected, cancelled
+  const [reportSchedules, setReportSchedules] = useState([]);
 
   const toggleDrawer = () => setIsDrawerOpen((s) => !s);
 
@@ -129,6 +131,54 @@ const ReportHistory = () => {
       setError(`Failed to load report history: ${err.message || 'Unknown error'}`);
       setHistoryReports([]);
       setLoading(false);
+    }
+  };
+
+  // Fetch schedules for a specific incident
+  const fetchReportSchedules = async (incidentId) => {
+    try {
+      const response = await apiService.patrolSchedules.getAll();
+      const incidentSchedules = response.data.records.filter(
+        (schedule) => schedule.incident_id === incidentId
+      );
+      setReportSchedules(incidentSchedules);
+    } catch (error) {
+      console.error("Error fetching report schedules:", error);
+      setReportSchedules([]);
+    }
+  };
+
+  // Handle view report with timeline and schedule data
+  const handleViewReport = async (report) => {
+    try {
+      // Fetch full report details including timeline
+      const response = await apiService.incidents.getById(report.id);
+      
+      if (response.data && response.data.data) {
+        const fullReport = response.data.data;
+        
+        // Transform to include timeline and schedule data
+        const transformedReport = {
+          ...report,
+          timeline: fullReport.timeline || [],
+          patrol_schedule_id: fullReport.patrol_schedule_id,
+          patrol_date: fullReport.patrol_date,
+          patrol_time: fullReport.patrol_time,
+          patrol_status: fullReport.patrol_status,
+          patrol_notes: fullReport.patrol_notes,
+          assigned_catchers: fullReport.assigned_catchers || [],
+        };
+        
+        setSelectedReport(transformedReport);
+        fetchReportSchedules(report.id);
+      } else {
+        setSelectedReport(report);
+        fetchReportSchedules(report.id);
+      }
+    } catch (error) {
+      console.error('Failed to fetch full report details:', error);
+      setSelectedReport(report);
+      fetchReportSchedules(report.id);
     }
   };
 
@@ -595,6 +645,100 @@ const ReportHistory = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Timeline Section */}
+                    {selectedReport.timeline && selectedReport.timeline.length > 0 && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                          <ClockIcon className="h-5 w-5 text-indigo-600" />
+                          Incident Timeline
+                        </h3>
+                        <div className="relative pl-8">
+                          {selectedReport.timeline.map((event, index) => (
+                            <div key={index} className="relative pb-6 last:pb-0">
+                              {/* Timeline line */}
+                              {index < selectedReport.timeline.length - 1 && (
+                                <div className="absolute left-0 top-6 w-0.5 h-full bg-gray-200"></div>
+                              )}
+                              
+                              {/* Timeline dot */}
+                              <div className={`absolute left-0 top-1 w-4 h-4 rounded-full border-2 ${
+                                event.completed 
+                                  ? 'bg-green-500 border-green-500' 
+                                  : 'bg-white border-gray-300'
+                              }`}></div>
+                              
+                              {/* Timeline content */}
+                              <div className="ml-6">
+                                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <p className="font-medium text-gray-900">{event.status}</p>
+                                      <p className="text-sm text-gray-600 mt-1">{event.description}</p>
+                                    </div>
+                                    {event.completed && (
+                                      <CheckCircleIcon className="h-5 w-5 text-green-500 flex-shrink-0 ml-2" />
+                                    )}
+                                  </div>
+                                  {event.timestamp && (
+                                    <p className="text-xs text-gray-500 mt-2">
+                                      {new Date(event.timestamp).toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Patrol Schedule Table */}
+                    {reportSchedules.length > 0 && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                          <ClockIcon className="h-5 w-5 text-blue-600" />
+                          Patrol Schedule History
+                        </h3>
+                        <div className="overflow-hidden rounded-lg border border-gray-300">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Assigned Staff</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Schedule Date</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Created</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 bg-white">
+                              {reportSchedules.map((schedule) => (
+                                <tr key={schedule.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 text-gray-900">{schedule.catcher_name || 'Not assigned'}</td>
+                                  <td className="px-4 py-3 text-gray-900">{schedule.schedule_date || 'N/A'}</td>
+                                  <td className="px-4 py-3">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      schedule.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                                      schedule.status === 'On Patrol' ? 'bg-blue-100 text-blue-800' :
+                                      schedule.status === 'Assigned' ? 'bg-yellow-100 text-yellow-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {schedule.status}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-600 text-xs">{schedule.created_at || 'N/A'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Description Section */}
                     <div className="space-y-3">

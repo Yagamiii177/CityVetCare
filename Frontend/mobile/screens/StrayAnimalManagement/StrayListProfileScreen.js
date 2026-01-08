@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
 } from "react-native";
 import { Ionicons, MaterialIcons, FontAwesome } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { resolveImageUri } from "../../utils/resolveImageUri";
+import api from "../../services/api";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -25,23 +27,60 @@ const StrayProfileScreen = () => {
   const [zoomVisible, setZoomVisible] = useState(false);
   const [currentZoomImage, setCurrentZoomImage] = useState(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [ownerInfo, setOwnerInfo] = useState(null);
+  const [loadingOwner, setLoadingOwner] = useState(false);
   const petName = pet.name?.trim() !== "" ? pet.name : "Unnamed";
 
+  // Fetch owner info by RFID
+  useEffect(() => {
+    const fetchOwner = async () => {
+      if (!pet?.rfid || !/^\d{9}$/.test(String(pet.rfid))) {
+        setOwnerInfo(null);
+        return;
+      }
+      try {
+        setLoadingOwner(true);
+        const response = await api.pets.getByRfid(String(pet.rfid));
+        const data = response?.data?.data || response?.data || response;
+        setOwnerInfo(data?.owner || null);
+      } catch (e) {
+        setOwnerInfo(null);
+      } finally {
+        setLoadingOwner(false);
+      }
+    };
+    fetchOwner();
+  }, [pet?.rfid]);
+
+  const DEFAULT_PET_IMAGE = useMemo(
+    () => require("../../assets/icons/logo.png"),
+    []
+  );
+
+  const [failedImages, setFailedImages] = useState(() => new Set());
+
   const getImages = () => {
-    if (pet.imageUrls?.length > 0) return pet.imageUrls;
-    return [require("../../assets/icons/logo.png")];
+    if (pet.imageUrls?.length > 0) {
+      return pet.imageUrls
+        .map((img) => (typeof img === "string" ? resolveImageUri(img) : img))
+        .filter(Boolean);
+    }
+    return [DEFAULT_PET_IMAGE];
   };
 
   const images = getImages();
 
   const handleRedeem = () => {
-    if (pet.status === "Available") {
+    const status = (pet.status || "").toLowerCase();
+    if (status === "captured" || status === "available") {
       navigation.navigate("RedemptionForm", { pet });
     }
   };
 
   const openImageZoom = (image) => {
-    setCurrentZoomImage(image);
+    setCurrentZoomImage(
+      typeof image === "string" ? resolveImageUri(image) : image
+    );
     setZoomVisible(true);
   };
 
@@ -49,12 +88,38 @@ const StrayProfileScreen = () => {
     setZoomVisible(false);
   };
 
+  const formatOwnerName = (fullName) => {
+    if (!fullName) return "";
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 0) return "";
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+  };
+
   const renderImageItem = ({ item }) => {
-    const source = typeof item === "string" ? { uri: item } : item;
+    const resolvedUri = typeof item === "string" ? item : null;
+    const source =
+      typeof item === "string"
+        ? failedImages.has(resolvedUri)
+          ? DEFAULT_PET_IMAGE
+          : { uri: resolvedUri }
+        : item;
     return (
       <TouchableWithoutFeedback onPress={() => openImageZoom(item)}>
         <View style={styles.imageContainer}>
-          <Image source={source} style={styles.image} resizeMode="cover" />
+          <Image
+            source={source}
+            style={styles.image}
+            resizeMode="cover"
+            onError={() => {
+              if (!resolvedUri) return;
+              setFailedImages((prev) => {
+                const next = new Set(prev);
+                next.add(resolvedUri);
+                return next;
+              });
+            }}
+          />
         </View>
       </TouchableWithoutFeedback>
     );
@@ -155,10 +220,52 @@ const StrayProfileScreen = () => {
             </Text>
             <DetailRow icon="pets" label="Availability" value={pet.status} />
           </View>
+
+          {/* Possible Owner Section */}
+          {pet?.rfid && /^\d{9}$/.test(String(pet.rfid)) && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                <MaterialIcons name="person" size={18} color="#FA8630" />{" "}
+                Possible Owner
+              </Text>
+              {loadingOwner ? (
+                <Text style={styles.loadingText}>
+                  Loading owner information...
+                </Text>
+              ) : ownerInfo ? (
+                <DetailRow
+                  icon="person"
+                  label="Name"
+                  value={formatOwnerName(
+                    ownerInfo.full_name || ownerInfo.name || ""
+                  )}
+                />
+              ) : (
+                <Text style={styles.noOwnerText}>
+                  No owner information found
+                </Text>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Redeem Button */}
-        <TouchableOpacity style={styles.redeemButton} onPress={handleRedeem}>
+        <TouchableOpacity
+          style={[
+            styles.redeemButton,
+            !(
+              (pet.status || "").toLowerCase() === "captured" ||
+              (pet.status || "").toLowerCase() === "available"
+            ) && styles.disabledButton,
+          ]}
+          onPress={handleRedeem}
+          disabled={
+            !(
+              (pet.status || "").toLowerCase() === "captured" ||
+              (pet.status || "").toLowerCase() === "available"
+            )
+          }
+        >
           <FontAwesome name="home" size={18} color="white" />
           <Text style={styles.buttonText}> Redeem</Text>
         </TouchableOpacity>
@@ -176,7 +283,7 @@ const StrayProfileScreen = () => {
               <Image
                 source={
                   typeof currentZoomImage === "string"
-                    ? { uri: currentZoomImage }
+                    ? { uri: resolveImageUri(currentZoomImage) }
                     : currentZoomImage
                 }
                 style={styles.zoomedImage}
@@ -334,11 +441,26 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 10,
   },
+  disabledButton: {
+    backgroundColor: "#CCCCCC",
+  },
   buttonText: {
     color: "white",
     fontSize: 16,
     fontWeight: "bold",
     marginLeft: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: "#999",
+    fontStyle: "italic",
+    marginVertical: 8,
+  },
+  noOwnerText: {
+    fontSize: 14,
+    color: "#999",
+    fontStyle: "italic",
+    marginVertical: 8,
   },
   zoomModalBackground: {
     flex: 1,

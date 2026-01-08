@@ -179,7 +179,7 @@ const SubmitIncidentReportPage = () => {
         title: formData.type,
         description: `${formData.details}${formData.injuries ? '\n\nInjuries: ' + formData.injuries : ''}${formData.animalType ? '\nAnimal Type: ' + formData.animalType : ''}${formData.animalCount > 1 ? '\nAnimal Count: ' + formData.animalCount : ''}`,
         location: formData.location,
-        status: 'pending',
+        status: 'Pending',
         priority: formData.severity.toLowerCase(),
         reporter_name: formData.reporterName,
         reporter_contact: formData.reporterContact,

@@ -18,14 +18,16 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { incidentService } from '../../services/apiService';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useFocusEffect } from '@react-navigation/native';
 
-const MyReportsScreen = ({ navigation }) => {
+const MyReportsScreen = ({ navigation, route }) => {
   const { user, isAuthenticated } = useAuth();
   const [reports, setReports] = useState([]);
   const [filteredReports, setFilteredReports] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('All');
+  const highlightIncidentId = route?.params?.highlightIncidentId;
 
   const filters = ['All', 'Pending', 'In Progress', 'Resolved', 'Rejected'];
 
@@ -59,8 +61,8 @@ const MyReportsScreen = ({ navigation }) => {
 
     try {
       setIsLoading(true);
-      const ownerId = user.owner_id || user.id;
-      const response = await incidentService.getByOwnerId(ownerId);
+      // Use the new authenticated endpoint that gets reports automatically from token
+      const response = await incidentService.getMyReports();
       
       const reportsData = response.data || [];
       setReports(reportsData);
@@ -104,6 +106,21 @@ const MyReportsScreen = ({ navigation }) => {
     fetchReports();
   }, []);
 
+  // Handle navigation from notification to specific incident
+  useFocusEffect(
+    useCallback(() => {
+      if (highlightIncidentId) {
+        // If we have a highlighted incident ID from notification
+        // Navigate directly to that incident's detail page
+        setTimeout(() => {
+          navigation.navigate('ReportDetail', { reportId: highlightIncidentId });
+          // Clear the param after navigation
+          navigation.setParams({ highlightIncidentId: undefined });
+        }, 100);
+      }
+    }, [highlightIncidentId])
+  );
+
   // Format date
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -119,7 +136,6 @@ const MyReportsScreen = ({ navigation }) => {
     const typeMap = {
       bite: 'Incident Bite',
       stray: 'Stray Animal',
-      lost: 'Lost Pet',
     };
     return typeMap[type] || type;
   };
@@ -199,7 +215,9 @@ const MyReportsScreen = ({ navigation }) => {
             color="#FD7E14"
           />
           <Text style={styles.catcherText}>
-            {report.assigned_catchers || 'Not yet assigned'}
+            {Array.isArray(report.assigned_catchers) && report.assigned_catchers.length > 0
+              ? report.assigned_catchers.map(c => c.full_name).join(', ')
+              : report.assigned_team || 'Not yet assigned'}
           </Text>
         </View>
 

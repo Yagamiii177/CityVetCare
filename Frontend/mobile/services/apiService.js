@@ -117,12 +117,30 @@ export const incidentService = {
    * @param {object} filters - Optional filters (status)
    */
   getByOwnerId: async (ownerId, filters = {}) => {
-    const queryParams = new URLSearchParams(filters).toString();
-    const url = queryParams 
-      ? `${API_ENDPOINTS.INCIDENTS.LIST}/owner/${ownerId}?${queryParams}`
+    // Use the new BY_OWNER endpoint if available, otherwise fallback
+    const endpoint = API_ENDPOINTS.INCIDENTS.BY_OWNER 
+      ? API_ENDPOINTS.INCIDENTS.BY_OWNER(ownerId)
       : `${API_ENDPOINTS.INCIDENTS.LIST}/owner/${ownerId}`;
     
+    const queryParams = new URLSearchParams(filters).toString();
+    const url = queryParams ? `${endpoint}?${queryParams}` : endpoint;
+    
     console.log('📡 Fetching owner reports:', url);
+    
+    const response = await fetchWithError(url, {
+      method: 'GET',
+    });
+    
+    return response;
+  },
+
+  /**
+   * Get authenticated user's own reports (requires authentication)
+   * Uses token authentication to automatically fetch current user's reports
+   */
+  getMyReports: async () => {
+    const url = API_ENDPOINTS.INCIDENTS.MY_REPORTS;
+    console.log('📡 Fetching my reports (authenticated):', url);
     
     const response = await fetchWithError(url, {
       method: 'GET',
@@ -265,8 +283,6 @@ export const incidentService = {
         title = 'Incident/Bite Report';
       } else if (reportData.reportType === 'stray') {
         title = 'Stray Animal Report';
-      } else if (reportData.reportType === 'lost') {
-        title = 'Lost Pet Report';
       }
 
       // Step 3: Format the incident date properly

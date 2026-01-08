@@ -19,7 +19,12 @@ import AnimalProfileScreen from "./screens/StrayAnimalManagement/AdoptionProfile
 import AdoptionFormScreen from "./screens/StrayAnimalManagement/AdoptionFormScreen";
 import StrayListProfileScreen from "./screens/StrayAnimalManagement/StrayListProfileScreen";
 import RedemptionFormScreen from "./screens/StrayAnimalManagement/RedemptionFormScreen";
+import AdoptionRequestsListScreen from "./screens/StrayAnimalManagement/AdoptionRequestsListScreen";
+import AdoptionRequestDetailScreen from "./screens/StrayAnimalManagement/AdoptionRequestDetailScreen";
+import RedemptionRequestsListScreen from "./screens/StrayAnimalManagement/RedemptionRequestsListScreen";
+import RedemptionRequestDetailScreen from "./screens/StrayAnimalManagement/RedemptionRequestDetailScreen";
 import AnimalLoggerHomePageScreen from "./screens/StrayAnimalManagement/AnimalLogger/AnimalLoggerHomeScreen";
+import VetHomeScreen from "./screens/StrayAnimalManagement/AnimalLogger/VetHomeScreen";
 import PetVaccinationScreen from "./screens/PetVaccinationManagement/PetVaccinationScreen";
 import SuccessPage from "./screens/PetVaccinationManagement/SuccessPage";
 import AboutUsScreen from "./screens/Main/AboutUsScreen";
@@ -37,6 +42,7 @@ import PetProfile from "./components/PetVaccinationManagement/PetProfile";
 import { Asset } from "expo-asset";
 import * as SplashScreen from "expo-splash-screen";
 import { View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { preloadIcons } from "./utils/iconHelper";
 
 const Stack = createNativeStackNavigator();
@@ -51,7 +57,7 @@ export default function App() {
       try {
         // Preload all app icons using the icon helper
         await preloadIcons();
-        
+
         // Preload additional campaign images
         const additionalImages = [
           require("./assets/CampaignManagement/image7.png"),
@@ -63,7 +69,7 @@ export default function App() {
       } catch (e) {
         // Silently fail asset loading in production
         if (__DEV__) {
-          console.warn('Asset loading error:', e);
+          console.warn("Asset loading error:", e);
         }
       } finally {
         setAppIsReady(true);
@@ -85,14 +91,15 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
         <NavigationContainer>
           <Stack.Navigator
             initialRouteName="Login"
             screenOptions={{
               headerShown: false,
               animation: "fade",
-            }}>
+            }}
+          >
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="Main" component={MainStackScreen} />
@@ -100,11 +107,15 @@ export default function App() {
               name="AnimalLoggerMain"
               component={AnimalLoggerHomePageScreen}
             />
+            <Stack.Screen name="VetHome" component={VetHomeScreen} />
             <Stack.Screen
               name="EventRegistration"
               component={EventRegistration}
             />
-            <Stack.Screen name="ReportIncident" component={ReportIncidentScreen} />
+            <Stack.Screen
+              name="ReportIncident"
+              component={ReportIncidentScreen}
+            />
             <Stack.Screen
               name="LocationPicker"
               component={LocationPickerScreen}
@@ -118,7 +129,10 @@ export default function App() {
               name="ReadingMaterial"
               component={ReadingMaterialListScreen}
             />
-            <Stack.Screen name="MapNearbyClinics" component={MapNearbyClinics} />
+            <Stack.Screen
+              name="MapNearbyClinics"
+              component={MapNearbyClinics}
+            />
             <Stack.Screen name="ScreenOption" component={ScreenOption} />
             <Stack.Screen
               name="PetVaccination"
@@ -128,10 +142,13 @@ export default function App() {
             <Stack.Screen name="PetProfile" component={PetProfile} />
             <Stack.Screen name="NotFound" component={NotFound} />
             <Stack.Screen name="SuccessPage" component={SuccessPage} />
-            <Stack.Screen name="AnimalProfile" component={AnimalProfileScreen} />
+            <Stack.Screen
+              name="AnimalProfile"
+              component={AnimalProfileScreen}
+            />
           </Stack.Navigator>
         </NavigationContainer>
-      </View>
+      </GestureHandlerRootView>
     </AuthProvider>
   );
 }
@@ -142,7 +159,8 @@ function MainStackScreen() {
       screenOptions={{
         headerShown: false,
         animation: "none",
-      }}>
+      }}
+    >
       <Stack.Screen name="HomePage" component={HomePageScreen} />
       <Stack.Screen name="MapNearbyClinics" component={MapNearbyClinics} />
       <Stack.Screen name="Map" component={MapScreen} />
@@ -229,6 +247,38 @@ function MainStackScreen() {
       <Stack.Screen
         name="RedemptionForm"
         component={RedemptionFormScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="AdoptionRequestsList"
+        component={AdoptionRequestsListScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="AdoptionRequestDetail"
+        component={AdoptionRequestDetailScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="RedemptionRequestsList"
+        component={RedemptionRequestsListScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="RedemptionRequestDetail"
+        component={RedemptionRequestDetailScreen}
         options={{
           animation: "slide_from_bottom",
           animationDuration: 300,

@@ -17,8 +17,20 @@ class Incident {
           ir.incident_date,
           ir.status,
           ir.reported_at as created_at,
-          r.full_name as reporter_name,
-          r.contact_number as reporter_contact,
+          ir.updated_at,
+          ir.owner_id,
+          CASE 
+            WHEN ir.owner_id IS NOT NULL THEN po.full_name
+            ELSE r.full_name
+          END as reporter_name,
+          CASE
+            WHEN ir.owner_id IS NOT NULL THEN po.contact_number
+            ELSE r.contact_number
+          END as reporter_contact,
+          CASE
+            WHEN ir.owner_id IS NOT NULL THEN 'Pet Owner'
+            ELSE 'Anonymous (Emergency)'
+          END as account_type,
           l.address_text as location,
           l.latitude,
           l.longitude,
@@ -30,6 +42,7 @@ class Incident {
           GROUP_CONCAT(DISTINCT dc.full_name SEPARATOR ', ') as assigned_team
         FROM incident_report ir
         JOIN reporter r ON ir.reporter_id = r.reporter_id
+        LEFT JOIN pet_owner po ON ir.owner_id = po.owner_id
         JOIN incident_location l ON ir.location_id = l.location_id
         LEFT JOIN incident_pet p ON ir.report_id = p.report_id
         LEFT JOIN patrol_schedule ps ON ir.report_id = ps.report_id AND ps.status IN ('Assigned', 'On Patrol')
@@ -69,13 +82,31 @@ class Incident {
       
       const [rows] = await pool.execute(query, params);
       
-      // Get images for each report
+      // Get images for each report and generate title from report_type
       for (let row of rows) {
         const [images] = await pool.execute(
           'SELECT image_path FROM report_image WHERE report_id = ?',
           [row.id]
         );
         row.images = images.map(img => img.image_path);
+        
+        // Generate title based on report_type for frontend compatibility
+        if (row.report_type) {
+          if (row.report_type === 'bite' || row.report_type === 'incident') {
+            row.title = 'Bite Incident';
+          } else if (row.report_type === 'stray') {
+            row.title = 'Stray Animal';
+          } else if (row.report_type === 'lost') {
+            row.title = 'Lost Pet';
+          } else {
+            row.title = row.report_type.charAt(0).toUpperCase() + row.report_type.slice(1);
+          }
+        } else {
+          row.title = 'Unknown Incident';
+        }
+        
+        // Also add incident_type field for mobile compatibility
+        row.incident_type = row.report_type;
       }
       
       return rows;
@@ -98,8 +129,25 @@ class Incident {
           ir.incident_date,
           ir.status,
           ir.reported_at as created_at,
-          r.full_name as reporter_name,
-          r.contact_number as reporter_contact,
+          ir.updated_at,
+          ir.owner_id,
+          ir.priority,
+          CASE 
+            WHEN ir.owner_id IS NOT NULL THEN po.full_name
+            ELSE r.full_name
+          END as reporter_name,
+          CASE
+            WHEN ir.owner_id IS NOT NULL THEN po.contact_number
+            ELSE r.contact_number
+          END as reporter_contact,
+          CASE
+            WHEN ir.owner_id IS NOT NULL THEN po.email
+            ELSE NULL
+          END as reporter_email,
+          CASE
+            WHEN ir.owner_id IS NOT NULL THEN 'Pet Owner'
+            ELSE 'Anonymous (Emergency)'
+          END as account_type,
           l.address_text as location,
           l.latitude,
           l.longitude,
@@ -108,12 +156,20 @@ class Incident {
           p.pet_breed,
           p.pet_gender,
           p.pet_size,
-          GROUP_CONCAT(DISTINCT dc.full_name SEPARATOR ', ') as assigned_team
+          ps.schedule_id as patrol_schedule_id,
+          ps.schedule_date as patrol_date,
+          ps.schedule_time as patrol_time,
+          ps.status as patrol_status,
+          ps.notes as patrol_notes,
+          ps.created_at as patrol_scheduled_at,
+          ps.updated_at as patrol_updated_at,
+          GROUP_CONCAT(DISTINCT CONCAT(dc.catcher_id, ':', dc.full_name, ':', COALESCE(dc.contact_number, '')) SEPARATOR '||') as assigned_catchers_data
         FROM incident_report ir
         JOIN reporter r ON ir.reporter_id = r.reporter_id
+        LEFT JOIN pet_owner po ON ir.owner_id = po.owner_id
         JOIN incident_location l ON ir.location_id = l.location_id
         LEFT JOIN incident_pet p ON ir.report_id = p.report_id
-        LEFT JOIN patrol_schedule ps ON ir.report_id = ps.report_id AND ps.status IN ('Assigned', 'On Patrol')
+        LEFT JOIN patrol_schedule ps ON ir.report_id = ps.report_id
         LEFT JOIN dog_catcher dc ON FIND_IN_SET(dc.catcher_id, ps.assigned_catcher_id) > 0
         WHERE ir.report_id = ?
         GROUP BY ir.report_id
@@ -127,12 +183,92 @@ class Incident {
       
       const incident = rows[0];
       
+      // Parse assigned catchers data
+      if (incident.assigned_catchers_data) {
+        const catchersArray = incident.assigned_catchers_data.split('||');
+        incident.assigned_catchers = catchersArray.map(catcherData => {
+          const [catcher_id, full_name, contact_number] = catcherData.split(':');
+          return {
+            catcher_id: parseInt(catcher_id),
+            full_name,
+            contact_number: contact_number || null
+          };
+        });
+      } else {
+        incident.assigned_catchers = [];
+      }
+      delete incident.assigned_catchers_data;
+      
       // Get images
       const [images] = await pool.execute(
         'SELECT image_path FROM report_image WHERE report_id = ?',
         [id]
       );
       incident.images = images.map(img => img.image_path);
+      
+      // Generate title based on report_type for frontend compatibility
+      if (incident.report_type) {
+        if (incident.report_type === 'bite' || incident.report_type === 'incident') {
+          incident.title = 'Bite Incident';
+        } else if (incident.report_type === 'stray') {
+          incident.title = 'Stray Animal';
+        } else if (incident.report_type === 'lost') {
+          incident.title = 'Lost Pet';
+        } else {
+          incident.title = incident.report_type.charAt(0).toUpperCase() + incident.report_type.slice(1);
+        }
+      } else {
+        incident.title = 'Unknown Incident';
+      }
+      
+      // Also add incident_type field for mobile compatibility
+      incident.incident_type = incident.report_type;
+      
+      // Build timeline based on actual data
+      incident.timeline = [
+        {
+          status: 'Reported',
+          timestamp: incident.created_at,
+          description: `Report submitted by ${incident.reporter_name}`,
+          completed: true
+        }
+      ];
+      
+      if (incident.status !== 'Pending' && incident.status !== 'Rejected' && incident.status !== 'Cancelled') {
+        incident.timeline.push({
+          status: 'Verified',
+          timestamp: incident.status === 'Verified' ? incident.updated_at : null,
+          description: 'Report verified by admin',
+          completed: incident.status !== 'Pending'
+        });
+      }
+      
+      if (incident.patrol_scheduled_at) {
+        incident.timeline.push({
+          status: 'Scheduled',
+          timestamp: incident.patrol_scheduled_at,
+          description: `Patrol scheduled for ${incident.patrol_date} ${incident.patrol_time || ''}`,
+          completed: true
+        });
+      }
+      
+      if (incident.patrol_status === 'On Patrol' || incident.patrol_status === 'Completed') {
+        incident.timeline.push({
+          status: 'In Progress',
+          timestamp: incident.patrol_status === 'On Patrol' ? incident.patrol_updated_at : null,
+          description: 'Patrol team is on site',
+          completed: true
+        });
+      }
+      
+      if (incident.status === 'Resolved' || incident.patrol_status === 'Completed') {
+        incident.timeline.push({
+          status: 'Resolved',
+          timestamp: incident.status === 'Resolved' ? incident.updated_at : null,
+          description: 'Incident resolved successfully',
+          completed: incident.status === 'Resolved'
+        });
+      }
       
       return incident;
     } catch (error) {
@@ -190,14 +326,19 @@ class Incident {
       const reportType = data.incident_type === 'incident' ? 'bite' : data.incident_type || 'stray';
       const incidentDate = data.incident_date || new Date().toISOString().slice(0, 19).replace('T', ' ');
       
-      // Support owner_id for authenticated mobile reports
-      const queryFields = data.owner_id 
+      // Support owner_id for authenticated mobile reports (only if it's a valid numeric value)
+      const parsedOwnerId = data.owner_id != null && String(data.owner_id).trim() !== ''
+        ? Number(data.owner_id)
+        : null;
+      const hasValidOwnerId = Number.isFinite(parsedOwnerId);
+
+      const queryFields = hasValidOwnerId
         ? 'reporter_id, location_id, owner_id, report_type, description, incident_date, status'
         : 'reporter_id, location_id, report_type, description, incident_date, status';
       
-      const queryPlaceholders = data.owner_id ? '?, ?, ?, ?, ?, ?, ?' : '?, ?, ?, ?, ?, ?';
-      const queryParams = data.owner_id 
-        ? [reporterId, locationId, data.owner_id, reportType, data.description || null, incidentDate, data.status || 'Pending']
+      const queryPlaceholders = hasValidOwnerId ? '?, ?, ?, ?, ?, ?, ?' : '?, ?, ?, ?, ?, ?';
+      const queryParams = hasValidOwnerId
+        ? [reporterId, locationId, parsedOwnerId, reportType, data.description || null, incidentDate, data.status || 'Pending']
         : [reporterId, locationId, reportType, data.description || null, incidentDate, data.status || 'Pending'];
       
       const [reportResult] = await connection.execute(
@@ -264,35 +405,144 @@ class Incident {
    * Update incident
    */
   static async update(id, data) {
+    const connection = await pool.getConnection();
+    
     try {
-      const fields = [];
-      const params = [];
+      await connection.beginTransaction();
+      
+      // Update incident_report fields
+      const incidentFields = [];
+      const incidentParams = [];
       
       if (data.description !== undefined) {
-        fields.push('description = ?');
-        params.push(data.description);
+        incidentFields.push('description = ?');
+        incidentParams.push(data.description);
       }
       if (data.status !== undefined) {
-        fields.push('status = ?');
-        params.push(data.status);
+        incidentFields.push('status = ?');
+        incidentParams.push(data.status);
       }
       if (data.report_type !== undefined) {
-        fields.push('report_type = ?');
-        params.push(data.report_type);
+        incidentFields.push('report_type = ?');
+        incidentParams.push(data.report_type);
+      }
+      if (data.incident_type !== undefined) {
+        incidentFields.push('report_type = ?');
+        const reportType = data.incident_type === 'incident' ? 'bite' : data.incident_type;
+        incidentParams.push(reportType);
+      }
+      if (data.incident_date !== undefined) {
+        incidentFields.push('incident_date = ?');
+        incidentParams.push(data.incident_date);
       }
       
-      if (fields.length === 0) {
-        return false;
+      // Update incident_report if there are fields to update
+      if (incidentFields.length > 0) {
+        incidentParams.push(id);
+        const query = `UPDATE incident_report SET ${incidentFields.join(', ')} WHERE report_id = ?`;
+        await connection.execute(query, incidentParams);
       }
       
-      params.push(id);
-      const query = `UPDATE incident_report SET ${fields.join(', ')} WHERE report_id = ?`;
+      // Update location if provided
+      if (data.location !== undefined || data.latitude !== undefined || data.longitude !== undefined) {
+        // Get location_id for this incident
+        const [incident] = await connection.execute(
+          'SELECT location_id FROM incident_report WHERE report_id = ?',
+          [id]
+        );
+        
+        if (incident.length > 0) {
+          const locationId = incident[0].location_id;
+          const locationFields = [];
+          const locationParams = [];
+          
+          if (data.location !== undefined) {
+            locationFields.push('address_text = ?');
+            locationParams.push(data.location);
+          }
+          if (data.latitude !== undefined) {
+            locationFields.push('latitude = ?');
+            locationParams.push(data.latitude);
+          }
+          if (data.longitude !== undefined) {
+            locationFields.push('longitude = ?');
+            locationParams.push(data.longitude);
+          }
+          
+          if (locationFields.length > 0) {
+            locationParams.push(locationId);
+            const locationQuery = `UPDATE incident_location SET ${locationFields.join(', ')} WHERE location_id = ?`;
+            await connection.execute(locationQuery, locationParams);
+          }
+        }
+      }
       
-      const [result] = await pool.execute(query, params);
-      return result.affectedRows > 0;
+      // Update pet/animal information if provided
+      if (data.animal_type !== undefined || data.pet_color !== undefined || 
+          data.pet_breed !== undefined || data.pet_gender !== undefined || data.pet_size !== undefined) {
+        
+        // Check if pet record exists
+        const [existingPet] = await connection.execute(
+          'SELECT report_id FROM incident_pet WHERE report_id = ?',
+          [id]
+        );
+        
+        if (existingPet.length > 0) {
+          // Update existing pet record
+          const petFields = [];
+          const petParams = [];
+          
+          if (data.animal_type !== undefined) {
+            petFields.push('animal_type = ?');
+            petParams.push(data.animal_type);
+          }
+          if (data.pet_color !== undefined) {
+            petFields.push('pet_color = ?');
+            petParams.push(data.pet_color);
+          }
+          if (data.pet_breed !== undefined) {
+            petFields.push('pet_breed = ?');
+            petParams.push(data.pet_breed);
+          }
+          if (data.pet_gender !== undefined) {
+            petFields.push('pet_gender = ?');
+            petParams.push(data.pet_gender);
+          }
+          if (data.pet_size !== undefined) {
+            petFields.push('pet_size = ?');
+            petParams.push(data.pet_size);
+          }
+          
+          if (petFields.length > 0) {
+            petParams.push(id);
+            const petQuery = `UPDATE incident_pet SET ${petFields.join(', ')} WHERE report_id = ?`;
+            await connection.execute(petQuery, petParams);
+          }
+        } else if (data.animal_type) {
+          // Create new pet record if it doesn't exist and animal_type is provided
+          await connection.execute(
+            `INSERT INTO incident_pet (report_id, animal_type, pet_color, pet_breed, pet_gender, pet_size) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              id,
+              data.animal_type,
+              data.pet_color || null,
+              data.pet_breed || null,
+              data.pet_gender || null,
+              data.pet_size || null
+            ]
+          );
+        }
+      }
+      
+      await connection.commit();
+      return true;
     } catch (error) {
+      await connection.rollback();
       logger.error('Failed to update incident', error);
       throw error;
+    } finally {
+      connection.release();
     }
   }
 
@@ -325,7 +575,9 @@ class Incident {
           ir.status,
           ir.reported_at as created_at,
           ir.updated_at,
+          ir.priority,
           l.address_text as location_address,
+          l.address_text as location,
           l.latitude,
           l.longitude,
           p.animal_type,
@@ -333,12 +585,14 @@ class Incident {
           p.pet_breed,
           p.pet_gender,
           p.pet_size,
+          ps.schedule_id as patrol_schedule_id,
           ps.schedule_date as patrol_date,
           ps.schedule_time as patrol_time,
           ps.status as patrol_status,
           ps.notes as patrol_notes,
-          GROUP_CONCAT(DISTINCT dc.full_name SEPARATOR ', ') as assigned_catchers,
-          GROUP_CONCAT(DISTINCT dc.contact_number SEPARATOR ', ') as catcher_contacts,
+          ps.created_at as patrol_scheduled_at,
+          ps.updated_at as patrol_updated_at,
+          GROUP_CONCAT(DISTINCT CONCAT(dc.catcher_id, ':', dc.full_name, ':', COALESCE(dc.contact_number, '')) SEPARATOR '||') as assigned_catchers_data,
           ia.severity_level,
           ia.injuries_description as resolution_notes
         FROM incident_report ir
@@ -363,16 +617,97 @@ class Incident {
       
       const [rows] = await pool.execute(query, params);
       
-      // Get images for each report
+      // Process each report
       for (let row of rows) {
+        // Parse assigned catchers data
+        if (row.assigned_catchers_data) {
+          const catchersArray = row.assigned_catchers_data.split('||');
+          row.assigned_catchers = catchersArray.map(catcherData => {
+            const [catcher_id, full_name, contact_number] = catcherData.split(':');
+            return {
+              catcher_id: parseInt(catcher_id),
+              full_name,
+              contact_number: contact_number || null
+            };
+          });
+          row.assigned_catchers_list = row.assigned_catchers.map(c => c.full_name).join(', ');
+        } else {
+          row.assigned_catchers = [];
+          row.assigned_catchers_list = null;
+        }
+        delete row.assigned_catchers_data;
+        
+        // Get images for each report
         const [images] = await pool.execute(
           'SELECT image_path FROM report_image WHERE report_id = ?',
           [row.id]
         );
         row.images = images.map(img => img.image_path);
         
+        // Generate title based on incident_type (report_type) for frontend compatibility
+        if (row.incident_type) {
+          if (row.incident_type === 'bite' || row.incident_type === 'incident') {
+            row.title = 'Bite Incident';
+          } else if (row.incident_type === 'stray') {
+            row.title = 'Stray Animal';
+          } else if (row.incident_type === 'lost') {
+            row.title = 'Lost Pet';
+          } else {
+            row.title = row.incident_type.charAt(0).toUpperCase() + row.incident_type.slice(1);
+          }
+        } else {
+          row.title = 'Unknown Incident';
+        }
+        
+        // Build timeline
+        row.timeline = [
+          {
+            status: 'Reported',
+            timestamp: row.created_at,
+            description: 'Report submitted',
+            completed: true
+          }
+        ];
+        
+        if (row.status !== 'Pending' && row.status !== 'Rejected' && row.status !== 'Cancelled') {
+          row.timeline.push({
+            status: 'Verified',
+            timestamp: row.status === 'Verified' ? row.updated_at : null,
+            description: 'Report verified',
+            completed: row.status !== 'Pending'
+          });
+        }
+        
+        if (row.patrol_scheduled_at) {
+          row.timeline.push({
+            status: 'Scheduled',
+            timestamp: row.patrol_scheduled_at,
+            description: `Patrol scheduled for ${row.patrol_date}`,
+            completed: true
+          });
+        }
+        
+        if (row.patrol_status === 'On Patrol' || row.patrol_status === 'Completed') {
+          row.timeline.push({
+            status: 'In Progress',
+            timestamp: row.patrol_status === 'On Patrol' ? row.patrol_updated_at : null,
+            description: 'Patrol in progress',
+            completed: true
+          });
+        }
+        
+        if (row.status === 'Resolved' || row.patrol_status === 'Completed') {
+          row.timeline.push({
+            status: 'Resolved',
+            timestamp: row.status === 'Resolved' ? row.updated_at : null,
+            description: 'Incident resolved',
+            completed: row.status === 'Resolved'
+          });
+        }
+        
         // Format dates
         row.is_emergency = false; // Authenticated reports are not emergency
+        row.account_type = 'Pet Owner';
       }
       
       logger.info(`Found ${rows.length} reports for owner ${ownerId}`);

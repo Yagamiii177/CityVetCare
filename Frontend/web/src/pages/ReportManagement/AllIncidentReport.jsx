@@ -91,7 +91,7 @@ const IncidentReportingManagement = () => {
 
     debounceTimerRef.current = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 500);
+    }, 300);
 
     return () => {
       if (debounceTimerRef.current) {
@@ -474,7 +474,7 @@ const IncidentReportingManagement = () => {
         incident_type: newReportData.incident_type || newReportData.reportType || 'stray',
         description: newReportData.description || 'Report submitted from admin portal',
         location: newReportData.location || 'Location to be determined',
-        status: 'pending',
+        status: 'Pending',
         reporter_name: newReportData.reporter_name || 'Admin Portal',
         reporter_contact: newReportData.reporter_contact || newReportData.contactNumber || 'N/A',
         incident_date: newReportData.incident_date,
@@ -573,7 +573,7 @@ const IncidentReportingManagement = () => {
     const headers = [
       'ID', 'Reporter', 'Contact', 'Type', 'Report Type', 'Location',
       'Date', 'Time', 'Status', 'Animal Type', 'Breed', 'Color',
-      'Gender', 'Size', 'Assigned Team', 'Description'
+      'Gender', 'Size', 'Description'
     ];
 
     // Prepare CSV rows
@@ -592,7 +592,6 @@ const IncidentReportingManagement = () => {
       report.petColor,
       report.petGender,
       report.petSize,
-      report.assignedTeam || 'Not assigned',
       `"${report.description.replace(/"/g, '""')}"` // Escape quotes in description
     ]);
 
@@ -623,10 +622,51 @@ const IncidentReportingManagement = () => {
     });
   }, [reports]);
 
-  // View report details
-  const handleViewReport = useCallback((report) => {
-    setSelectedReport(report);
-    fetchReportSchedules(report.id);
+  // View report details - fetch complete data from API
+  const handleViewReport = useCallback(async (report) => {
+    try {
+      logger.debug('Fetching full report details', { id: report.id });
+      
+      // Fetch full report details with patrol info, timeline, etc.
+      const response = await apiService.incidents.getById(report.id);
+      
+      if (response.data && response.data.data) {
+        const fullReport = response.data.data;
+        
+        // Transform to frontend format with all details
+        const transformedReport = {
+          ...report,
+          // Add backend fields that might not be in list view
+          owner_id: fullReport.owner_id,
+          account_type: fullReport.account_type,
+          reporter_email: fullReport.reporter_email,
+          priority: fullReport.priority,
+          // Patrol details
+          patrol_schedule_id: fullReport.patrol_schedule_id,
+          patrol_date: fullReport.patrol_date,
+          patrol_time: fullReport.patrol_time,
+          patrol_status: fullReport.patrol_status,
+          patrol_notes: fullReport.patrol_notes,
+          assigned_catchers: fullReport.assigned_catchers || [],
+          // Timeline
+          timeline: fullReport.timeline || [],
+          // Ensure images are included
+          images: fullReport.images || report.images || []
+        };
+        
+        setSelectedReport(transformedReport);
+        fetchReportSchedules(report.id);
+      } else {
+        // Fallback to original report if API fails
+        setSelectedReport(report);
+        fetchReportSchedules(report.id);
+      }
+    } catch (error) {
+      logger.error('Failed to fetch full report details', error);
+      // Fallback to original report
+      setSelectedReport(report);
+      fetchReportSchedules(report.id);
+    }
   }, [fetchReportSchedules]);
 
   // Close report details modal
@@ -737,11 +777,11 @@ const IncidentReportingManagement = () => {
                     <input
                       id="search-input"
                       type="text"
-                      placeholder="Search reports (searches database: type, reporter, location, animal, team)..."
+                      placeholder="Search by ID, type, description, status, reporter name, or location..."
                       value={searchTerm}
                       onChange={(e) => handleSearch(e.target.value)}
                       className="pl-10 pr-4 py-2 border w-full rounded-lg focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
-                      aria-label="Search reports by type, reporter, location, animal, or team"
+                      aria-label="Search reports by ID, type, description, status, reporter name, or location"
                     />
                     {searchTerm && (
                       <button 
@@ -860,13 +900,6 @@ const IncidentReportingManagement = () => {
                                   aria-label={`View details for report ${report.id}`}
                                 >
                                   <EyeIcon className="h-5 w-5" />
-                                </button>
-                                <button 
-                                  className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 transition-colors" 
-                                  title="Assign Team"
-                                  aria-label={`Assign team to report ${report.id}`}
-                                >
-                                  <UserIcon className="h-5 w-5" />
                                 </button>
                               </div>
                             </td>
@@ -1054,6 +1087,23 @@ const IncidentReportingManagement = () => {
                                   <span className="text-gray-900 font-medium">{selectedReport.reporter}</span>
                                 </div>
                               </div>
+                              
+                              {selectedReport.account_type && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                    Account Type
+                                  </label>
+                                  <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                      selectedReport.account_type === 'Pet Owner' 
+                                        ? 'bg-green-100 text-green-800 border border-green-200' 
+                                        : 'bg-orange-100 text-orange-800 border border-orange-200'
+                                    }`}>
+                                      {selectedReport.account_type}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
 
                               <div>
                                 <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
@@ -1063,6 +1113,17 @@ const IncidentReportingManagement = () => {
                                   <span className="text-gray-900 font-medium">{selectedReport.reporterContact}</span>
                                 </div>
                               </div>
+                              
+                              {selectedReport.reporter_email && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                    Email
+                                  </label>
+                                  <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                    <span className="text-gray-900 font-medium">{selectedReport.reporter_email}</span>
+                                  </div>
+                                </div>
+                              )}
 
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
@@ -1109,15 +1170,6 @@ const IncidentReportingManagement = () => {
                                 </label>
                                 <div className="p-3 bg-white rounded-lg border border-gray-200">
                                   {getStatusBadge(selectedReport.status)}
-                                </div>
-                              </div>
-
-                              <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
-                                  Assigned Team
-                                </label>
-                                <div className="p-3 bg-white rounded-lg border border-gray-200">
-                                  <span className="text-gray-900 font-medium">{selectedReport.assignedTeam || 'Not assigned'}</span>
                                 </div>
                               </div>
                             </div>
@@ -1220,15 +1272,143 @@ const IncidentReportingManagement = () => {
                           </div>
                         </div>
 
-                        {/* Injuries Section */}
-                        {selectedReport.injuries && selectedReport.injuries !== "None" && (
+                        {/* Injuries/Concerns section removed as per requirements */}
+
+                        {/* Patrol Assignment Section */}
+                        {(selectedReport.patrol_schedule_id || selectedReport.assigned_catchers?.length > 0) && (
+                          <div className="bg-gradient-to-br from-purple-50 to-white p-5 rounded-xl border border-purple-100 shadow-sm">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                              <ClockIcon className="h-5 w-5 text-purple-600" />
+                              Patrol Assignment Details
+                            </h3>
+                            
+                            <div className="space-y-4">
+                              {selectedReport.assigned_catchers && selectedReport.assigned_catchers.length > 0 && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">
+                                    Assigned Dog Catchers
+                                  </label>
+                                  <div className="space-y-2">
+                                    {selectedReport.assigned_catchers.map((catcher, index) => (
+                                      <div key={index} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
+                                        <UserIcon className="h-5 w-5 text-purple-600" />
+                                        <div>
+                                          <p className="text-gray-900 font-medium">{catcher.full_name}</p>
+                                          {catcher.contact_number && (
+                                            <p className="text-sm text-gray-500">{catcher.contact_number}</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <div className="grid grid-cols-2 gap-4">
+                                {selectedReport.patrol_date && (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                      Patrol Date
+                                    </label>
+                                    <div className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
+                                      <CalendarIcon className="h-4 w-4 text-gray-400" />
+                                      <span className="text-gray-900 font-medium">{selectedReport.patrol_date}</span>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {selectedReport.patrol_time && (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                      Patrol Time
+                                    </label>
+                                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                      <span className="text-gray-900 font-medium">{selectedReport.patrol_time}</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {selectedReport.patrol_status && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                    Patrol Status
+                                  </label>
+                                  <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                      selectedReport.patrol_status === 'Completed' ? 'bg-green-100 text-green-800 border border-green-200' :
+                                      selectedReport.patrol_status === 'On Patrol' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                                      'bg-blue-100 text-blue-800 border border-blue-200'
+                                    }`}>
+                                      {selectedReport.patrol_status}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {selectedReport.patrol_notes && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+                                    Patrol Notes
+                                  </label>
+                                  <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                    <p className="text-gray-900">{selectedReport.patrol_notes}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Timeline Section */}
+                        {selectedReport.timeline && selectedReport.timeline.length > 0 && (
                           <div className="space-y-3">
                             <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                              <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
-                              Injuries/Concerns
+                              <ClockIcon className="h-5 w-5 text-indigo-600" />
+                              Incident Timeline
                             </h3>
-                            <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                              <p className="text-gray-800 leading-relaxed">{selectedReport.injuries}</p>
+                            <div className="relative pl-8">
+                              {selectedReport.timeline.map((event, index) => (
+                                <div key={index} className="relative pb-6 last:pb-0">
+                                  {/* Timeline line */}
+                                  {index < selectedReport.timeline.length - 1 && (
+                                    <div className="absolute left-0 top-6 w-0.5 h-full bg-gray-200"></div>
+                                  )}
+                                  
+                                  {/* Timeline dot */}
+                                  <div className={`absolute left-0 top-1 w-4 h-4 rounded-full border-2 ${
+                                    event.completed 
+                                      ? 'bg-green-500 border-green-500' 
+                                      : 'bg-white border-gray-300'
+                                  }`}></div>
+                                  
+                                  {/* Timeline content */}
+                                  <div className="ml-6">
+                                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                          <p className="font-medium text-gray-900">{event.status}</p>
+                                          <p className="text-sm text-gray-600 mt-1">{event.description}</p>
+                                        </div>
+                                        {event.completed && (
+                                          <CheckCircleIcon className="h-5 w-5 text-green-500 flex-shrink-0 ml-2" />
+                                        )}
+                                      </div>
+                                      {event.timestamp && (
+                                        <p className="text-xs text-gray-500 mt-2">
+                                          {new Date(event.timestamp).toLocaleString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -1294,13 +1474,8 @@ const IncidentReportingManagement = () => {
                             Update Status
                           </button>
                           <button
-                            className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
-                          >
-                            Assign Team
-                          </button>
-                          <button
                             onClick={handleCloseReportDetails}
-                            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium shadow-sm"
+                            className="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium shadow-sm"
                           >
                             Close
                           </button>

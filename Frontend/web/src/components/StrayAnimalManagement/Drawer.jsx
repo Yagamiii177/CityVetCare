@@ -3,8 +3,7 @@ import {
   ClipboardDocumentListIcon,
   ArrowsRightLeftIcon,
   HomeModernIcon,
-  DocumentTextIcon,
-  PlusCircleIcon,
+  XCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -34,14 +33,14 @@ export const Drawer = ({ isOpen, onItemClick, setIsDrawerOpen }) => {
       path: "/redemption-requests",
     },
     {
-      name: "Adoption List",
+      name: "Adoption Requests",
       icon: <HomeModernIcon className="h-5 w-5 mr-3" />,
       path: "/adoption-list",
     },
     {
-      name: "Statistics & Logs",
-      icon: <DocumentTextIcon className="h-5 w-5 mr-3" />,
-      path: "/statistics-logs",
+      name: "Euthanized List",
+      icon: <XCircleIcon className="h-5 w-5 mr-3" />,
+      path: "/euthanized-list",
     },
   ];
 

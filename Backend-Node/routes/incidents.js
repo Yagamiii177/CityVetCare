@@ -2,6 +2,8 @@ import express from 'express';
 import Incident from '../models/Incident.js';
 import Logger from '../utils/logger.js';
 import { upload } from '../config/multer.js';
+import { authenticateToken, optionalAuth } from '../middleware/auth.js';
+import { notifyIncidentSubmitted, notifyIncidentStatusChange } from '../services/notificationService.js';
 
 const router = express.Router();
 const logger = new Logger('INCIDENTS');
@@ -56,6 +58,48 @@ router.get('/', async (req, res) => {
       error: true,
       message: 'Failed to fetch incidents',
       details: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/incidents/my-reports
+ * Get all incidents reported by the authenticated user
+ * Requires authentication
+ */
+router.get('/my-reports', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userType = req.user.userType;
+    
+    // Only pet owners can access my reports
+    if (userType !== 'pet_owner') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only pet owners can access their reports'
+      });
+    }
+    
+    const filters = {
+      status: req.query.status
+    };
+    
+    logger.debug(`Fetching reports for authenticated user ${userId}`, filters);
+    
+    const incidents = await Incident.getByOwnerId(userId, filters);
+    
+    res.json({
+      success: true,
+      data: incidents,
+      total: incidents.length,
+      message: incidents.length === 0 ? 'No reports found' : undefined
+    });
+  } catch (error) {
+    logger.error('Failed to fetch user reports', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch your reports',
+      details: error.message
     });
   }
 });
@@ -198,8 +242,9 @@ router.post('/upload-images', upload.array('images', 5), async (req, res) => {
 /**
  * POST /api/incidents
  * Create new incident (with optional image upload)
+ * Uses optional authentication to associate report with user if logged in
  */
-router.post('/', upload.array('images', 5), async (req, res) => {
+router.post('/', optionalAuth, upload.array('images', 5), async (req, res) => {
   try {
     logger.info('📝 Creating new incident');
     logger.debug('Request body:', { ...req.body, images: req.body.images ? '[...]' : 'none' });
@@ -225,14 +270,44 @@ router.post('/', upload.array('images', 5), async (req, res) => {
       logger.debug('Images from request body:', images.length);
     }
     
+    // Only associate owner_id for authenticated pet owners.
+    // Admin/dog_catcher tokens should NOT be written into incident_report.owner_id,
+    // because that FK references pet_owner(owner_id).
+    const ownerIdFromToken =
+      req.user && req.user.userType === 'pet_owner' && req.user.id != null
+        ? Number(req.user.id)
+        : null;
+
+    const ownerIdFromBody = req.body.owner_id != null && String(req.body.owner_id).trim() !== ''
+      ? Number(req.body.owner_id)
+      : null;
+
     const incidentData = {
       ...req.body,
-      images: images
+      images: images,
+      owner_id: Number.isFinite(ownerIdFromToken)
+        ? ownerIdFromToken
+        : (Number.isFinite(ownerIdFromBody) ? ownerIdFromBody : null)
     };
 
     const incidentId = await Incident.create(incidentData);
     
     logger.info(`✅ Incident created successfully with ID: ${incidentId}`);
+    
+    // Create notification for authenticated users (not anonymous emergency reports)
+    if (req.user && req.user.id && req.user.userType === 'pet_owner') {
+      try {
+        await notifyIncidentSubmitted({
+          ownerId: req.user.id,
+          incidentId: incidentId,
+          reportType: incidentData.incident_type || 'incident'
+        });
+        logger.info(`✅ Submission notification sent to owner ${req.user.id}`);
+      } catch (notifError) {
+        // Don't fail the request if notification fails
+        logger.error('⚠️ Failed to send submission notification', notifError);
+      }
+    }
     
     res.status(201).json({
       success: true,
@@ -261,6 +336,16 @@ router.put('/:id', async (req, res) => {
   try {
     logger.debug(`Updating incident ${req.params.id}`, req.body);
     
+    // Get current incident data before update to check for status changes
+    const currentIncident = await Incident.getById(req.params.id);
+    
+    if (!currentIncident) {
+      return res.status(404).json({
+        error: true,
+        message: 'Incident not found'
+      });
+    }
+    
     const updated = await Incident.update(req.params.id, req.body);
     
     if (!updated) {
@@ -271,6 +356,24 @@ router.put('/:id', async (req, res) => {
     }
     
     logger.info(`Incident ${req.params.id} updated successfully`);
+    
+    // Send notification if status changed and incident has an owner_id (authenticated user)
+    if (req.body.status && 
+        req.body.status !== currentIncident.status && 
+        currentIncident.owner_id) {
+      try {
+        await notifyIncidentStatusChange({
+          ownerId: currentIncident.owner_id,
+          incidentId: req.params.id,
+          status: req.body.status,
+          rejectionReason: req.body.rejection_reason || null
+        });
+        logger.info(`✅ Status change notification sent to owner ${currentIncident.owner_id}`);
+      } catch (notifError) {
+        // Don't fail the request if notification fails
+        logger.error('⚠️ Failed to send status change notification', notifError);
+      }
+    }
     
     res.json({
       success: true,
