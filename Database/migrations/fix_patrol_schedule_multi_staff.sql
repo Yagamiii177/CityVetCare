@@ -8,16 +8,59 @@
 USE cityvetcare_db;
 
 -- Step 1: Drop the foreign key constraint
-ALTER TABLE patrol_schedule 
-DROP FOREIGN KEY fk_schedule_catcher;
+SET @has_fk_schedule_catcher := (
+  SELECT COUNT(*)
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'patrol_schedule'
+    AND CONSTRAINT_NAME = 'fk_schedule_catcher'
+    AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+);
+
+SET @drop_fk_sql := IF(
+  @has_fk_schedule_catcher > 0,
+  'ALTER TABLE patrol_schedule DROP FOREIGN KEY fk_schedule_catcher',
+  'SELECT "Skipping: fk_schedule_catcher not found" AS info'
+);
+PREPARE stmt_drop_fk FROM @drop_fk_sql;
+EXECUTE stmt_drop_fk;
+DEALLOCATE PREPARE stmt_drop_fk;
 
 -- Step 2: Change column type from INT to VARCHAR(255)
-ALTER TABLE patrol_schedule 
-MODIFY COLUMN assigned_catcher_id VARCHAR(255) NOT NULL COMMENT 'Comma-separated catcher IDs for team patrols';
+SET @has_assigned_catcher_id := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'patrol_schedule'
+    AND COLUMN_NAME = 'assigned_catcher_id'
+);
+
+SET @modify_column_sql := IF(
+  @has_assigned_catcher_id > 0,
+  'ALTER TABLE patrol_schedule MODIFY COLUMN assigned_catcher_id VARCHAR(255) NOT NULL COMMENT ''Comma-separated catcher IDs for team patrols''',
+  'SELECT "Skipping: assigned_catcher_id column not found" AS info'
+);
+PREPARE stmt_modify_col FROM @modify_column_sql;
+EXECUTE stmt_modify_col;
+DEALLOCATE PREPARE stmt_modify_col;
 
 -- Step 3: Add index for better performance (cannot add FK for comma-separated values)
-ALTER TABLE patrol_schedule 
-ADD INDEX idx_assigned_catchers (assigned_catcher_id(50));
+SET @has_idx_assigned_catchers := (
+  SELECT COUNT(*)
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'patrol_schedule'
+    AND INDEX_NAME = 'idx_assigned_catchers'
+);
+
+SET @add_index_sql := IF(
+  @has_idx_assigned_catchers = 0,
+  'ALTER TABLE patrol_schedule ADD INDEX idx_assigned_catchers (assigned_catcher_id(50))',
+  'SELECT "Skipping: idx_assigned_catchers already exists" AS info'
+);
+PREPARE stmt_add_idx FROM @add_index_sql;
+EXECUTE stmt_add_idx;
+DEALLOCATE PREPARE stmt_add_idx;
 
 -- Verification query
 SELECT 

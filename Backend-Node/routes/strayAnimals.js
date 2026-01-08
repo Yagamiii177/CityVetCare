@@ -170,6 +170,171 @@ router.get("/", async (req, res) => {
   }
 });
 
+// GET /api/stray-animals/dashboard
+// Returns metrics used by the web Stray Animal Management dashboard
+// NOTE: Must be declared before /:id route.
+router.get("/dashboard", async (req, res) => {
+  try {
+    // Metrics
+    const [[totalRow]] = await pool.query(
+      "SELECT COUNT(*) AS total FROM stray_animals"
+    );
+
+    const [statusRows] = await pool.query(
+      "SELECT status, COUNT(*) AS count FROM stray_animals GROUP BY status"
+    );
+    const statusCounts = Object.fromEntries(
+      (statusRows || []).map((r) => [String(r.status), Number(r.count) || 0])
+    );
+
+    const [adoptionRows] = await pool.query(
+      "SELECT status, COUNT(*) AS count FROM adoption_request GROUP BY status"
+    );
+    const adoptionRequestCounts = Object.fromEntries(
+      (adoptionRows || []).map((r) => [String(r.status), Number(r.count) || 0])
+    );
+
+    const [redemptionRows] = await pool.query(
+      "SELECT status, COUNT(*) AS count FROM redemption_request GROUP BY status"
+    );
+    const redemptionRequestCounts = Object.fromEntries(
+      (redemptionRows || []).map((r) => [
+        String(r.status),
+        Number(r.count) || 0,
+      ])
+    );
+
+    // 30-day time series (date bucket)
+    // NOTE: Avoid WITH RECURSIVE to support MySQL 5.7.
+    const [registeredRows] = await pool.query(
+      `
+      SELECT DATE(registration_date) AS d, COUNT(*) AS c
+      FROM stray_animals
+      WHERE registration_date >= CURDATE() - INTERVAL 29 DAY
+      GROUP BY DATE(registration_date)
+      `
+    );
+
+    const [adoptionSeriesRows] = await pool.query(
+      `
+      SELECT
+        DATE(request_date) AS d,
+        COUNT(*) AS total,
+        SUM(CASE WHEN LOWER(status) = 'approved' THEN 1 ELSE 0 END) AS approved,
+        SUM(CASE WHEN LOWER(status) = 'pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN LOWER(status) = 'rejected' THEN 1 ELSE 0 END) AS rejected
+      FROM adoption_request
+      WHERE request_date >= CURDATE() - INTERVAL 29 DAY
+      GROUP BY DATE(request_date)
+      `
+    );
+
+    const registeredMap = new Map(
+      (registeredRows || []).map((r) => [
+        String(r.d).slice(0, 10),
+        Number(r.c) || 0,
+      ])
+    );
+
+    const adoptionMap = new Map(
+      (adoptionSeriesRows || []).map((r) => [
+        String(r.d).slice(0, 10),
+        {
+          total: Number(r.total) || 0,
+          approved: Number(r.approved) || 0,
+          pending: Number(r.pending) || 0,
+          rejected: Number(r.rejected) || 0,
+        },
+      ])
+    );
+
+    const seriesRows = [];
+    for (let i = 29; i >= 0; i--) {
+      const dt = new Date();
+      dt.setHours(0, 0, 0, 0);
+      dt.setDate(dt.getDate() - i);
+      const dateStr = dt.toISOString().slice(0, 10);
+      const adoptionDay = adoptionMap.get(dateStr) || {
+        total: 0,
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+      };
+
+      seriesRows.push({
+        date: dateStr,
+        registeredStrays: registeredMap.get(dateStr) || 0,
+        adoptionRequests: adoptionDay.total,
+        adoptionApproved: adoptionDay.approved,
+        adoptionPending: adoptionDay.pending,
+        adoptionRejected: adoptionDay.rejected,
+      });
+    }
+
+    // Recent activity (last 10)
+    const [activityRows] = await pool.query(
+      `
+      (
+        SELECT
+          CONCAT('stray-', sa.animal_id) AS id,
+          'stray_registered' AS type,
+          CONCAT('New stray registered', IF(sa.name IS NULL OR sa.name = '', '', CONCAT(': ', sa.name))) AS action,
+          sa.created_at AS timestamp
+        FROM stray_animals sa
+        ORDER BY sa.created_at DESC
+        LIMIT 10
+      )
+      UNION ALL
+      (
+        SELECT
+          CONCAT('adoption-', ar.adoption_id) AS id,
+          'adoption_requested' AS type,
+          CONCAT('Adoption requested', IF(sa.name IS NULL OR sa.name = '', '', CONCAT(': ', sa.name))) AS action,
+          ar.request_date AS timestamp
+        FROM adoption_request ar
+        LEFT JOIN stray_animals sa ON sa.animal_id = ar.stray_id
+        ORDER BY ar.request_date DESC
+        LIMIT 10
+      )
+      UNION ALL
+      (
+        SELECT
+          CONCAT('redemption-', rr.redemption_id) AS id,
+          'redemption_requested' AS type,
+          CONCAT('Redemption requested', IF(sa.name IS NULL OR sa.name = '', '', CONCAT(': ', sa.name))) AS action,
+          rr.request_date AS timestamp
+        FROM redemption_request rr
+        LEFT JOIN stray_animals sa ON sa.animal_id = rr.stray_id
+        ORDER BY rr.request_date DESC
+        LIMIT 10
+      )
+      ORDER BY timestamp DESC
+      LIMIT 10;
+      `
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        metrics: {
+          totalStrays: Number(totalRow?.total) || 0,
+          statusCounts,
+          adoptionRequestCounts,
+          redemptionRequestCounts,
+        },
+        timeSeries: Array.isArray(seriesRows) ? seriesRows : [],
+        recentActivities: Array.isArray(activityRows) ? activityRows : [],
+      },
+    });
+  } catch (error) {
+    logger.error("Failed to fetch stray dashboard", error);
+    return res.status(500).json({
+      error: true,
+      message: "Unable to fetch stray dashboard",
+    });
+  }
+});
+
 // GET /api/stray-animals/:id
 router.get("/:id", async (req, res) => {
   try {

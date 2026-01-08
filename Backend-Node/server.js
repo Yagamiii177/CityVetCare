@@ -15,10 +15,6 @@ import catchersRouter from "./routes/catchers.js";
 import dashboardRouter from "./routes/dashboard.js";
 import schedulesRouter from "./routes/schedules.js";
 import strayAnimalsRouter from "./routes/strayAnimals.js";
-<<<<<<< HEAD
-import patrolStaffRouter from "./routes/patrol-staff.js";
-import patrolSchedulesRouter from "./routes/patrol-schedules.js";
-=======
 import readingMaterialsRouter from "./routes/readingMaterials.js";
 import announcementsRouter from "./routes/announcements.js";
 import userAnnouncementsRouter from "./routes/user-announcements.js";
@@ -27,7 +23,6 @@ import patrolSchedulesRouter from "./routes/patrol-schedules.js";
 import clinicsRouter from "./routes/clinics.js";
 import clinicMapRouter from "./routes/clinic-map.js";
 import adminDashboardRouter from "./routes/admin-dashboard.js";
->>>>>>> 733077ab88905bd840cdb76d1034ae691aa16a7f
 import petsRouter from "./routes/pets.js";
 import euthanizedAnimalsRouter from "./routes/euthanizedAnimals.js";
 import adoptionRequestsRouter from "./routes/adoptionRequests.js";
@@ -79,13 +74,8 @@ app.use(
   })
 );
 // Increase payload size limits for image uploads (10MB for mobile base64 images)
-<<<<<<< HEAD
-app.use(express.json({ limit: '15mb' })); // Accommodate base64 encoding overhead
-app.use(express.urlencoded({ extended: true, limit: '15mb' }));
-=======
 app.use(express.json({ limit: "15mb" })); // Accommodate base64 encoding overhead
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
->>>>>>> 733077ab88905bd840cdb76d1034ae691aa16a7f
 
 // Serve uploaded files as static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

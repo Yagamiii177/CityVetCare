@@ -150,17 +150,14 @@ export const apiService = {
   patrolSchedules: {
     getAll: (filters = {}) => api.get("/patrol-schedules", { params: filters }),
     getById: (id) => api.get(`/patrol-schedules/${id}`),
-<<<<<<< HEAD
-    getByIncident: (incidentId) => api.get(`/patrol-schedules/incident/${incidentId}`),
-    checkConflict: (data) => api.post("/patrol-schedules/check-conflict", data),
-=======
     getByIncident: (incidentId) =>
       api.get(`/patrol-schedules/incident/${incidentId}`),
->>>>>>> 733077ab88905bd840cdb76d1034ae691aa16a7f
+    checkConflict: (data) => api.post("/patrol-schedules/check-conflict", data),
     create: (data) => api.post("/patrol-schedules", data),
     update: (id, data) => api.put(`/patrol-schedules/${id}`, data),
     delete: (id) => api.delete(`/patrol-schedules/${id}`),
-    removeStaff: (scheduleId, staffId) => api.delete(`/patrol-schedules/${scheduleId}/staff/${staffId}`),
+    removeStaff: (scheduleId, staffId) =>
+      api.delete(`/patrol-schedules/${scheduleId}/staff/${staffId}`),
   },
 
   // Stray Animals
@@ -172,6 +169,7 @@ export const apiService = {
     putToAdoption: (id) => api.post(`/stray-animals/${id}/adopt`),
     euthanize: (id, data) => api.post(`/stray-animals/${id}/euthanize`, data),
     alertOwner: (id) => api.post(`/stray-animals/${id}/alert-owner`),
+    getDashboardStats: () => api.get("/stray-animals/dashboard"),
   },
 
   // Euthanized Animals

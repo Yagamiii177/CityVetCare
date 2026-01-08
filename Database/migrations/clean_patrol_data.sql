@@ -30,8 +30,8 @@ SELECT
     catcher_id,
     full_name,
     contact_number,
-    status,
-    created_at
+    date_created,
+    date_updated
 FROM dog_catcher
 ORDER BY catcher_id;
 

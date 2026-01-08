@@ -250,13 +250,8 @@ CREATE TABLE IF NOT EXISTS stray_animals (
     date_captured DATE NOT NULL,
     registration_date DATE NOT NULL,
     location_captured VARCHAR(255) NOT NULL,
-<<<<<<< HEAD
     latitude DECIMAL(10,8) NULL,
     longitude DECIMAL(11,8) NULL,
-=======
-    latitude DECIMAL(10, 8) NULL,
-    longitude DECIMAL(11, 8) NULL,
->>>>>>> db2a2b89099177d7e3d92306a365d4776423a5a7
     status ENUM('captured', 'adoption', 'adopted', 'euthanized', 'claimed') NOT NULL DEFAULT 'captured',
     images JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -268,7 +263,6 @@ CREATE TABLE IF NOT EXISTS stray_animals (
     INDEX idx_location (location_captured),
     INDEX idx_stray_coords (latitude, longitude),
     INDEX idx_captured_by (captured_by),
-    INDEX idx_stray_coords (latitude, longitude),
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -307,11 +301,7 @@ CREATE TABLE IF NOT EXISTS adoption_request (
     adopter_id INT NOT NULL,
     request_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(50) DEFAULT 'pending',
-<<<<<<< HEAD
-    applicant_details JSON,
-=======
     applicant_details JSON NULL,
->>>>>>> db2a2b89099177d7e3d92306a365d4776423a5a7
     CONSTRAINT fk_adoption_stray FOREIGN KEY (stray_id) REFERENCES stray_animals(animal_id) ON DELETE CASCADE,
     CONSTRAINT fk_adoption_adopter FOREIGN KEY (adopter_id) REFERENCES pet_owner(owner_id) ON DELETE CASCADE,
     INDEX idx_adoption_status (status)
@@ -444,9 +434,11 @@ CREATE TABLE IF NOT EXISTS announcement (
     date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_announcement_admin FOREIGN KEY (admin_id) REFERENCES administrator(admin_id) ON DELETE CASCADE,
-<<<<<<< HEAD
-    INDEX idx_announcement_status (status)
-<<<<<<< HEAD
+    INDEX idx_announcement_status (status),
+    INDEX idx_announcement_category (category),
+    INDEX idx_announcement_priority (priority),
+    INDEX idx_announcement_publish_date (publish_date),
+    INDEX idx_announcement_archived (is_archived)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Notifications Table (used by backend /api/notifications)
@@ -463,16 +455,6 @@ CREATE TABLE IF NOT EXISTS notifications (
     INDEX idx_user_notifications (user_id, user_type),
     INDEX idx_notification_read (is_read),
     INDEX idx_stray_notification (stray_animal_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-=======
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
->>>>>>> db2a2b89099177d7e3d92306a365d4776423a5a7
-=======
-    INDEX idx_announcement_status (status),
-    INDEX idx_announcement_category (category),
-    INDEX idx_announcement_priority (priority),
-    INDEX idx_announcement_publish_date (publish_date),
-    INDEX idx_announcement_archived (is_archived)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Upgrade existing announcement table with new attributes if it already exists
@@ -541,4 +523,4 @@ CREATE TABLE IF NOT EXISTS archive_history (
     INDEX idx_archive_material (material_id),
     INDEX idx_archive_date (archived_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
->>>>>>> 733077ab88905bd840cdb76d1034ae691aa16a7f
+

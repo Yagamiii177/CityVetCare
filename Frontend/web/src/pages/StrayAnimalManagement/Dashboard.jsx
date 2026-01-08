@@ -75,7 +75,7 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
 
-        const response = await apiService.dashboard.getStats();
+        const response = await apiService.strayAnimals.getDashboardStats();
         const payload = response?.data?.data;
 
         if (!isMounted) return;

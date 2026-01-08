@@ -363,17 +363,43 @@ router.post("/:id/claim", async (req, res) => {
       );
     }
 
-    // Create pet record (avoid duplicates per owner+rfid)
-    const [existingPet] = await connection.query(
-      "SELECT pet_id FROM pet WHERE owner_id = ? AND rfid = ? LIMIT 1",
-      [rr.owner_id, finalRfid]
-    );
+    // Create or transfer pet record by RFID.
+    // If a pet with this RFID already exists (even under a different owner), transfer ownership
+    // instead of creating a duplicate record.
+    const ownerCountDelta = new Map();
+    const addOwnerDelta = (ownerId, delta) => {
+      if (ownerId === null || ownerId === undefined) return;
+      const key = Number(ownerId);
+      if (!Number.isFinite(key)) return;
+      ownerCountDelta.set(key, (ownerCountDelta.get(key) || 0) + delta);
+    };
 
     let petId;
     const photo = normalizeStrayImagesToPhoto(rr.images);
 
-    if (existingPet.length > 0) {
-      petId = existingPet[0].pet_id;
+    const [petsByRfid] = await connection.query(
+      "SELECT pet_id, owner_id FROM pet WHERE rfid = ? ORDER BY pet_id ASC FOR UPDATE",
+      [finalRfid]
+    );
+
+    if (petsByRfid.length > 0) {
+      // Keep the oldest record as canonical and remove duplicates.
+      const canonical = petsByRfid[0];
+      petId = canonical.pet_id;
+
+      const currentOwnerId = canonical.owner_id;
+      const desiredOwnerId = rr.owner_id;
+
+      if (Number(currentOwnerId) !== Number(desiredOwnerId)) {
+        await connection.query("UPDATE pet SET owner_id = ? WHERE pet_id = ?", [
+          desiredOwnerId,
+          petId,
+        ]);
+        addOwnerDelta(currentOwnerId, -1);
+        addOwnerDelta(desiredOwnerId, +1);
+      }
+
+      // Update canonical record with latest stray details.
       await connection.query(
         `UPDATE pet
          SET name = COALESCE(?, name),
@@ -395,6 +421,19 @@ router.post("/:id/claim", async (req, res) => {
           petId,
         ]
       );
+
+      // Remove any duplicate pet rows sharing the same RFID.
+      if (petsByRfid.length > 1) {
+        const duplicateRows = petsByRfid.slice(1);
+        duplicateRows.forEach((row) => addOwnerDelta(row.owner_id, -1));
+
+        const duplicateIds = duplicateRows.map((r) => r.pet_id);
+        const placeholders = duplicateIds.map(() => "?").join(",");
+        await connection.query(
+          `DELETE FROM pet WHERE pet_id IN (${placeholders})`,
+          duplicateIds
+        );
+      }
     } else {
       const [insertPet] = await connection.query(
         `INSERT INTO pet (owner_id, rfid, name, species, breed, age, sex, color, markings, photo, status)
@@ -412,12 +451,7 @@ router.post("/:id/claim", async (req, res) => {
         ]
       );
       petId = insertPet.insertId;
-
-      // Best-effort: increment owner's pet_count
-      await connection.query(
-        "UPDATE pet_owner SET pet_count = pet_count + 1 WHERE owner_id = ?",
-        [rr.owner_id]
-      );
+      addOwnerDelta(rr.owner_id, +1);
     }
 
     // Increment capture count for this pet only if RFID was manually entered
@@ -428,17 +462,26 @@ router.post("/:id/claim", async (req, res) => {
       );
     }
 
-    // Mark redemption request as archived
+    // Mark ALL redemption requests for this stray as archived to prevent duplicates being shown/claimed.
     await connection.query(
-      "UPDATE redemption_request SET status = 'archived' WHERE redemption_id = ?",
-      [rr.redemption_id]
-    );
-
-    // Mark stray as claimed (requires DB enum to include 'claimed')
-    await connection.query(
-      "UPDATE stray_animals SET status = 'claimed' WHERE animal_id = ?",
+      "UPDATE redemption_request SET status = 'archived' WHERE stray_id = ?",
       [rr.stray_id]
     );
+
+    // Apply best-effort pet_count adjustments (transfer + dedupe)
+    for (const [ownerId, delta] of ownerCountDelta.entries()) {
+      if (!delta) continue;
+      await connection.query(
+        "UPDATE pet_owner SET pet_count = GREATEST(pet_count + ?, 0) WHERE owner_id = ?",
+        [delta, ownerId]
+      );
+    }
+
+    // The stray has been successfully claimed and transferred to the pet table.
+    // Remove the stray record so old ownership/capture data doesn't remain.
+    await connection.query("DELETE FROM stray_animals WHERE animal_id = ?", [
+      rr.stray_id,
+    ]);
 
     await connection.commit();
 
