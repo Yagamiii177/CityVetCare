@@ -197,9 +197,151 @@ async function sendSMS({ to, message }) {
   return true;
 }
 
+/**
+ * Create incident notification for pet owner
+ * @param {Object} params - Notification parameters
+ * @param {number} params.ownerId - Pet owner ID
+ * @param {number} params.incidentId - Incident report ID
+ * @param {string} params.title - Notification title
+ * @param {string} params.message - Notification message
+ * @param {string} params.type - Notification type
+ */
+export async function createIncidentNotification({
+  ownerId,
+  incidentId,
+  title,
+  message,
+  type,
+}) {
+  try {
+    // Ensure the notifications table exists and has the correct schema
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS notifications (
+        notification_id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        user_type ENUM('owner', 'admin', 'catcher') NOT NULL DEFAULT 'owner',
+        owner_id INT NULL COMMENT 'FK to pet_owner.owner_id for authenticated pet owners',
+        incident_id INT NULL COMMENT 'FK to incident_report.report_id',
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        stray_animal_id INT NULL,
+        is_read TINYINT(1) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user_notifications (user_id, user_type),
+        INDEX idx_notification_read (is_read),
+        INDEX idx_stray_notification (stray_animal_id),
+        INDEX idx_owner_notifications (owner_id),
+        INDEX idx_incident_notifications (incident_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
+
+    // Check if owner_id and incident_id columns exist
+    try {
+      await pool.query(
+        `ALTER TABLE notifications 
+         ADD COLUMN IF NOT EXISTS owner_id INT NULL COMMENT 'FK to pet_owner.owner_id' AFTER user_type,
+         ADD COLUMN IF NOT EXISTS incident_id INT NULL COMMENT 'FK to incident_report.report_id' AFTER owner_id,
+         ADD INDEX IF NOT EXISTS idx_owner_notifications (owner_id),
+         ADD INDEX IF NOT EXISTS idx_incident_notifications (incident_id)`
+      );
+    } catch (alterError) {
+      // Columns may already exist, continue
+      logger.debug("Notification table columns already exist or couldn't be altered");
+    }
+
+    // Insert notification record
+    const [result] = await pool.query(
+      `INSERT INTO notifications 
+       (user_id, user_type, owner_id, incident_id, title, message, type) 
+       VALUES (?, 'owner', ?, ?, ?, ?, ?)`,
+      [ownerId, ownerId, incidentId, title, message, type]
+    );
+
+    logger.info(`✅ Incident notification created for owner ${ownerId}, incident ${incidentId}, type: ${type}`);
+    
+    return {
+      success: true,
+      notificationId: result.insertId
+    };
+  } catch (error) {
+    logger.error("❌ Failed to create incident notification", error);
+    throw error;
+  }
+}
+
+/**
+ * Create notification on incident submission (authenticated users only)
+ */
+export async function notifyIncidentSubmitted({ ownerId, incidentId, reportType }) {
+  return await createIncidentNotification({
+    ownerId,
+    incidentId,
+    title: "Incident Report Submitted",
+    message: `Your incident report was submitted successfully. Please wait while it is being verified.`,
+    type: "submission",
+  });
+}
+
+/**
+ * Create notification on incident status change
+ */
+export async function notifyIncidentStatusChange({ ownerId, incidentId, status, rejectionReason }) {
+  let title, message, type;
+
+  switch (status) {
+    case "Verified":
+      title = "Report Verified";
+      message = "Your report has been verified and is being processed.";
+      type = "status_update";
+      break;
+
+    case "Scheduled":
+      title = "Report Scheduled";
+      message = "Your report has been scheduled for patrol action.";
+      type = "status_update";
+      break;
+
+    case "In Progress":
+      title = "Patrol In Progress";
+      message = "A patrol team is currently responding to your report.";
+      type = "status_update";
+      break;
+
+    case "Resolved":
+      title = "Report Resolved";
+      message = "Your reported incident has been resolved. Thank you.";
+      type = "status_update";
+      break;
+
+    case "Rejected":
+      title = "Report Rejected";
+      message = rejectionReason 
+        ? `Your report was rejected. Reason: ${rejectionReason}`
+        : "Your report was rejected. Tap to view the reason.";
+      type = "rejection";
+      break;
+
+    default:
+      // Don't send notification for other status changes
+      return null;
+  }
+
+  return await createIncidentNotification({
+    ownerId,
+    incidentId,
+    title,
+    message,
+    type,
+  });
+}
+
 export default {
   sendOwnerAlert,
   createInAppNotification,
   sendEmail,
   sendSMS,
+  createIncidentNotification,
+  notifyIncidentSubmitted,
+  notifyIncidentStatusChange,
 };

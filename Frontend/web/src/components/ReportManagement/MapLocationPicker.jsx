@@ -1,8 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
+import { OpenStreetMapProvider } from 'leaflet-geosearch';
 import "leaflet/dist/leaflet.css";
-import { XMarkIcon, MapPinIcon, CheckIcon } from "@heroicons/react/24/outline";
+import "leaflet-geosearch/dist/geosearch.css";
+import { XMarkIcon, MapPinIcon, CheckIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -49,6 +51,17 @@ const MapClickHandler = ({ onLocationSelect }) => {
   return null;
 };
 
+// Component to expose map instance
+const MapInstanceHandler = ({ mapRef }) => {
+  const map = useMapEvents({});
+  useEffect(() => {
+    if (mapRef) {
+      mapRef.current = map;
+    }
+  }, [map, mapRef]);
+  return null;
+};
+
 /**
  * MapLocationPicker Component
  * Allows users to pin a location on a map and get latitude/longitude coordinates
@@ -63,7 +76,11 @@ const MapLocationPicker = ({ isOpen, onClose, onLocationSelect, initialPosition 
   const [selectedPosition, setSelectedPosition] = useState(initialPosition || { lat: 13.6218, lng: 123.1948 });
   const [address, setAddress] = useState("");
   const [loadingAddress, setLoadingAddress] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const mapRef = useRef(null);
+  const searchProvider = useRef(new OpenStreetMapProvider());
 
   // Reset position when modal opens
   useEffect(() => {
@@ -104,7 +121,42 @@ const MapLocationPicker = ({ isOpen, onClose, onLocationSelect, initialPosition 
   const handleMapClick = useCallback((latlng) => {
     setSelectedPosition(latlng);
     getAddressFromCoordinates(latlng.lat, latlng.lng);
+    setSearchQuery("");
+    setSearchResults([]);
   }, [getAddressFromCoordinates]);
+
+  // Handle search
+  const handleSearch = useCallback(async (query) => {
+    if (!query || query.trim().length < 3) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await searchProvider.current.search({ query: query });
+      setSearchResults(results.slice(0, 5)); // Limit to 5 results
+    } catch (error) {
+      console.error("Search error:", error);
+      setSearchResults([]);
+    }
+    setIsSearching(false);
+  }, []);
+
+  // Handle search result selection
+  const handleSearchResultSelect = useCallback((result) => {
+    const { x: lng, y: lat, label } = result;
+    const newPosition = { lat, lng };
+    setSelectedPosition(newPosition);
+    setAddress(label);
+    setSearchQuery(label);
+    setSearchResults([]);
+    
+    // Move map to selected location
+    if (mapRef.current) {
+      mapRef.current.setView([lat, lng], 17);
+    }
+  }, []);
 
   // Handle confirm button
   const handleConfirm = () => {
@@ -151,14 +203,53 @@ const MapLocationPicker = ({ isOpen, onClose, onLocationSelect, initialPosition 
           </p>
         </div>
 
+        {/* Search Bar */}
+        <div className="p-4 bg-white border-b border-gray-200 relative">
+          <div className="relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                handleSearch(e.target.value);
+              }}
+              placeholder="Search for a place or address..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FA8630] focus:border-transparent"
+            />
+            {isSearching && (
+              <div className="absolute right-3 top-3">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#FA8630]"></div>
+              </div>
+            )}
+            
+            {/* Search Results Dropdown */}
+            {searchResults.length > 0 && (
+              <div className="absolute z-[9999] left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {searchResults.map((result, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSearchResultSelect(result)}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+                  >
+                    <div className="flex items-start gap-2">
+                      <MapPinIcon className="h-5 w-5 text-[#FA8630] flex-shrink-0 mt-0.5" />
+                      <span className="text-sm text-gray-700">{result.label}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Map Container */}
-        <div className="relative" style={{ height: '200px', width: '100%' }}>
+        <div className="relative" style={{ height: '500px', width: '100%' }}>
           <MapContainer
             center={[selectedPosition.lat, selectedPosition.lng]}
-            zoom={13}
+            zoom={15}
             style={{ height: '100%', width: '100%' }}
             scrollWheelZoom={true}
-            ref={mapRef}
           >
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -166,6 +257,7 @@ const MapLocationPicker = ({ isOpen, onClose, onLocationSelect, initialPosition 
             />
             
             <MapClickHandler onLocationSelect={handleMapClick} />
+            <MapInstanceHandler mapRef={mapRef} />
             
             {selectedPosition && (
               <Marker 

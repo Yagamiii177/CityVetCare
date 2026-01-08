@@ -15,9 +15,9 @@ import { Platform } from "react-native";
 // ============================================
 //
 // Are you testing on a PHYSICAL DEVICE (real phone/tablet)?
-// 1. Uncomment line 24 below
+// 1. IP address is already configured below
 // 2. Make sure your phone and PC are on the SAME WiFi
-// 3. Your PC's IP is: 192.168.0.108
+// 3. Your PC's IP is: 192.168.1.45 (UPDATED: Jan 6, 2026)
 //
 // Are you using Android Emulator?
 // - No changes needed! Default works.
@@ -30,7 +30,7 @@ import { Platform } from "react-native";
 const getApiBaseUrl = () => {
   // 🔥 FOR PHYSICAL DEVICE (iPhone/Android): Use PC's IP address
   // Make sure your phone and PC are on the SAME WiFi network!
-  return "http://192.168.1.10:3000/api";
+  return "http://192.168.1.45:3000/api";
 
   // UNCOMMENT FOR EMULATOR/SIMULATOR TESTING:
   // For Android Emulator:
@@ -76,7 +76,8 @@ export const API_ENDPOINTS = {
     DETAIL: (id) => `${API_BASE_URL}/incidents/${id}`,
     UPDATE: (id) => `${API_BASE_URL}/incidents/${id}`,
     DELETE: (id) => `${API_BASE_URL}/incidents/${id}`,
-    MY_REPORTS: `${API_BASE_URL}/incidents?user=me`,
+    MY_REPORTS: `${API_BASE_URL}/incidents/my-reports`,
+    BY_OWNER: (ownerId) => `${API_BASE_URL}/incidents/owner/${ownerId}`,
   },
 
   // Pets

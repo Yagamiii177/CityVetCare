@@ -14,7 +14,10 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
-const ReportIncidentScreen = ({ navigation }) => {
+const ReportIncidentScreen = ({ navigation, route }) => {
+  // Track if this is an emergency report (no login) or authenticated report
+  const isEmergencyMode = route.params?.isEmergencyMode || false;
+  
   const [animalType, setAnimalType] = useState(null);
   const [petGender, setPetGender] = useState(null);
   const [images, setImages] = useState([]);
@@ -137,9 +140,10 @@ const ReportIncidentScreen = ({ navigation }) => {
         petBreed,
         petColor,
         contactNumber,
-        date,
+        date: date.toISOString(), // Convert to string to avoid serialization warning
         description,
       },
+      isEmergencyMode, // Pass emergency mode flag to next screen
     });
   };
 
@@ -184,7 +188,7 @@ const ReportIncidentScreen = ({ navigation }) => {
 
         <TouchableOpacity
           style={styles.historyButton}
-          onPress={() => navigation.navigate("ReportStatus")}
+          onPress={() => navigation.navigate("MyReports")}
           activeOpacity={0.7}
         >
           <MaterialCommunityIcons name="history" size={27} color="#FD7E14" />
@@ -215,8 +219,6 @@ const ReportIncidentScreen = ({ navigation }) => {
                   ? "Incident/Bite Report"
                   : reportType === "stray"
                   ? "Stray Animal Report"
-                  : reportType === "lost"
-                  ? "Lost Pet Report"
                   : "Select report type"}
               </Text>
               <MaterialCommunityIcons
@@ -245,15 +247,6 @@ const ReportIncidentScreen = ({ navigation }) => {
                   }}
                 >
                   <Text>Stray Animal Report</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.dropdownOption}
-                  onPress={() => {
-                    setReportType("lost");
-                    setShowReportTypeDropdown(false);
-                  }}
-                >
-                  <Text>Lost Pet Report</Text>
                 </TouchableOpacity>
               </View>
             )}

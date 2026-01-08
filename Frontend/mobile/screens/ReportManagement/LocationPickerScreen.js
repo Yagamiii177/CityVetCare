@@ -4,8 +4,14 @@ import MapView, { Marker } from 'react-native-maps';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { incidentService } from '../../services/apiService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const LocationPickerScreen = ({ navigation, route }) => {
+  // Check if this is an emergency report (from login screen) or authenticated report
+  // This determines where the user should be navigated after successful submission
+  const isEmergencyMode = route.params?.isEmergencyMode || false;
+  const { user, isAuthenticated } = useAuth();
+  
   const [marker, setMarker] = useState(null);
   const [region, setRegion] = useState({
     latitude: 14.5995,
@@ -72,8 +78,11 @@ const LocationPickerScreen = ({ navigation, route }) => {
         timestamp: new Date().toISOString()
       };
       
-      // Submit to backend
-      const response = await incidentService.create(finalReport);
+      // Submit to backend with user data if authenticated
+      const response = await incidentService.create(
+        finalReport, 
+        isAuthenticated && !isEmergencyMode ? user : null
+      );
       
       setShowConfirmation(false);
       setShowSuccessModal(true);
@@ -91,7 +100,19 @@ const LocationPickerScreen = ({ navigation, route }) => {
 
   const handleHomePress = () => {
     setShowSuccessModal(false);
-    navigation.navigate('Main', { screen: 'HomePage' });
+    
+    // Context-aware navigation based on how the user accessed the report form
+    if (isEmergencyMode) {
+      // Emergency report: User came from login screen without authentication
+      // Reset navigation stack and return to Login to prevent unauthorized access
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
+    } else {
+      // Authenticated report: User is logged in, return to app home
+      navigation.navigate('Main', { screen: 'HomePage' });
+    }
   };
 
   return (

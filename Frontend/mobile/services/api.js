@@ -395,10 +395,12 @@ export const incidentsAPI = {
   },
 
   /**
-   * Get user's own reports
+   * Get user's own reports (requires authentication)
    */
   getMyReports: async () => {
-    return await apiRequest(API_ENDPOINTS.INCIDENTS.MY_REPORTS);
+    return await apiRequest(API_ENDPOINTS.INCIDENTS.MY_REPORTS, {
+      method: "GET"
+    }, true); // requiresAuth = true
   },
 
   /**

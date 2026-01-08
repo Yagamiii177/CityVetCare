@@ -1,6 +1,24 @@
 # 🐾 CityVetCare - Stray Animal Management System
 
+**Version:** 3.1.0 ✨ (Updated January 6, 2026)  
+**Status:** ✅ Production Ready - All Systems Operational
+
 A comprehensive web and mobile application system for managing stray animal incidents, reports, catcher teams, and patrol schedules in urban areas.
+
+---
+
+## 🎉 Latest Updates (v3.1.0)
+
+### ✨ What's New:
+- **Dedicated Patrol Management API** - New `/api/patrol-staff` and `/api/patrol-schedules` endpoints
+- **Enhanced UI** - Improved patrol assignment with search, filters, and better visuals
+- **Better Organization** - Dedicated models for PatrolStaff and PatrolSchedule
+- **Fixed Routing** - All API endpoints properly connected
+
+📖 **Full Details:** [SYSTEM_FIX_COMPLETE.md](SYSTEM_FIX_COMPLETE.md)  
+⚡ **Quick Guide:** [QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)
+
+---
 
 ## 🏗️ System Architecture
 
@@ -116,18 +134,19 @@ npm start
 - `DELETE /catchers/:id` - Delete catcher team
 
 #### Patrol Staff
-- `GET /patrol-staff` - Get all patrol staff
-- `GET /patrol-staff/:id` - Get patrol staff by ID
-- `POST /patrol-staff` - Create patrol staff
-- `PUT /patrol-staff/:id` - Update patrol staff
-- `DELETE /patrol-staff/:id` - Delete patrol staff
+- `GET /patrol-staff` - Get all patrol staff ✨ NEW
+- `GET /patrol-staff/:id` - Get patrol staff by ID ✨ NEW
+- `POST /patrol-staff` - Create patrol staff ✨ NEW
+- `PUT /patrol-staff/:id` - Update patrol staff ✨ NEW
+- `DELETE /patrol-staff/:id` - Delete patrol staff ✨ NEW
 
 #### Patrol Schedules
-- `GET /patrol-schedules` - Get all schedules
-- `GET /patrol-schedules/:id` - Get schedule by ID
-- `POST /patrol-schedules` - Create schedule
-- `PUT /patrol-schedules/:id` - Update schedule
-- `DELETE /patrol-schedules/:id` - Delete schedule
+- `GET /patrol-schedules` - Get all schedules ✨ NEW
+- `GET /patrol-schedules/:id` - Get schedule by ID ✨ NEW
+- `GET /patrol-schedules/incident/:id` - Get by incident ✨ NEW
+- `POST /patrol-schedules` - Create schedule ✨ NEW
+- `PUT /patrol-schedules/:id` - Update schedule ✨ NEW
+- `DELETE /patrol-schedules/:id` - Delete schedule ✨ NEW
 
 #### Dashboard
 - `GET /dashboard` - Get dashboard statistics

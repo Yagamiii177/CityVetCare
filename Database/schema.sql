@@ -85,20 +85,154 @@ CREATE TABLE IF NOT EXISTS pet (
     INDEX idx_pet_color (color)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Incident Report Table
+-- =============================================
+-- INCIDENT REPORT MANAGEMENT SYSTEM
+-- Normalized schema for Web and Mobile reporting
+-- =============================================
+
+-- Reporter Table - Store citizen information
+CREATE TABLE IF NOT EXISTS reporter (
+    reporter_id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(100),
+    contact_number VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_contact_number (contact_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Incident Location Table - For map-based reporting
+CREATE TABLE IF NOT EXISTS incident_location (
+    location_id INT AUTO_INCREMENT PRIMARY KEY,
+    address_text VARCHAR(255),
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_coordinates (latitude, longitude)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Incident Report Table - Core report data
 CREATE TABLE IF NOT EXISTS incident_report (
     report_id INT AUTO_INCREMENT PRIMARY KEY,
-    owner_id INT NULL,
-    report_type VARCHAR(50) NOT NULL,
+    reporter_id INT NOT NULL,
+    owner_id INT NULL COMMENT 'Pet owner who submitted the report (NULL for anonymous emergency reports)',
+    location_id INT NOT NULL,
+    
+    -- Report Classification
+    report_type ENUM('bite', 'stray', 'lost') NOT NULL,
     description TEXT,
-    location VARCHAR(255),
-    photo TEXT,
-    date_reported DATETIME DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(50) DEFAULT 'pending',
-    CONSTRAINT fk_incident_owner FOREIGN KEY (owner_id) REFERENCES pet_owner(owner_id) ON DELETE SET NULL,
-    INDEX idx_incident_owner (owner_id),
-    INDEX idx_incident_type (report_type),
-    INDEX idx_incident_status (status)
+    incident_date DATETIME NOT NULL,
+    status ENUM('Pending', 'Verified', 'Scheduled', 'In Progress', 'Resolved', 'Rejected', 'Cancelled') DEFAULT 'Pending',
+    priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
+    
+    -- Timestamps
+    reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_report_reporter FOREIGN KEY (reporter_id) REFERENCES reporter(reporter_id) ON DELETE CASCADE,
+    CONSTRAINT fk_report_owner FOREIGN KEY (owner_id) REFERENCES pet_owner(owner_id) ON DELETE SET NULL,
+    CONSTRAINT fk_report_location FOREIGN KEY (location_id) REFERENCES incident_location(location_id) ON DELETE CASCADE,
+    INDEX idx_report_type (report_type),
+    INDEX idx_status (status),
+    INDEX idx_owner_id (owner_id),
+    INDEX idx_incident_date (incident_date),
+    INDEX idx_reported_at (reported_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Incident Pet Table - Animal information linked to incident reports
+CREATE TABLE IF NOT EXISTS incident_pet (
+    pet_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    
+    -- Pet Information
+    animal_type ENUM('Dog', 'Cat', 'Other') NOT NULL,
+    pet_color VARCHAR(100),
+    pet_breed VARCHAR(100),
+    pet_gender ENUM('Male', 'Female', 'Unknown') DEFAULT 'Unknown',
+    pet_size ENUM('Small', 'Medium', 'Large') DEFAULT 'Medium',
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_incident_pet_report FOREIGN KEY (report_id) REFERENCES incident_report(report_id) ON DELETE CASCADE,
+    INDEX idx_incident_pet_report (report_id),
+    INDEX idx_incident_animal_type (animal_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Report Images Table - Evidence uploads
+CREATE TABLE IF NOT EXISTS report_image (
+    image_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    image_path VARCHAR(255) NOT NULL,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_image_report FOREIGN KEY (report_id) REFERENCES incident_report(report_id) ON DELETE CASCADE,
+    INDEX idx_image_report (report_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Incident Assessment Table - Admin-only evaluation
+CREATE TABLE IF NOT EXISTS incident_assessment (
+    assessment_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    assessed_by INT NOT NULL,
+    
+    -- Assessment Details
+    severity_level ENUM('Low', 'Medium', 'High', 'Critical') DEFAULT 'Medium',
+    injuries_description TEXT,
+    follow_up_required BOOLEAN DEFAULT FALSE,
+    
+    -- Timestamps
+    assessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_assessment_report FOREIGN KEY (report_id) REFERENCES incident_report(report_id) ON DELETE CASCADE,
+    CONSTRAINT fk_assessment_admin FOREIGN KEY (assessed_by) REFERENCES administrator(admin_id) ON DELETE CASCADE,
+    INDEX idx_assessment_report (report_id),
+    INDEX idx_severity (severity_level)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Patrol Schedule Table - Scheduling support
+CREATE TABLE IF NOT EXISTS patrol_schedule (
+    schedule_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    assigned_catcher_id VARCHAR(255) NOT NULL COMMENT 'Comma-separated catcher IDs for team patrols',
+    
+    -- Schedule Details
+    schedule_date DATE NOT NULL,
+    schedule_time TIME,
+    status ENUM('Assigned', 'On Patrol', 'Completed', 'Cancelled') DEFAULT 'Assigned',
+    notes TEXT,
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_schedule_report FOREIGN KEY (report_id) REFERENCES incident_report(report_id) ON DELETE CASCADE,
+    INDEX idx_schedule_report (report_id),
+    INDEX idx_schedule_date (schedule_date),
+    INDEX idx_schedule_status (status),
+    INDEX idx_assigned_catchers (assigned_catcher_id(50))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Notifications Table
+-- Used by backend for authenticated notifications (pet owners/admin/catchers)
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    user_type ENUM('owner', 'admin', 'catcher') NOT NULL DEFAULT 'owner',
+    owner_id INT NULL COMMENT 'FK to pet_owner.owner_id for authenticated pet owners',
+    incident_id INT NULL COMMENT 'FK to incident_report.report_id',
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    stray_animal_id INT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_notifications (user_id, user_type),
+    INDEX idx_notification_read (is_read),
+    INDEX idx_stray_notification (stray_animal_id),
+    INDEX idx_owner_notifications (owner_id),
+    INDEX idx_incident_notifications (incident_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Stray Animals Table
@@ -116,8 +250,13 @@ CREATE TABLE IF NOT EXISTS stray_animals (
     date_captured DATE NOT NULL,
     registration_date DATE NOT NULL,
     location_captured VARCHAR(255) NOT NULL,
+<<<<<<< HEAD
     latitude DECIMAL(10,8) NULL,
     longitude DECIMAL(11,8) NULL,
+=======
+    latitude DECIMAL(10, 8) NULL,
+    longitude DECIMAL(11, 8) NULL,
+>>>>>>> db2a2b89099177d7e3d92306a365d4776423a5a7
     status ENUM('captured', 'adoption', 'adopted', 'euthanized', 'claimed') NOT NULL DEFAULT 'captured',
     images JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -127,6 +266,7 @@ CREATE TABLE IF NOT EXISTS stray_animals (
     INDEX idx_breed (breed),
     INDEX idx_date_captured (date_captured),
     INDEX idx_location (location_captured),
+    INDEX idx_stray_coords (latitude, longitude),
     INDEX idx_captured_by (captured_by),
     INDEX idx_stray_coords (latitude, longitude),
     INDEX idx_status (status)
@@ -167,7 +307,11 @@ CREATE TABLE IF NOT EXISTS adoption_request (
     adopter_id INT NOT NULL,
     request_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(50) DEFAULT 'pending',
+<<<<<<< HEAD
     applicant_details JSON,
+=======
+    applicant_details JSON NULL,
+>>>>>>> db2a2b89099177d7e3d92306a365d4776423a5a7
     CONSTRAINT fk_adoption_stray FOREIGN KEY (stray_id) REFERENCES stray_animals(animal_id) ON DELETE CASCADE,
     CONSTRAINT fk_adoption_adopter FOREIGN KEY (adopter_id) REFERENCES pet_owner(owner_id) ON DELETE CASCADE,
     INDEX idx_adoption_status (status)
@@ -248,6 +392,7 @@ CREATE TABLE IF NOT EXISTS announcement (
     status VARCHAR(50) DEFAULT 'draft',
     CONSTRAINT fk_announcement_admin FOREIGN KEY (admin_id) REFERENCES administrator(admin_id) ON DELETE CASCADE,
     INDEX idx_announcement_status (status)
+<<<<<<< HEAD
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Notifications Table (used by backend /api/notifications)
@@ -265,3 +410,6 @@ CREATE TABLE IF NOT EXISTS notifications (
     INDEX idx_notification_read (is_read),
     INDEX idx_stray_notification (stray_animal_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+>>>>>>> db2a2b89099177d7e3d92306a365d4776423a5a7

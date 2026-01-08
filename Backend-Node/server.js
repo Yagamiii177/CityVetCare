@@ -10,13 +10,18 @@ import validateEnv from "./utils/validateEnv.js";
 // Import routes
 import authRouter from "./routes/auth.js";
 import healthRouter from "./routes/health.js";
+import incidentsRouter from "./routes/incidents.js";
+import catchersRouter from "./routes/catchers.js";
+import dashboardRouter from "./routes/dashboard.js";
+import schedulesRouter from "./routes/schedules.js";
 import strayAnimalsRouter from "./routes/strayAnimals.js";
+import patrolStaffRouter from "./routes/patrol-staff.js";
+import patrolSchedulesRouter from "./routes/patrol-schedules.js";
 import petsRouter from "./routes/pets.js";
 import euthanizedAnimalsRouter from "./routes/euthanizedAnimals.js";
 import adoptionRequestsRouter from "./routes/adoptionRequests.js";
 import notificationsRouter from "./routes/notifications.js";
 import redemptionRequestsRouter from "./routes/redemptionRequests.js";
-import dashboardRouter from "./routes/dashboard.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -62,8 +67,9 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: "15mb" }));
-app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+// Increase payload size limits for image uploads (10MB for mobile base64 images)
+app.use(express.json({ limit: '15mb' })); // Accommodate base64 encoding overhead
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Serve uploaded files as static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -78,25 +84,37 @@ app.use((req, res, next) => {
 app.get("/", (req, res) => {
   res.json({
     message: "CityVetCare API",
-    version: "3.0.0",
+    version: "3.1.0",
     platform: "Node.js/Express",
-    description: "Simplified authentication system for City Vet Care",
+    description: "Complete report management system for City Vet Care",
     endpoints: {
       "/api/health": "Health check",
       "/api/auth": "Authentication (login, create account)",
+      "/api/incidents": "Incident report management",
+      "/api/catchers": "Catcher team management",
+      "/api/dashboard": "Dashboard statistics",
+      "/api/schedules": "Patrol scheduling",
+      "/api/patrol-staff": "Patrol staff management (dedicated)",
+      "/api/patrol-schedules": "Patrol schedules management (dedicated)",
+      "/api/stray-animals": "Stray animals management",
     },
   });
 });
 
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/incidents", incidentsRouter);
+app.use("/api/catchers", catchersRouter);
+app.use("/api/dashboard", dashboardRouter);
+app.use("/api/schedules", schedulesRouter);
+app.use("/api/patrol-staff", patrolStaffRouter);
+app.use("/api/patrol-schedules", patrolSchedulesRouter);
 app.use("/api/stray-animals", strayAnimalsRouter);
 app.use("/api/pets", petsRouter);
 app.use("/api/euthanized-animals", euthanizedAnimalsRouter);
 app.use("/api/adoption-requests", adoptionRequestsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/redemption-requests", redemptionRequestsRouter);
-app.use("/api/dashboard", dashboardRouter);
 
 // Debug: Log registered routes
 if (process.env.NODE_ENV === "development") {

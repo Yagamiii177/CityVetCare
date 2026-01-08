@@ -1,216 +1,155 @@
-import express from "express";
-import { pool } from "../config/database.js";
-import Logger from "../utils/logger.js";
+import express from 'express';
+import Incident from '../models/Incident.js';
+import pool from '../config/database.js';
+import Logger from '../utils/logger.js';
 
 const router = express.Router();
-const logger = new Logger("DASHBOARD_ROUTES");
+const logger = new Logger('DASHBOARD');
 
-const toDateKey = (d) => {
+/**
+ * GET /api/dashboard
+ * Get dashboard statistics
+ */
+router.get('/', async (req, res) => {
   try {
-    return typeof d === "string"
-      ? d.slice(0, 10)
-      : d.toISOString().slice(0, 10);
-  } catch {
-    return null;
-  }
-};
-
-const buildDateRange = (days) => {
-  const out = [];
-  const now = new Date();
-  // Use local day boundaries; values are used as labels only.
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i);
-    d.setHours(0, 0, 0, 0);
-    out.push(toDateKey(d));
-  }
-  return out.filter(Boolean);
-};
-
-// GET /api/dashboard
-router.get("/", async (req, res) => {
-  try {
-    const rangeDays = 30;
-    const dates = buildDateRange(rangeDays);
-
-    const [[totalStraysRow]] = await pool.query(
-      "SELECT COUNT(*) AS total FROM stray_animals"
-    );
-
-    const [statusRows] = await pool.query(
-      "SELECT LOWER(COALESCE(status, 'captured')) AS status, COUNT(*) AS count FROM stray_animals GROUP BY LOWER(COALESCE(status, 'captured'))"
-    );
-
-    const [adoptionStatusRows] = await pool.query(
-      "SELECT LOWER(COALESCE(status, 'pending')) AS status, COUNT(*) AS count FROM adoption_request GROUP BY LOWER(COALESCE(status, 'pending'))"
-    );
-
-    const [redemptionStatusRows] = await pool.query(
-      "SELECT LOWER(COALESCE(status, 'pending')) AS status, COUNT(*) AS count FROM redemption_request GROUP BY LOWER(COALESCE(status, 'pending'))"
-    );
-
-    // Stray registrations by day (registration_date preferred, fallback to created_at)
-    const [registrationRows] = await pool.query(
-      `SELECT DATE(COALESCE(registration_date, created_at)) AS d, COUNT(*) AS count
-       FROM stray_animals
-       WHERE COALESCE(registration_date, DATE(created_at)) >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       GROUP BY DATE(COALESCE(registration_date, created_at))`,
-      [rangeDays - 1]
-    );
-
-    // Adoption approvals by day (approved_date), and total requests by day (request_date)
-    const [adoptionRequestRows] = await pool.query(
-      `SELECT DATE(request_date) AS d,
-              SUM(CASE WHEN LOWER(status) = 'pending' THEN 1 ELSE 0 END) AS pending,
-              SUM(CASE WHEN LOWER(status) = 'approved' THEN 1 ELSE 0 END) AS approved,
-              SUM(CASE WHEN LOWER(status) = 'rejected' THEN 1 ELSE 0 END) AS rejected,
-              COUNT(*) AS total
-       FROM adoption_request
-       WHERE DATE(request_date) >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       GROUP BY DATE(request_date)`,
-      [rangeDays - 1]
-    );
-
-    // Optional: approval date series if the schema includes approved_date.
-    // Older schemas track only request_date + status.
-    let adoptionApprovedRows = [];
-    try {
-      const [approvedDateCols] = await pool.query(
-        "SHOW COLUMNS FROM adoption_request LIKE 'approved_date'"
-      );
-      if (approvedDateCols?.length) {
-        const [rows] = await pool.query(
-          `SELECT DATE(approved_date) AS d, COUNT(*) AS approved
-           FROM adoption_request
-           WHERE LOWER(status) = 'approved'
-             AND approved_date IS NOT NULL
-             AND DATE(approved_date) >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-           GROUP BY DATE(approved_date)`,
-          [rangeDays - 1]
-        );
-        adoptionApprovedRows = rows || [];
-      }
-    } catch (colCheckError) {
-      logger.warn(
-        "Skipping approved_date series (schema does not support it)",
-        colCheckError
-      );
-      adoptionApprovedRows = [];
-    }
-
-    // Recent activity (last 6 combined)
-    const [recentStrays] = await pool.query(
-      `SELECT animal_id, created_at
-       FROM stray_animals
-       ORDER BY created_at DESC
-       LIMIT 6`
-    );
-
-    const [recentAdoptionReq] = await pool.query(
-      `SELECT adoption_id, request_date
-       FROM adoption_request
-       ORDER BY request_date DESC
-       LIMIT 6`
-    );
-
-    const [recentRedemptionReq] = await pool.query(
-      `SELECT redemption_id, request_date
-       FROM redemption_request
-       ORDER BY request_date DESC
-       LIMIT 6`
-    );
-
-    const statusCounts = Object.fromEntries(
-      (statusRows || []).map((r) => [r.status, Number(r.count) || 0])
-    );
-
-    const adoptionRequestCounts = Object.fromEntries(
-      (adoptionStatusRows || []).map((r) => [r.status, Number(r.count) || 0])
-    );
-
-    const redemptionRequestCounts = Object.fromEntries(
-      (redemptionStatusRows || []).map((r) => [r.status, Number(r.count) || 0])
-    );
-
-    const byDate = new Map(dates.map((d) => [d, { date: d }]));
-
-    for (const r of registrationRows || []) {
-      const key = toDateKey(r.d);
-      if (!key || !byDate.has(key)) continue;
-      byDate.get(key).registeredStrays = Number(r.count) || 0;
-    }
-
-    for (const r of adoptionRequestRows || []) {
-      const key = toDateKey(r.d);
-      if (!key || !byDate.has(key)) continue;
-      byDate.get(key).adoptionRequests = Number(r.total) || 0;
-      byDate.get(key).adoptionPending = Number(r.pending) || 0;
-      byDate.get(key).adoptionApproved = Number(r.approved) || 0;
-      byDate.get(key).adoptionRejected = Number(r.rejected) || 0;
-    }
-
-    // Override approved series using approved_date-based aggregation when available.
-    for (const r of adoptionApprovedRows || []) {
-      const key = toDateKey(r.d);
-      if (!key || !byDate.has(key)) continue;
-      byDate.get(key).adoptionApproved = Number(r.approved) || 0;
-    }
-
-    const timeSeries = Array.from(byDate.values()).map((row) => ({
-      date: row.date,
-      registeredStrays: row.registeredStrays ?? 0,
-      adoptionRequests: row.adoptionRequests ?? 0,
-      adoptionApproved: row.adoptionApproved ?? 0,
-      adoptionPending: row.adoptionPending ?? 0,
-      adoptionRejected: row.adoptionRejected ?? 0,
-    }));
-
-    const activitiesRaw = [
-      ...(recentStrays || []).map((r) => ({
-        ts: r.created_at,
-        type: "stray_registered",
-        label: `New stray registered (#${r.animal_id})`,
-      })),
-      ...(recentAdoptionReq || []).map((r) => ({
-        ts: r.request_date,
-        type: "adoption_requested",
-        label: `New adoption request (#${r.adoption_id})`,
-      })),
-      ...(recentRedemptionReq || []).map((r) => ({
-        ts: r.request_date,
-        type: "redemption_requested",
-        label: `New redemption request (#${r.redemption_id})`,
-      })),
-    ]
-      .filter((a) => a.ts)
-      .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
-      .slice(0, 6)
-      .map((a, idx) => ({
-        id: idx + 1,
-        type: a.type,
-        action: a.label,
-        timestamp: a.ts,
-      }));
-
+    // Get incident counts by status
+    const counts = await Incident.getCountsByStatus();
+    
+    // Get today's patrols/schedules
+    const [todaySchedules] = await pool.execute(`
+      SELECT COUNT(*) as count 
+      FROM patrol_schedule 
+      WHERE DATE(schedule_date) = CURDATE() 
+      AND status != 'cancelled'
+    `);
+    
+    // Get patrol status counts
+    const [patrolCounts] = await pool.execute(`
+      SELECT 
+        COUNT(CASE WHEN status = 'Assigned' THEN 1 END) as scheduled,
+        COUNT(CASE WHEN status = 'On Patrol' THEN 1 END) as in_progress,
+        COUNT(CASE WHEN status = 'Completed' THEN 1 END) as completed,
+        COUNT(CASE WHEN status = 'Cancelled' THEN 1 END) as cancelled
+      FROM patrol_schedule
+    `);
+    
+    // Get recent incidents (last 5)
+    const recentIncidents = await Incident.getAll({ limit: 5, offset: 0 });
+    
+    // Get today's patrol schedules
+    const [todaysPatrols] = await pool.execute(`
+      SELECT ps.*, ir.report_type, ir.status as incident_status, il.address_text as location
+      FROM patrol_schedule ps
+      LEFT JOIN incident_report ir ON ps.report_id = ir.report_id
+      LEFT JOIN incident_location il ON ir.location_id = il.location_id
+      WHERE DATE(ps.schedule_date) = CURDATE()
+      ORDER BY ps.schedule_date ASC
+      LIMIT 10
+    `);
+    
+    // Get active staff count
+    const [activeStaff] = await pool.execute(`
+      SELECT COUNT(*) as count 
+      FROM dog_catcher 
+      WHERE 1=1
+    `);
+    
+    // Count staff currently on patrol
+    const [onPatrol] = await pool.execute(`
+      SELECT COUNT(DISTINCT assigned_catcher_id) as count
+      FROM patrol_schedule
+      WHERE status = 'On Patrol'
+      AND DATE(schedule_date) = CURDATE()
+    `);
+    
+    // Get activity trends for last 7 days
+    const [activityTrends] = await pool.execute(`
+      SELECT 
+        DATE(reported_at) as date,
+        COUNT(*) as incident_count,
+        SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END) as resolved_count
+      FROM incident_report
+      WHERE reported_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+      GROUP BY DATE(reported_at)
+      ORDER BY date DESC
+    `);
+    
+    const patrolStats = patrolCounts[0];
+    
     res.json({
       success: true,
       data: {
-        metrics: {
-          totalStrays: Number(totalStraysRow?.total) || 0,
-          statusCounts,
-          adoptionRequestCounts,
-          redemptionRequestCounts,
+        incidents: {
+          total_incidents: counts.total || 0,
+          bite_incidents: counts.bite_incidents || 0,
+          stray_incidents: counts.stray_incidents || 0,
+          urgent: counts.urgent || 0,
+          high_priority: counts.high_priority || 0,
+          in_progress: counts.in_progress || 0,
+          verified: counts.verified || 0,
+          resolved: counts.resolved || 0,
+          rejected: counts.rejected || 0
         },
-        timeSeries,
-        recentActivities: activitiesRaw,
-      },
+        patrols: {
+          scheduled: patrolStats.scheduled || 0,
+          in_progress: patrolStats.in_progress || 0,
+          completed: patrolStats.completed || 0,
+          cancelled: patrolStats.cancelled || 0,
+          captured: 0,
+          not_found: 0,
+          rescheduled: 0
+        },
+        staff: {
+          available: activeStaff[0].count || 0,
+          on_patrol: onPatrol[0].count || 0
+        },
+        verification: {
+          pending_verification: counts.pending || 0,
+          urgent_verifications: counts.urgent || 0,
+          overdue_verifications: 0
+        },
+        recentIncidents: recentIncidents,
+        todaysPatrols: todaysPatrols,
+        activityTrends: activityTrends,
+        lastUpdated: new Date().toISOString()
+      }
     });
   } catch (error) {
-    logger.error("Failed to build dashboard stats", error);
-    res
-      .status(500)
-      .json({ error: true, message: "Unable to fetch dashboard stats" });
+    logger.error('Failed to fetch dashboard data', error);
+    res.status(500).json({
+      error: true,
+      message: 'Failed to fetch dashboard data',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/dashboard/stats
+ * Get dashboard statistics (alias)
+ */
+router.get('/stats', async (req, res) => {
+  try {
+    const counts = await Incident.getCountsByStatus();
+    
+    res.json({
+      success: true,
+      data: {
+        total_reports: counts.total,
+        pending: counts.pending,
+        verified: counts.verified,
+        in_progress: counts.in_progress,
+        resolved: counts.resolved,
+        assigned: counts.assigned,
+        scheduled: counts.scheduled
+      }
+    });
+  } catch (error) {
+    logger.error('Failed to fetch dashboard stats', error);
+    res.status(500).json({
+      error: true,
+      message: 'Failed to fetch dashboard stats'
+    });
   }
 });
 

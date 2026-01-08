@@ -18,6 +18,8 @@ async function ensureNotificationsTable() {
     notification_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     user_type ENUM('owner', 'admin', 'catcher') NOT NULL DEFAULT 'owner',
+    owner_id INT NULL COMMENT 'FK to pet_owner.owner_id for authenticated pet owners',
+    incident_id INT NULL COMMENT 'FK to incident_report.report_id',
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     type VARCHAR(50) NOT NULL,
@@ -26,8 +28,28 @@ async function ensureNotificationsTable() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_user_notifications (user_id, user_type),
     INDEX idx_notification_read (is_read),
-    INDEX idx_stray_notification (stray_animal_id)
+    INDEX idx_stray_notification (stray_animal_id),
+    INDEX idx_owner_notifications (owner_id),
+    INDEX idx_incident_notifications (incident_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+
+  // Ensure owner_id and incident_id columns exist
+  try {
+    await pool.query(`ALTER TABLE notifications 
+      ADD COLUMN IF NOT EXISTS owner_id INT NULL COMMENT 'FK to pet_owner.owner_id' AFTER user_type,
+      ADD COLUMN IF NOT EXISTS incident_id INT NULL COMMENT 'FK to incident_report.report_id' AFTER owner_id`);
+  } catch (e) {
+    // Columns may already exist
+  }
+
+  // Ensure indexes exist
+  try {
+    await pool.query(`ALTER TABLE notifications
+      ADD INDEX IF NOT EXISTS idx_owner_notifications (owner_id),
+      ADD INDEX IF NOT EXISTS idx_incident_notifications (incident_id)`);
+  } catch (e) {
+    // Indexes may already exist
+  }
 }
 
 // GET /api/notifications - list notifications for current user
@@ -46,6 +68,7 @@ router.get("/", authenticateToken, async (req, res) => {
          n.is_read,
          n.created_at,
          n.stray_animal_id,
+         n.incident_id,
          sa.animal_id,
          sa.name as stray_name,
          sa.species,
@@ -57,15 +80,18 @@ router.get("/", authenticateToken, async (req, res) => {
          sa.rfid,
          sa.status,
          sa.date_captured,
-         sa.location_captured
+         sa.location_captured,
+         ir.status as incident_status,
+         ir.report_type as incident_type
        FROM notifications n
        LEFT JOIN stray_animals sa ON n.stray_animal_id = sa.animal_id
+       LEFT JOIN incident_report ir ON n.incident_id = ir.report_id
        WHERE n.user_id = ? AND n.user_type = ?
        ORDER BY n.created_at DESC`,
       [userId, userType]
     );
 
-    // Transform the notifications to include pet data
+    // Transform the notifications to include pet data and incident data
     const transformedNotifications = rows.map((row) => {
       const notification = {
         id: row.id,
@@ -75,6 +101,13 @@ router.get("/", authenticateToken, async (req, res) => {
         is_read: row.is_read,
         created_at: row.created_at,
       };
+
+      // If there's incident data, include it
+      if (row.incident_id) {
+        notification.incident_id = row.incident_id;
+        notification.incident_status = row.incident_status;
+        notification.incident_type = row.incident_type;
+      }
 
       // If there's stray animal data, include it
       if (row.stray_animal_id && row.animal_id) {

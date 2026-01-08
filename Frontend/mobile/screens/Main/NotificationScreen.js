@@ -59,6 +59,9 @@ const NotificationScreen = () => {
           ? new Date(notif.created_at).toLocaleDateString()
           : new Date().toLocaleDateString(),
         pet: notif.stray_animal || null, // Include the stray animal data
+        incident_id: notif.incident_id || null, // Include incident ID for navigation
+        incident_status: notif.incident_status || null,
+        incident_type: notif.incident_type || null,
       }));
 
       setNotifications(transformedNotifications);
@@ -98,6 +101,9 @@ const NotificationScreen = () => {
         return require("../../assets/icons/adopt_pet_icon.png");
       case "adoption_status":
         return require("../../assets/icons/adopt_pet_icon.png");
+      case "submission":
+      case "status_update":
+      case "rejection":
       case "new_report":
       case "report_status":
         return require("../../assets/icons/report_icon.png");
@@ -110,9 +116,12 @@ const NotificationScreen = () => {
     switch (type) {
       case "pet_capture":
         return "Notifications";
+      case "submission":
+      case "status_update":
+      case "rejection":
       case "new_report":
       case "report_status":
-        return "ReportStatus";
+        return "MyReports";
       default:
         return "Notifications";
     }
@@ -144,6 +153,24 @@ const NotificationScreen = () => {
         fetchUnread();
       } catch {}
     }
+
+    // If it's an incident notification, navigate to My Reports with the incident
+    if (notification.incident_id && 
+        (notification.type === 'submission' || 
+         notification.type === 'status_update' || 
+         notification.type === 'rejection')) {
+      // Close any open modals first
+      setDetailModalVisible(false);
+      setDetailNotification(null);
+      
+      // Navigate to My Reports screen (which will show the incident)
+      navigation.navigate('MyReports', {
+        highlightIncidentId: notification.incident_id
+      });
+      return;
+    }
+
+    // Otherwise show the detail modal
     setDetailNotification(notification);
     setDetailModalVisible(true);
   };
@@ -347,6 +374,20 @@ const NotificationScreen = () => {
                 Date: {detailNotification?.date}
               </Text>
               <View style={styles.detailButtons}>
+                {detailNotification?.incident_id && (
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={() => {
+                      closeDetail();
+                      navigation.navigate('MyReports', {
+                        highlightIncidentId: detailNotification.incident_id
+                      });
+                    }}
+                  >
+                    <Ionicons name="document-text" size={18} color="#fff" />
+                    <Text style={styles.primaryButtonText}>View Report</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.deleteButton}
                   onPress={() => {

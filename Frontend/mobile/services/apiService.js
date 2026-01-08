@@ -46,18 +46,33 @@ const fetchWithError = async (url, options = {}) => {
       console.log('🔓 Request without authentication (emergency report)');
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), options.timeout || 60000); // 60 second default timeout
 
-    const data = await response.json();
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return data;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request timed out. Please check your internet connection and try again.');
+      }
+      throw fetchError;
     }
-
-    return data;
   } catch (error) {
     console.error('🚨 API Error:', error.message);
     throw new Error(error.message || 'Network request failed');
@@ -94,6 +109,44 @@ export const incidentService = {
     return fetchWithError(API_ENDPOINTS.INCIDENTS.DETAIL(id), {
       method: 'GET',
     });
+  },
+
+  /**
+   * Get all incidents reported by a specific owner
+   * @param {number} ownerId - The pet owner ID
+   * @param {object} filters - Optional filters (status)
+   */
+  getByOwnerId: async (ownerId, filters = {}) => {
+    // Use the new BY_OWNER endpoint if available, otherwise fallback
+    const endpoint = API_ENDPOINTS.INCIDENTS.BY_OWNER 
+      ? API_ENDPOINTS.INCIDENTS.BY_OWNER(ownerId)
+      : `${API_ENDPOINTS.INCIDENTS.LIST}/owner/${ownerId}`;
+    
+    const queryParams = new URLSearchParams(filters).toString();
+    const url = queryParams ? `${endpoint}?${queryParams}` : endpoint;
+    
+    console.log('📡 Fetching owner reports:', url);
+    
+    const response = await fetchWithError(url, {
+      method: 'GET',
+    });
+    
+    return response;
+  },
+
+  /**
+   * Get authenticated user's own reports (requires authentication)
+   * Uses token authentication to automatically fetch current user's reports
+   */
+  getMyReports: async () => {
+    const url = API_ENDPOINTS.INCIDENTS.MY_REPORTS;
+    console.log('📡 Fetching my reports (authenticated):', url);
+    
+    const response = await fetchWithError(url, {
+      method: 'GET',
+    });
+    
+    return response;
   },
 
   /**
@@ -143,14 +196,32 @@ export const incidentService = {
       }
 
       // Upload images to the correct endpoint
-      const uploadUrl = `${API_ENDPOINTS.INCIDENTS.CREATE}/upload-images`;
+      const uploadUrl = `${API_ENDPOINTS.INCIDENTS.LIST}/upload-images`;
       console.log('📡 Upload URL:', uploadUrl);
 
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData,
-        headers, // Let React Native set Content-Type automatically
-      });
+      // Create AbortController for timeout (3 minutes for image uploads)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('⏱️ Image upload timeout after 180 seconds');
+        controller.abort();
+      }, 180000); // 180 seconds for image uploads
+
+      let response;
+      try {
+        response = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData,
+          headers, // Let React Native set Content-Type automatically
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Image upload timed out. Please check your internet connection and try again.');
+        }
+        throw fetchError;
+      }
 
       console.log('📥 Upload response status:', response.status);
 
@@ -187,13 +258,15 @@ export const incidentService = {
   /**
    * Create new incident report
    * @param {Object} reportData - Report data including location, images, etc.
+   * @param {Object} user - Authenticated user object (optional, for authenticated reports)
    */
-  create: async (reportData) => {
+  create: async (reportData, user = null) => {
     try {
       console.log('📝 Creating incident report...', {
         reportType: reportData.reportType,
         hasImages: reportData.images?.length > 0,
-        location: reportData.location
+        location: reportData.location,
+        isAuthenticated: !!user
       });
 
       // Step 1: Upload images first if any
@@ -210,14 +283,18 @@ export const incidentService = {
         title = 'Incident/Bite Report';
       } else if (reportData.reportType === 'stray') {
         title = 'Stray Animal Report';
-      } else if (reportData.reportType === 'lost') {
-        title = 'Lost Pet Report';
       }
 
       // Step 3: Format the incident date properly
-      const incidentDate = reportData.date 
-        ? new Date(reportData.date).toISOString().replace('T', ' ').split('.')[0]
-        : new Date().toISOString().replace('T', ' ').split('.')[0];
+      let incidentDate;
+      try {
+        // Handle both Date objects and ISO strings
+        const dateObj = typeof reportData.date === 'string' ? new Date(reportData.date) : reportData.date;
+        incidentDate = dateObj.toISOString().replace('T', ' ').split('.')[0];
+      } catch (e) {
+        console.warn('Date parsing failed, using current date');
+        incidentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
+      }
 
       // Step 4: Prepare the data for submission
       const payload = {
@@ -229,7 +306,7 @@ export const incidentService = {
         latitude: reportData.location?.latitude || null,
         longitude: reportData.location?.longitude || null,
         status: 'pending',
-        reporter_name: reportData.reporterName || 'Mobile User',
+        reporter_name: user?.full_name || reportData.reporterName || 'Mobile User',
         reporter_contact: reportData.contactNumber || '',
         incident_date: incidentDate,
         incident_type: reportData.reportType || 'incident',
@@ -238,10 +315,15 @@ export const incidentService = {
         animal_type: reportData.animalType || null,
         pet_gender: reportData.petGender || null,
         pet_size: reportData.petSize || null,
-        images: JSON.stringify(imageUrls) // Store as JSON string
+        images: imageUrls, // Send as array
+        // Add owner_id if user is authenticated
+        owner_id: user?.owner_id || user?.id || null
       };
 
-      console.log('📤 Submitting report to backend...', payload);
+      console.log('📤 Submitting report to backend...', {
+        ...payload,
+        isAuthenticated: !!payload.owner_id
+      });
 
       // Step 5: Submit the report
       const result = await fetchWithError(API_ENDPOINTS.INCIDENTS.CREATE, {

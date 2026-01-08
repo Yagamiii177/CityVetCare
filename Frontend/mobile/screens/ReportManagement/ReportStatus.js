@@ -54,7 +54,6 @@ const ReportStatus = () => {
     const typeMap = {
       'incident': 'Incident Bite Report',
       'stray': 'Stray Animal',
-      'lost': 'Lost Pet',
     };
     return typeMap[type] || type;
   };
