@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS incident_location (
 CREATE TABLE IF NOT EXISTS incident_report (
     report_id INT AUTO_INCREMENT PRIMARY KEY,
     reporter_id INT NOT NULL,
+    owner_id INT NULL COMMENT 'Pet owner who submitted the report (NULL for anonymous emergency reports)',
     location_id INT NOT NULL,
     
     -- Report Classification
@@ -109,9 +110,11 @@ CREATE TABLE IF NOT EXISTS incident_report (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
     CONSTRAINT fk_report_reporter FOREIGN KEY (reporter_id) REFERENCES reporter(reporter_id) ON DELETE CASCADE,
+    CONSTRAINT fk_report_owner FOREIGN KEY (owner_id) REFERENCES pet_owner(owner_id) ON DELETE SET NULL,
     CONSTRAINT fk_report_location FOREIGN KEY (location_id) REFERENCES incident_location(location_id) ON DELETE CASCADE,
     INDEX idx_report_type (report_type),
     INDEX idx_status (status),
+    INDEX idx_owner_id (owner_id),
     INDEX idx_incident_date (incident_date),
     INDEX idx_reported_at (reported_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -192,6 +195,27 @@ CREATE TABLE IF NOT EXISTS patrol_schedule (
     INDEX idx_assigned_catchers (assigned_catcher_id(50))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Notifications Table
+-- Used by backend for authenticated notifications (pet owners/admin/catchers)
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    user_type ENUM('owner', 'admin', 'catcher') NOT NULL DEFAULT 'owner',
+    owner_id INT NULL COMMENT 'FK to pet_owner.owner_id for authenticated pet owners',
+    incident_id INT NULL COMMENT 'FK to incident_report.report_id',
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    stray_animal_id INT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_notifications (user_id, user_type),
+    INDEX idx_notification_read (is_read),
+    INDEX idx_stray_notification (stray_animal_id),
+    INDEX idx_owner_notifications (owner_id),
+    INDEX idx_incident_notifications (incident_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Stray Animals Table
 CREATE TABLE IF NOT EXISTS stray_animals (
     animal_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -207,6 +231,8 @@ CREATE TABLE IF NOT EXISTS stray_animals (
     date_captured DATE NOT NULL,
     registration_date DATE NOT NULL,
     location_captured VARCHAR(255) NOT NULL,
+    latitude DECIMAL(10, 8) NULL,
+    longitude DECIMAL(11, 8) NULL,
     status ENUM('captured', 'adoption', 'adopted', 'euthanized', 'claimed') NOT NULL DEFAULT 'captured',
     images JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -216,6 +242,7 @@ CREATE TABLE IF NOT EXISTS stray_animals (
     INDEX idx_breed (breed),
     INDEX idx_date_captured (date_captured),
     INDEX idx_location (location_captured),
+    INDEX idx_stray_coords (latitude, longitude),
     INDEX idx_captured_by (captured_by),
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -255,6 +282,7 @@ CREATE TABLE IF NOT EXISTS adoption_request (
     adopter_id INT NOT NULL,
     request_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(50) DEFAULT 'pending',
+    applicant_details JSON NULL,
     CONSTRAINT fk_adoption_stray FOREIGN KEY (stray_id) REFERENCES stray_animals(animal_id) ON DELETE CASCADE,
     CONSTRAINT fk_adoption_adopter FOREIGN KEY (adopter_id) REFERENCES pet_owner(owner_id) ON DELETE CASCADE,
     INDEX idx_adoption_status (status)
@@ -269,6 +297,8 @@ CREATE TABLE IF NOT EXISTS redemption_request (
     request_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(50) DEFAULT 'pending',
     remarks TEXT,
+    owner_contact VARCHAR(50) NULL,
+    proof_images TEXT NULL,
     attempt_count INT DEFAULT 0,
     CONSTRAINT fk_redemption_stray FOREIGN KEY (stray_id) REFERENCES stray_animals(animal_id) ON DELETE CASCADE,
     CONSTRAINT fk_redemption_owner FOREIGN KEY (owner_id) REFERENCES pet_owner(owner_id) ON DELETE CASCADE,
