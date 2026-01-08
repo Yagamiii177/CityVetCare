@@ -5,11 +5,14 @@ import {
   ScrollView,
   ActivityIndicator,
   Text,
+  TouchableOpacity,
 } from "react-native";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/ScreenHeader";
 import AdoptionCard from "../../components/StrayAnimalManagement/AdoptionCard";
 import SearchBar from "../../components/StrayAnimalManagement/SearchBar";
 import api from "../../services/api";
+import { resolveImageUri } from "../../utils/resolveImageUri";
 
 const AdoptionScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -86,7 +89,7 @@ const AdoptionScreen = ({ navigation }) => {
         capturedLocation:
           animal.locationCaptured || animal.location_captured || "",
         notes: "",
-        imageUrls: normalizeImages(animal.images),
+        imageUrls: normalizeImages(animal.images).map(resolveImageUri),
         rfid: animal.rfid || null,
       }));
 
@@ -129,7 +132,22 @@ const AdoptionScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Pet Adoption" showBackButton />
+      {/* Custom Header with Button */}
+      <View style={styles.headerContainer}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back-outline" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Pet Adoption</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("AdoptionRequestsList")}
+            style={styles.headerButton}
+          >
+            <MaterialCommunityIcons name="history" size={27} color="#FD7E14" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.orangeDivider} />
+      </View>
 
       <View style={styles.searchBarContainer}>
         <SearchBar
@@ -183,6 +201,31 @@ const AdoptionScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F1F1F1" },
+  headerContainer: {
+    backgroundColor: "#fff",
+    paddingTop: 50,
+    paddingBottom: 15,
+    paddingHorizontal: 16,
+  },
+  headerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  headerButton: {
+    padding: 4,
+  },
+  orangeDivider: {
+    height: 3,
+    backgroundColor: "#FD7E14",
+    marginTop: 10,
+    borderRadius: 2,
+  },
   searchBarContainer: {
     paddingHorizontal: 16,
     paddingTop: 8,

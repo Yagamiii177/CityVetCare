@@ -4,9 +4,55 @@ import EuthanizedAnimal from "../models/EuthanizedAnimal.js";
 import Logger from "../utils/logger.js";
 import { pool } from "../config/database.js";
 import { sendOwnerAlert } from "../services/notificationService.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const router = express.Router();
 const logger = new Logger("STRAY_ANIMAL_ROUTES");
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const strayUploadsDir = path.join(__dirname, "..", "uploads", "stray");
+if (!fs.existsSync(strayUploadsDir)) {
+  fs.mkdirSync(strayUploadsDir, { recursive: true });
+}
+
+const isDataUrlImage = (val = "") => {
+  if (typeof val !== "string") return false;
+  return /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(val.trim());
+};
+
+const saveDataUrlImage = async (dataUrl) => {
+  const trimmed = String(dataUrl || "").trim();
+  const match = trimmed.match(/^data:image\/(jpeg|jpg|png|webp);base64,(.*)$/i);
+  if (!match) return null;
+
+  const ext =
+    match[1].toLowerCase() === "jpeg" ? "jpg" : match[1].toLowerCase();
+  const base64 = match[2];
+
+  let buffer;
+  try {
+    buffer = Buffer.from(base64, "base64");
+  } catch {
+    return null;
+  }
+
+  // Safety limit: 6MB per image
+  if (buffer.length > 6 * 1024 * 1024) return null;
+
+  const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+  const filename = `stray-${unique}.${ext}`;
+  const filePath = path.join(strayUploadsDir, filename);
+
+  await fs.promises.writeFile(filePath, buffer);
+
+  // Publicly served by server.js: app.use('/uploads', ...)
+  return `/uploads/stray/${filename}`;
+};
 
 // Accept only web-accessible image references; drop device-local file:// URIs
 const isAllowedImage = (val = "") => {
@@ -14,14 +60,58 @@ const isAllowedImage = (val = "") => {
   const trimmed = val.trim();
   if (!trimmed) return false;
   if (trimmed.startsWith("file:")) return false;
+  // Accept only web-accessible URLs and server upload paths.
   return (
     trimmed.startsWith("http://") ||
     trimmed.startsWith("https://") ||
-    trimmed.startsWith("data:") ||
-    trimmed.startsWith("blob:") ||
     trimmed.startsWith("/uploads") ||
     trimmed.startsWith("uploads/")
   );
+};
+
+const persistIncomingImages = async (images) => {
+  if (!images) return images;
+
+  const toEntries = () => {
+    if (Array.isArray(images)) return images.map((v, idx) => [String(idx), v]);
+    if (typeof images === "string") {
+      const trimmed = images.trim();
+      if (isDataUrlImage(trimmed)) return [["0", trimmed]];
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed))
+          return parsed.map((v, idx) => [String(idx), v]);
+        if (parsed && typeof parsed === "object") return Object.entries(parsed);
+        return [["0", trimmed]];
+      } catch {
+        return [["0", trimmed]];
+      }
+    }
+    if (typeof images === "object") return Object.entries(images);
+    return [];
+  };
+
+  const entries = toEntries();
+  const persisted = await Promise.all(
+    entries.map(async ([key, value]) => {
+      if (typeof value !== "string") return [key, value];
+      const trimmed = value.trim();
+      if (!trimmed) return [key, trimmed];
+
+      if (isDataUrlImage(trimmed)) {
+        try {
+          const savedPath = await saveDataUrlImage(trimmed);
+          return [key, savedPath || ""];
+        } catch {
+          return [key, ""]; // drop on failure
+        }
+      }
+
+      return [key, trimmed];
+    })
+  );
+
+  return Object.fromEntries(persisted);
 };
 
 const normalizeImages = (images) => {
@@ -113,6 +203,7 @@ router.post("/", async (req, res) => {
       markings,
       sprayedNeutered,
       capturedBy,
+      registeredBy, // Accept both capturedBy and registeredBy
       dateCaptured,
       registrationDate,
       locationCaptured,
@@ -142,6 +233,8 @@ router.post("/", async (req, res) => {
       petRecord = petRows[0] || null;
     }
 
+    const persistedImages = await persistIncomingImages(images);
+
     const payload = {
       rfid: normalizedRfid,
       name,
@@ -151,13 +244,13 @@ router.post("/", async (req, res) => {
       color,
       markings,
       sprayedNeutered: Boolean(sprayedNeutered),
-      capturedBy,
+      capturedBy: registeredBy || capturedBy, // Use registeredBy if available, otherwise capturedBy
       dateCaptured,
       registrationDate:
         registrationDate || new Date().toISOString().split("T")[0],
       locationCaptured,
       notes,
-      images: normalizeImages(images),
+      images: normalizeImages(persistedImages),
     };
 
     let result;
@@ -204,9 +297,11 @@ router.put("/:id", async (req, res) => {
       });
     }
 
+    const persistedImages = await persistIncomingImages(req.body?.images);
+
     const updated = await StrayAnimal.update(req.params.id, {
       ...req.body,
-      images: normalizeImages(req.body?.images),
+      images: normalizeImages(persistedImages),
     });
     if (!updated) {
       return res.status(404).json({
@@ -373,6 +468,7 @@ router.post("/:id/alert-owner", async (req, res) => {
       captureLocation: animal.locationCaptured,
       captureDate: animal.dateCaptured,
       ownerId: ownerData.owner_id,
+      strayAnimalId: req.params.id,
     });
 
     res.json({

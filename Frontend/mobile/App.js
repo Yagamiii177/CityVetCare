@@ -19,6 +19,10 @@ import AnimalProfileScreen from "./screens/StrayAnimalManagement/AdoptionProfile
 import AdoptionFormScreen from "./screens/StrayAnimalManagement/AdoptionFormScreen";
 import StrayListProfileScreen from "./screens/StrayAnimalManagement/StrayListProfileScreen";
 import RedemptionFormScreen from "./screens/StrayAnimalManagement/RedemptionFormScreen";
+import AdoptionRequestsListScreen from "./screens/StrayAnimalManagement/AdoptionRequestsListScreen";
+import AdoptionRequestDetailScreen from "./screens/StrayAnimalManagement/AdoptionRequestDetailScreen";
+import RedemptionRequestsListScreen from "./screens/StrayAnimalManagement/RedemptionRequestsListScreen";
+import RedemptionRequestDetailScreen from "./screens/StrayAnimalManagement/RedemptionRequestDetailScreen";
 import AnimalLoggerHomePageScreen from "./screens/StrayAnimalManagement/AnimalLogger/AnimalLoggerHomeScreen";
 import VetHomeScreen from "./screens/StrayAnimalManagement/AnimalLogger/VetHomeScreen";
 import PetVaccinationScreen from "./screens/PetVaccinationManagement/PetVaccinationScreen";
@@ -223,6 +227,38 @@ function MainStackScreen() {
       <Stack.Screen
         name="RedemptionForm"
         component={RedemptionFormScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="AdoptionRequestsList"
+        component={AdoptionRequestsListScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="AdoptionRequestDetail"
+        component={AdoptionRequestDetailScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="RedemptionRequestsList"
+        component={RedemptionRequestsListScreen}
+        options={{
+          animation: "slide_from_bottom",
+          animationDuration: 300,
+        }}
+      />
+      <Stack.Screen
+        name="RedemptionRequestDetail"
+        component={RedemptionRequestDetailScreen}
         options={{
           animation: "slide_from_bottom",
           animationDuration: 300,

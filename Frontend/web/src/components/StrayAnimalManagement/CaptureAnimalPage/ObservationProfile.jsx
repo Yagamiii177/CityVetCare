@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { apiService } from "../../../utils/api";
+import { apiService, getImageUrl } from "../../../utils/api";
+import logo from "../../../assets/logo.png";
 import {
   XMarkIcon,
   PencilSquareIcon,
@@ -21,30 +22,45 @@ const ObservationProfile = ({ animal, onClose, isOpen, onSave }) => {
   const [ownerInfo, setOwnerInfo] = useState(null);
   const [ownerLoading, setOwnerLoading] = useState(false);
   const [ownerError, setOwnerError] = useState(null);
+  const [petCaptureCount, setPetCaptureCount] = useState(null);
+  const [petLoading, setPetLoading] = useState(false);
 
   useEffect(() => {
     setEditedAnimal(animal);
     setIsEditing(false);
   }, [animal]);
 
-  // Fetch owner details when RFID is present
+  // Fetch owner details and pet capture count when RFID is present
   useEffect(() => {
-    const fetchOwner = async () => {
+    const fetchData = async () => {
       setOwnerInfo(null);
       setOwnerError(null);
+      setPetCaptureCount(null);
       if (!animal?.rfid || !/^\d{9}$/.test(String(animal.rfid))) return;
       try {
         setOwnerLoading(true);
+        setPetLoading(true);
         const res = await apiService.pets.getByRfid(String(animal.rfid));
-        const data = res?.data?.data || res?.data || res;
-        setOwnerInfo(data?.owner || null);
+
+        // Extract pet and owner from response
+        const petData = res?.data?.pet || res?.pet || null;
+        const ownerData = res?.data?.owner || res?.owner || null;
+
+        setOwnerInfo(ownerData);
+
+        // Extract capture count from pet object
+        const captureCount =
+          petData?.capture_count ?? petData?.captureCount ?? null;
+        setPetCaptureCount(captureCount !== null ? Number(captureCount) : null);
       } catch (e) {
         setOwnerError("Unable to load owner details");
+        setPetCaptureCount(null);
       } finally {
         setOwnerLoading(false);
+        setPetLoading(false);
       }
     };
-    fetchOwner();
+    fetchData();
   }, [animal?.rfid]);
 
   if (!isOpen) return null;
@@ -109,9 +125,6 @@ const ObservationProfile = ({ animal, onClose, isOpen, onSave }) => {
     "Tuxedo",
   ];
 
-  const placeholderUrl =
-    "https://via.placeholder.com/300x300.png?text=No+Image";
-
   const handleImageFileChange = (key, file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -164,11 +177,18 @@ const ObservationProfile = ({ animal, onClose, isOpen, onSave }) => {
       label: "Registration",
       value: formatDate(editedAnimal.registrationDate),
     },
+    {
+      label: "Capture Count",
+      value:
+        petCaptureCount !== null && petCaptureCount !== undefined
+          ? String(petCaptureCount)
+          : "0",
+    },
   ];
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header with orange gradient */}
         <div className="sticky top-0 bg-gradient-to-r from-[#FA8630] to-[#E87928] p-6 rounded-t-2xl">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -285,9 +305,12 @@ const ObservationProfile = ({ animal, onClose, isOpen, onSave }) => {
                     className="aspect-square rounded-md overflow-hidden border border-gray-200 bg-white relative"
                   >
                     <img
-                      src={url}
+                      src={getImageUrl(url)}
                       alt={`${animal?.name || "Animal"} image ${idx + 1}`}
                       className="h-full w-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = logo;
+                      }}
                     />
                     {isEditing && (
                       <button
@@ -326,13 +349,25 @@ const ObservationProfile = ({ animal, onClose, isOpen, onSave }) => {
                         <label className="text-xs font-medium text-gray-600 uppercase tracking-wide">
                           {key.charAt(0).toUpperCase() + key.slice(1)} Image
                         </label>
+                        <div className="flex items-center gap-3">
+                          <label
+                            htmlFor={`file-${key}`}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-[#FA8630] to-[#E87928] text-white text-sm font-semibold shadow hover:shadow-md hover:brightness-105 transition"
+                          >
+                            Upload File
+                          </label>
+                          <span className="text-xs text-gray-500">
+                            PNG/JPG up to 5MB
+                          </span>
+                        </div>
                         <input
+                          id={`file-${key}`}
                           type="file"
                           accept="image/*"
                           onChange={(e) =>
                             handleImageFileChange(key, e.target.files?.[0])
                           }
-                          className="block w-full text-sm text-gray-700 border border-dashed border-gray-300 rounded-lg px-3 py-2 cursor-pointer bg-white"
+                          className="hidden"
                         />
                         <input
                           type="text"
@@ -695,7 +730,7 @@ const ObservationProfile = ({ animal, onClose, isOpen, onSave }) => {
                   {isEditing ? (
                     <>
                       <label className="block text-sm font-medium text-gray-700">
-                        Captured By
+                        Registered By
                       </label>
                       <input
                         type="text"
@@ -708,7 +743,7 @@ const ObservationProfile = ({ animal, onClose, isOpen, onSave }) => {
                   ) : (
                     <p className="text-sm text-gray-900 flex items-center gap-2">
                       <UserCircleIcon className="h-4 w-4 text-[#FA8630]" />
-                      <span className="font-semibold">Captured By:</span>{" "}
+                      <span className="font-semibold">Registered By:</span>{" "}
                       <span>{editedAnimal.capturedBy || "N/A"}</span>
                     </p>
                   )}

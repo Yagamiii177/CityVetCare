@@ -5,11 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import BottomTabNavigator from "../../components/BottomNavigation";
 import StrayCard from "../../components/StrayAnimalManagement/StrayList";
 import StrayFilterBar from "../../components/StrayAnimalManagement/StrayListFilter";
 import api from "../../services/api";
+import { resolveImageUri } from "../../utils/resolveImageUri";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 
 const isWithinDateRange = (dateString, range) => {
   const today = new Date();
@@ -34,6 +38,7 @@ const isWithinDateRange = (dateString, range) => {
 };
 
 const StrayListScreen = () => {
+  const navigation = useNavigation();
   const [strayAnimals, setStrayAnimals] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -76,7 +81,15 @@ const StrayListScreen = () => {
           markings: animal.markings || "",
           locationCaptured:
             animal.locationCaptured || animal.location_captured || "",
-          imageUrls: normalizeImages(animal.images),
+          latitude:
+            typeof animal.latitude === "number" ? animal.latitude : null,
+          longitude:
+            typeof animal.longitude === "number" ? animal.longitude : null,
+          imageUrls: normalizeImages(animal.images)
+            .map((img) =>
+              typeof img === "string" ? resolveImageUri(img) : img
+            )
+            .filter(Boolean),
           capturedDate: animal.dateCaptured || animal.date_captured,
           status: (animal.status || "captured").toString(),
           type: animal.species?.toLowerCase() || "dog",
@@ -115,11 +128,9 @@ const StrayListScreen = () => {
       animal.breed.toLowerCase().includes(searchQuery.toLowerCase());
 
     // Type filter
-    const matchesFilter =
-      !activeFilter ||
-      (activeFilter === "cat" && animal.type === "cat") ||
-      (activeFilter === "dog" && animal.type === "dog") ||
-      activeFilter === "nearby";
+    let matchesFilter = true;
+    if (activeFilter === "cat") matchesFilter = animal.type === "cat";
+    else if (activeFilter === "dog") matchesFilter = animal.type === "dog";
 
     // Date filter
     const matchesDate =
@@ -131,7 +142,16 @@ const StrayListScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Recently Captured Animals</Text>
+        <View style={styles.headerContent}>
+          <View style={{ width: 24 }} />
+          <Text style={styles.headerTitle}>Recently Captured Animals</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("RedemptionRequestsList")}
+            style={styles.headerButton}
+          >
+            <MaterialCommunityIcons name="history" size={27} color="#FD7E14" />
+          </TouchableOpacity>
+        </View>
         <View style={styles.orangeDivider} />
       </View>
 
@@ -183,14 +203,22 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#F1F1F1",
     marginTop: 40,
+  },
+  headerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 15,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
     color: "#333",
     textAlign: "center",
-    marginBottom: 15,
+    flex: 1,
+  },
+  headerButton: {
+    padding: 4,
   },
   orangeDivider: {
     height: 2.5,

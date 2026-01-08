@@ -92,6 +92,22 @@ export const API_ENDPOINTS = {
     UPDATE: (id) => `${API_BASE_URL}/stray-animals/${id}`,
   },
 
+  // Adoption Requests
+  ADOPTION_REQUESTS: {
+    LIST: `${API_BASE_URL}/adoption-requests`,
+    CREATE: `${API_BASE_URL}/adoption-requests`,
+    DETAIL: (id) => `${API_BASE_URL}/adoption-requests/${id}`,
+    UPDATE: (id) => `${API_BASE_URL}/adoption-requests/${id}`,
+  },
+
+  // Redemption Requests
+  REDEMPTION_REQUESTS: {
+    LIST: `${API_BASE_URL}/redemption-requests`,
+    CREATE: `${API_BASE_URL}/redemption-requests`,
+    DETAIL: (id) => `${API_BASE_URL}/redemption-requests/${id}`,
+    UPDATE: (id) => `${API_BASE_URL}/redemption-requests/${id}`,
+  },
+
   // Notifications
   NOTIFICATIONS: {
     LIST: `${API_BASE_URL}/notifications`,

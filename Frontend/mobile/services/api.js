@@ -645,14 +645,16 @@ const strayAnimalsAPI = {
  */
 const adoptionRequestsAPI = {
   create: async (data) => {
-    return await apiRequest("/api/adoption-requests", {
+    return await apiRequest(API_ENDPOINTS.ADOPTION_REQUESTS.CREATE, {
       method: "POST",
       body: JSON.stringify(data),
     });
   },
 
   listByUser: async (ownerId) => {
-    return await apiRequest(`/api/adoption-requests?adopter_id=${ownerId}`);
+    return await apiRequest(
+      `${API_ENDPOINTS.ADOPTION_REQUESTS.LIST}?adopter_id=${ownerId}`
+    );
   },
 };
 
@@ -670,14 +672,16 @@ const petsAPI = {
  */
 const redemptionRequestsAPI = {
   create: async (data) => {
-    return await apiRequest("/api/redemption-requests", {
+    return await apiRequest(API_ENDPOINTS.REDEMPTION_REQUESTS.CREATE, {
       method: "POST",
       body: JSON.stringify(data),
     });
   },
 
   listByOwner: async (ownerId) => {
-    return await apiRequest(`/api/redemption-requests?owner_id=${ownerId}`);
+    return await apiRequest(
+      `${API_ENDPOINTS.REDEMPTION_REQUESTS.LIST}?owner_id=${ownerId}`
+    );
   },
 };
 

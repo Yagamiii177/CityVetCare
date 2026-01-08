@@ -166,6 +166,36 @@ export const apiService = {
     getByRfid: (rfid) => api.get(`/pets/rfid/${rfid}`),
   },
 
+  // Adoption Requests
+  adoptionRequests: {
+    list: (filters = {}) => api.get("/adoption-requests", { params: filters }),
+    getById: (id) => api.get(`/adoption-requests/${id}`),
+    update: (id, data) => api.put(`/adoption-requests/${id}`, data),
+    claim: (id, data) => api.post(`/adoption-requests/${id}/claim`, data),
+  },
+
+  // Redemption Requests
+  redemptionRequests: {
+    list: (filters = {}) =>
+      api.get("/redemption-requests", { params: filters }),
+    getById: (id) => api.get(`/redemption-requests/${id}`),
+    create: (data) => api.post("/redemption-requests", data),
+    update: (id, data) => api.put(`/redemption-requests/${id}`, data),
+    claim: (id, data) => api.post(`/redemption-requests/${id}/claim`, data),
+  },
+
+  // Notifications (admin)
+  notifications: {
+    createForUser: ({ userId, userType = "owner", title, message, type }) =>
+      api.post("/notifications/admin", {
+        userId,
+        userType,
+        title,
+        message,
+        type,
+      }),
+  },
+
   // Dashboard
   dashboard: {
     getStats: () => api.get("/dashboard"),

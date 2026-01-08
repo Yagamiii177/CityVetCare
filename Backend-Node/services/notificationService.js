@@ -24,6 +24,7 @@ export async function sendOwnerAlert(params) {
     captureLocation,
     captureDate,
     ownerId,
+    strayAnimalId,
   } = params;
 
   const results = {
@@ -42,6 +43,7 @@ export async function sendOwnerAlert(params) {
       title: "Pet Captured",
       message,
       type: "pet_capture",
+      strayAnimalId,
     });
     results.pushNotification = true;
     logger.info(`Push notification sent to owner ${ownerId}`);
@@ -95,7 +97,13 @@ export async function sendOwnerAlert(params) {
 /**
  * Create in-app notification record
  */
-async function createInAppNotification({ ownerId, title, message, type }) {
+async function createInAppNotification({
+  ownerId,
+  title,
+  message,
+  type,
+  strayAnimalId,
+}) {
   // Check if notifications table exists, if not, create it
   try {
     await pool.query(
@@ -106,17 +114,19 @@ async function createInAppNotification({ ownerId, title, message, type }) {
         title VARCHAR(255) NOT NULL,
         message TEXT NOT NULL,
         type VARCHAR(50) NOT NULL,
+        stray_animal_id INT NULL,
         is_read TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_user_notifications (user_id, user_type),
-        INDEX idx_notification_read (is_read)
+        INDEX idx_notification_read (is_read),
+        INDEX idx_stray_notification (stray_animal_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     );
 
     await pool.query(
-      `INSERT INTO notifications (user_id, user_type, title, message, type) 
-       VALUES (?, 'owner', ?, ?, ?)`,
-      [ownerId, title, message, type]
+      `INSERT INTO notifications (user_id, user_type, title, message, type, stray_animal_id) 
+       VALUES (?, 'owner', ?, ?, ?, ?)`,
+      [ownerId, title, message, type, strayAnimalId || null]
     );
 
     return true;

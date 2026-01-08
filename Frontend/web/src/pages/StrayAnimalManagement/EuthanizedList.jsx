@@ -15,6 +15,8 @@ const EuthanizedListPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedAnimal, setSelectedAnimal] = useState(null);
+  const [ownerInfo, setOwnerInfo] = useState(null);
+  const [loadingOwner, setLoadingOwner] = useState(false);
 
   const loadEuthanizedAnimals = async () => {
     setIsLoading(true);
@@ -35,6 +37,31 @@ const EuthanizedListPage = () => {
   useEffect(() => {
     loadEuthanizedAnimals();
   }, []);
+
+  useEffect(() => {
+    const fetchOwner = async () => {
+      if (
+        !selectedAnimal?.rfid ||
+        !/^\d{9}$/.test(String(selectedAnimal.rfid))
+      ) {
+        setOwnerInfo(null);
+        return;
+      }
+      try {
+        setLoadingOwner(true);
+        const res = await apiService.pets.getByRfid(
+          String(selectedAnimal.rfid)
+        );
+        const ownerData = res?.data?.owner || res?.owner || null;
+        setOwnerInfo(ownerData);
+      } catch (_e) {
+        setOwnerInfo(null);
+      } finally {
+        setLoadingOwner(false);
+      }
+    };
+    fetchOwner();
+  }, [selectedAnimal]);
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
@@ -192,117 +219,108 @@ const EuthanizedListPage = () => {
 
           {/* Table Container */}
           <div className="flex-1 px-6 pb-8 overflow-hidden mb-15">
-            <div className="bg-white rounded-lg shadow-sm border border-[#E8E8E8] h-full flex flex-col">
-              {/* Table Header */}
-              <div className="flex-shrink-0 bg-red-50">
-                <table className="min-w-full">
-                  <thead>
+            <div className="bg-white rounded-lg shadow-sm border border-[#E8E8E8] h-full overflow-auto">
+              <table className="min-w-full divide-y divide-[#E8E8E8]">
+                <thead className="bg-red-50 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+                      ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+                      RFID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+                      Species
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+                      Breed
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+                      Had Owner
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+                      Date Euthanized
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+                      Reason
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-[#E8E8E8]">
+                  {isLoading ? (
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
-                        ID
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
-                        RFID
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
-                        Species
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
-                        Breed
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
-                        Had Owner
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
-                        Date Euthanized
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
-                        Reason
-                      </th>
+                      <td
+                        colSpan={8}
+                        className="px-6 py-4 text-center text-sm text-gray-500"
+                      >
+                        Loading records...
+                      </td>
                     </tr>
-                  </thead>
-                </table>
-              </div>
-
-              {/* Table Body */}
-              <div className="flex-1 overflow-auto">
-                <table className="min-w-full divide-y divide-[#E8E8E8]">
-                  <tbody className="bg-white divide-y divide-[#E8E8E8]">
-                    {isLoading ? (
-                      <tr>
-                        <td
-                          colSpan={8}
-                          className="px-6 py-4 text-center text-sm text-gray-500"
-                        >
-                          Loading records...
+                  ) : filteredAnimals.length > 0 ? (
+                    filteredAnimals.map((animal) => (
+                      <tr
+                        key={animal.id}
+                        className="hover:bg-red-50 cursor-pointer"
+                        onClick={() => setSelectedAnimal(animal)}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono font-medium text-gray-900">
+                          #{animal.id}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">
+                          {animal.rfid || "-"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                          {animal.name || "-"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {animal.species}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {animal.breed || "-"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          {animal.hadOwner ? (
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                              Yes
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                              No
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {formatDate(animal.dateEuthanized)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">
+                          {animal.reason || "-"}
                         </td>
                       </tr>
-                    ) : filteredAnimals.length > 0 ? (
-                      filteredAnimals.map((animal) => (
-                        <tr
-                          key={animal.id}
-                          className="hover:bg-red-50 cursor-pointer"
-                          onClick={() => setSelectedAnimal(animal)}
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-mono font-medium text-gray-900">
-                            #{animal.id}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">
-                            {animal.rfid || "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                            {animal.name || "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {animal.species}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {animal.breed || "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            {animal.hadOwner ? (
-                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                                Yes
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-                                No
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {formatDate(animal.dateEuthanized)}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">
-                            {animal.reason || "-"}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td
-                          colSpan={8}
-                          className="px-6 py-8 text-center text-sm text-gray-500"
-                        >
-                          <div className="flex flex-col items-center justify-center">
-                            <p className="text-lg font-medium text-gray-600 mb-2">
-                              No records found
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {hasFilters
-                                ? "Try adjusting your search or filters"
-                                : "No euthanized animals on record"}
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-6 py-8 text-center text-sm text-gray-500"
+                      >
+                        <div className="flex flex-col items-center justify-center">
+                          <p className="text-lg font-medium text-gray-600 mb-2">
+                            No records found
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {hasFilters
+                              ? "Try adjusting your search or filters"
+                              : "No euthanized animals on record"}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -368,6 +386,40 @@ const EuthanizedListPage = () => {
                 <p className="text-sm text-gray-500">Reason</p>
                 <p className="font-medium">{selectedAnimal.reason || "N/A"}</p>
               </div>
+              {loadingOwner && (
+                <div className="col-span-2 py-2 text-center text-sm text-gray-500">
+                  Loading owner information...
+                </div>
+              )}
+              {ownerInfo && (
+                <>
+                  <div className="col-span-2 pt-4 border-t border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                      Registered Owner
+                    </h3>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Owner Name</p>
+                    <p className="font-medium">
+                      {ownerInfo.full_name || "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Contact Number</p>
+                    <p className="font-medium">
+                      {ownerInfo.contact_number || "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Email</p>
+                    <p className="font-medium">{ownerInfo.email || "N/A"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Address</p>
+                    <p className="font-medium">{ownerInfo.address || "N/A"}</p>
+                  </div>
+                </>
+              )}
             </div>
             <div className="mt-6 flex justify-end">
               <button

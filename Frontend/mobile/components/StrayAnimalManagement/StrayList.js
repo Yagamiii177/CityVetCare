@@ -1,12 +1,19 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { resolveImageUri } from "../../utils/resolveImageUri";
 
 const DEFAULT_PET_IMAGE = require("../../assets/icons/logo.png");
 
 const StrayCard = ({ pet, onRedeem }) => {
   const navigation = useNavigation();
+
+  const mainImageUri = useMemo(
+    () => resolveImageUri(pet?.imageUrls?.[0]),
+    [pet?.imageUrls]
+  );
+  const [imageFailed, setImageFailed] = useState(false);
 
   const handleProfilePress = () => {
     navigation.navigate("StrayListProfile", { pet });
@@ -36,35 +43,51 @@ const StrayCard = ({ pet, onRedeem }) => {
         <View style={styles.imageCell}>
           <Image
             source={
-              pet.imageUrls && pet.imageUrls.length > 0 && pet.imageUrls[0]
-                ? { uri: pet.imageUrls[0] }
+              !imageFailed && mainImageUri
+                ? { uri: mainImageUri }
                 : DEFAULT_PET_IMAGE
             }
             style={styles.petImage}
             resizeMode="cover"
+            onError={() => setImageFailed(true)}
           />
         </View>
 
-        {/* Sex Column */}
-        <View style={styles.sexCell}>
-          <Ionicons
-            name={pet.sex === "Male" ? "male" : "female"}
-            size={16}
-            color={pet.sex === "Male" ? "#4A90E2" : "#FF6B6B"}
-          />
-          <Text style={styles.sexText}>{pet.sex || "Unknown"}</Text>
-        </View>
+        {/* Info Column - Display horizontally */}
+        <View style={styles.infoCell}>
+          <View style={styles.infoRow}>
+            {/* Name */}
+            <Text style={styles.petName} numberOfLines={1}>
+              {pet.name || `Stray #${pet.id}`}
+            </Text>
 
-        {/* Location Column */}
-        <View style={styles.locationCell}>
-          <Text style={styles.locationText} numberOfLines={1}>
-            {pet.locationCaptured || "Unknown"}
-          </Text>
-        </View>
+            {/* Gender */}
+            <View style={styles.genderRowHorizontal}>
+              <Ionicons
+                name={pet.sex === "Male" ? "male" : "female"}
+                size={12}
+                color={pet.sex === "Male" ? "#4A90E2" : "#FF6B6B"}
+              />
+              <Text style={styles.genderTextHorizontal}>
+                {pet.sex || "Unknown"}
+              </Text>
+            </View>
 
-        {/* Date Column */}
-        <View style={styles.dateCell}>
-          <Text style={styles.dateText}>{pet.capturedDate || "N/A"}</Text>
+            {/* RFID */}
+            <View style={styles.rfidRowHorizontal}>
+              <Text style={styles.rfidTextHorizontal}>
+                {pet.rfid || "no rfid"}
+              </Text>
+            </View>
+
+            {/* Date Captured */}
+            <View style={styles.dateRowHorizontal}>
+              <Ionicons name="calendar-outline" size={11} color="#888" />
+              <Text style={styles.capturedDateTextHorizontal}>
+                {pet.capturedDate || "N/A"}
+              </Text>
+            </View>
+          </View>
         </View>
       </TouchableOpacity>
 
@@ -118,39 +141,74 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 100,
     overflow: "hidden",
-    marginRight: 8,
+    marginRight: 12,
   },
   petImage: {
     width: "100%",
     height: "100%",
     backgroundColor: "#F1F1F1",
   },
-  sexCell: {
-    width: 80,
+  infoCell: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  infoRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
   },
-  sexText: {
+  petName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#333",
+  },
+  genderRowHorizontal: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  genderTextHorizontal: {
+    fontSize: 11,
+    color: "#666",
+  },
+  rfidRowHorizontal: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  rfidTextHorizontal: {
+    fontSize: 10,
+    color: "#666",
+    fontFamily: "monospace",
+  },
+  dateRowHorizontal: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  capturedDateTextHorizontal: {
+    fontSize: 11,
+    color: "#888",
+  },
+  genderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  genderText: {
     fontSize: 12,
     marginLeft: 4,
     color: "#666",
   },
-  locationCell: {
-    flex: 2,
-    paddingRight: 8,
-    right: 6,
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  locationText: {
-    fontSize: 12,
-    color: "#666",
-  },
-  dateCell: {
-    width: 70,
-  },
-  dateText: {
-    fontSize: 12,
-    color: "#666",
-    right: 2,
+  capturedDateText: {
+    fontSize: 11,
+    color: "#888",
+    marginLeft: 4,
   },
   redeemCell: {
     width: 80,

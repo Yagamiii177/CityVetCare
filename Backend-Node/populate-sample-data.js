@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Populate Sample Data Script
  * Inserts 1-3 sample records into each table in the CityVetCare database
  */
@@ -27,7 +27,7 @@ async function populateSampleData() {
   try {
     console.log("Connecting to database...");
     connection = await mysql.createConnection(DB_CONFIG);
-    console.log("✓ Connected to database");
+    console.log(" Connected to database");
 
     // Sample Administrators
     console.log("\nPopulating administrators...");
@@ -37,7 +37,7 @@ async function populateSampleData() {
       ('Dr. Juan Dela Cruz', 'veterinarian', 'drjuan', SHA2('password123', 256)),
       ('Staff Officer', 'staff', 'staff01', SHA2('password123', 256))
     `);
-    console.log("✓ Administrators inserted");
+    console.log(" Administrators inserted");
 
     // Sample Pet Owners
     console.log("\nPopulating pet owners...");
@@ -47,7 +47,7 @@ async function populateSampleData() {
       ('Patrick Lim', '18 P. Tuazon Blvd, Cubao, Quezon City', '09985551234', 'patrick.lim@mail.com', SHA2('password123', 256), 0),
       ('Kristine dela Cruz', '45 Lopez Jaena St, Jaro, Iloilo City', '09278889900', 'kristine.dc@mail.com', SHA2('password123', 256), 0)
     `);
-    console.log("✓ Pet Owners inserted");
+    console.log(" Pet Owners inserted");
 
     // Sample Dog Catchers
     console.log("\nPopulating dog catchers...");
@@ -57,17 +57,17 @@ async function populateSampleData() {
       ('Antonio Reyes', '09567890123'),
       ('Miguel Santos', '09678901234')
     `);
-    console.log("✓ Dog Catchers inserted");
+    console.log(" Dog Catchers inserted");
 
-    // Sample Pets
+    // Sample Pets - Updated with color and markings using fixed options
     console.log("\nPopulating pets...");
     await connection.execute(`
-      INSERT IGNORE INTO pet (owner_id, rfid, name, species, breed, age, sex, status, capture_count, redemption_count) VALUES
-      (1, '123456789', 'Buddy', 'dog', 'Labrador Retriever', 5, 'male', 'active', 0, 0),
-      (2, '234567890', 'Mochi', 'cat', 'Siamese', 3, 'female', 'active', 1, 0),
-      (3, '345678901', 'Max', 'dog', 'German Shepherd', 7, 'male', 'active', 2, 1)
+      INSERT IGNORE INTO pet (owner_id, rfid, name, species, breed, age, sex, color, markings, status, capture_count, redemption_count) VALUES
+      (1, '123456789', 'Buddy', 'dog', 'Labrador Retriever', 5, 'male', 'Black & White', 'White chest patch', 'active', 0, 0),
+      (2, '234567890', 'Mochi', 'cat', 'Siamese', 3, 'female', 'Cream', 'Blue eyes', 'active', 1, 0),
+      (3, '345678901', 'Max', 'dog', 'German Shepherd', 7, 'male', 'Brown', 'Black markings on face', 'active', 2, 1)
     `);
-    console.log("✓ Pets inserted");
+    console.log(" Pets inserted");
 
     // Sample Stray Animals (updated to match current schema)
     console.log("\nPopulating stray animals...");
@@ -92,7 +92,7 @@ async function populateSampleData() {
       ('234567890', 'Mochi', 'Domestic Shorthair', 'cat', 'female', 'Cream', 'Blue eyes', 0, 'Antonio Reyes', DATE_SUB(CURDATE(), INTERVAL 2 DAY), DATE_SUB(CURDATE(), INTERVAL 2 DAY), 'P. Tuazon, Cubao, QC', 'captured', JSON_OBJECT('front', '/uploads/stray/mochi_front.jpg')),
       (NULL, 'Greyboy', 'Aspin', 'dog', 'male', 'Gray', 'Black ears', 1, 'Miguel Santos', DATE_SUB(CURDATE(), INTERVAL 5 DAY), DATE_SUB(CURDATE(), INTERVAL 4 DAY), 'Naga City Public Market', 'adoption', JSON_OBJECT('front', '/uploads/stray/greyboy_front.jpg'))
     `);
-    console.log("✓ Stray Animals inserted");
+    console.log(" Stray Animals inserted");
 
     // Sample Private Clinics
     console.log("\nPopulating private clinics...");
@@ -102,7 +102,7 @@ async function populateSampleData() {
       ('Pet Care Center', '200 Medical Avenue', '02-234-5678', 'active'),
       ('Veterinary Plus', '300 Health Road', '02-345-6789', 'active')
     `);
-    console.log("✓ Private Clinics inserted");
+    console.log(" Private Clinics inserted");
 
     // Sample Vaccination Records
     console.log("\nPopulating vaccination records...");
@@ -112,7 +112,7 @@ async function populateSampleData() {
       (2, 2, 'FVRCP', DATE_SUB(CURDATE(), INTERVAL 6 MONTH), DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 'clinic'),
       (3, 3, 'Rabies', DATE_SUB(CURDATE(), INTERVAL 2 YEAR), DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 'clinic')
     `);
-    console.log("✓ Vaccination Records inserted");
+    console.log(" Vaccination Records inserted");
 
     // Sample Adoption Requests
     console.log("\nPopulating adoption requests...");
@@ -122,7 +122,7 @@ async function populateSampleData() {
       (2, 2, 'approved'),
       (1, 3, 'pending')
     `);
-    console.log("✓ Adoption Requests inserted");
+    console.log(" Adoption Requests inserted");
 
     // Sample Incident Reports
     console.log("\nPopulating incident reports...");
@@ -132,17 +132,17 @@ async function populateSampleData() {
       (2, 'bite', 'Child bitten by unknown dog', 'Brgy. Socorro covered court, QC', 'in_progress'),
       (3, 'injured', 'Cat limping near tricycle terminal', 'Pavia Plaza, Iloilo', 'pending_verification')
     `);
-    console.log("✓ Incident Reports inserted");
+    console.log(" Incident Reports inserted");
 
     // Sample Announcements
     console.log("\nPopulating announcements...");
     await connection.execute(`
       INSERT IGNORE INTO announcement (admin_id, title, content, language, status) VALUES
       (1, 'Free Anti-Rabies Clinic', 'Free anti-rabies vaccination for pets on Feb 14 at City Hall grounds.', 'en', 'published'),
-      (2, 'Missing Dog Alert', 'Missing shih tzu named "Mochi" last seen near Cubao Expo.', 'en', 'published'),
+      (2, 'Missing Dog Alert', 'Missing shih tzu named \"Mochi\" last seen near Cubao Expo.', 'en', 'published'),
       (1, 'Adoption Weekend', 'Visit the shelter this weekend to adopt fully vaccinated strays.', 'en', 'draft')
     `);
-    console.log("✓ Announcements inserted");
+    console.log(" Announcements inserted");
 
     // Update pet_count for owners based on pets
     console.log("\nUpdating pet_count for pet owners...");
@@ -152,10 +152,10 @@ async function populateSampleData() {
         SELECT COUNT(*) FROM pet p WHERE p.owner_id = po.owner_id
       )
     `);
-    console.log("✓ pet_count updated");
+    console.log(" pet_count updated");
 
     console.log("\n========================================");
-    console.log("✓ All sample data populated successfully!");
+    console.log(" All sample data populated successfully!");
     console.log("========================================");
 
     await connection.end();

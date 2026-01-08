@@ -58,6 +58,7 @@ const NotificationScreen = () => {
         date: notif.created_at
           ? new Date(notif.created_at).toLocaleDateString()
           : new Date().toLocaleDateString(),
+        pet: notif.stray_animal || null, // Include the stray animal data
       }));
 
       setNotifications(transformedNotifications);
@@ -346,20 +347,6 @@ const NotificationScreen = () => {
                 Date: {detailNotification?.date}
               </Text>
               <View style={styles.detailButtons}>
-                {detailNotification?.type === "pet_capture" && (
-                  <TouchableOpacity
-                    style={styles.primaryButton}
-                    onPress={() => {
-                      closeDetail();
-                      navigation.navigate("RedemptionForm", {
-                        pet: detailNotification?.pet || null,
-                      });
-                    }}
-                  >
-                    <Ionicons name="paw" size={18} color="#fff" />
-                    <Text style={styles.primaryButtonText}>Redeem Pet</Text>
-                  </TouchableOpacity>
-                )}
                 <TouchableOpacity
                   style={styles.deleteButton}
                   onPress={() => {

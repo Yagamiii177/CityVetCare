@@ -15,8 +15,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../../services/api";
+import ConfirmDialog from "../../components/common/ConfirmDialog";
 
 const AdoptionForm = () => {
   const navigation = useNavigation();
@@ -44,6 +46,7 @@ const AdoptionForm = () => {
   const [showPetLocationDropdown, setShowPetLocationDropdown] = useState(false);
   const [idImage, setIdImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
 
   const [formData, setFormData] = useState({
     // 1. Personal Information
@@ -82,6 +85,30 @@ const AdoptionForm = () => {
     confirmInfoTruthful: false,
   });
 
+  const autofillFromAccount = async () => {
+    try {
+      const raw = await AsyncStorage.getItem("@cityvetcare_user");
+      const user = raw ? JSON.parse(raw) : null;
+      if (!user) {
+        Alert.alert("Not logged in", "Please login to autofill your details.");
+        return;
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        fullName: prev.fullName || user.fullName || user.full_name || "",
+        phone: prev.phone || user.contactNumber || "",
+        email: prev.email || user.email || "",
+        address: prev.address || user.address || "",
+      }));
+
+      Alert.alert("Autofilled", "We filled available account details.");
+    } catch (e) {
+      console.error("Autofill failed", e);
+      Alert.alert("Autofill failed", "Unable to load your account details.");
+    }
+  };
+
   const handleSubmit = async () => {
     // Required fields validation
     const requiredFields = [
@@ -109,8 +136,40 @@ const AdoptionForm = () => {
       return;
     }
 
+    if (!idImage) {
+      Alert.alert(
+        "Valid ID Required",
+        "Please upload a photo of your valid ID"
+      );
+      return;
+    }
+
     try {
       setIsSubmitting(true);
+
+      const convertUriToDataUrl = async (uri) => {
+        if (!uri || typeof uri !== "string" || uri.trim() === "") return null;
+        try {
+          const info = await FileSystem.getInfoAsync(uri, { size: true });
+          const sizeMb = info?.size ? info.size / (1024 * 1024) : 0;
+          if (sizeMb > 3) {
+            Alert.alert(
+              "Image Too Large",
+              "Please choose an ID image under 3MB to submit."
+            );
+            return null;
+          }
+          const base64 = await FileSystem.readAsStringAsync(uri, {
+            encoding: "base64",
+          });
+          const ext = uri.split(".").pop()?.toLowerCase();
+          const mime = ext === "png" ? "image/png" : "image/jpeg";
+          return `data:${mime};base64,${base64}`;
+        } catch (err) {
+          console.warn("Failed to convert ID image to base64", err);
+          return null;
+        }
+      };
 
       // Get current user ID from storage
       const userDataStr = await AsyncStorage.getItem("@cityvetcare_user");
@@ -119,6 +178,15 @@ const AdoptionForm = () => {
 
       if (!adopterId) {
         Alert.alert("Error", "Please log in to submit an adoption request");
+        return;
+      }
+
+      const validIdImageDataUrl = await convertUriToDataUrl(idImage);
+      if (!validIdImageDataUrl) {
+        Alert.alert(
+          "Valid ID Required",
+          "Your ID image could not be processed. Please try uploading again."
+        );
         return;
       }
 
@@ -132,6 +200,7 @@ const AdoptionForm = () => {
           phone: formData.phone,
           email: formData.email,
           address: formData.address,
+          validIdImage: validIdImageDataUrl,
           residenceType: formData.residenceType,
           ownershipStatus: formData.ownershipStatus,
           landlordPermission: formData.landlordPermission,
@@ -229,368 +298,411 @@ const AdoptionForm = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Header */}
-      <View style={styles.headerContainer}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back-outline" size={24} color="blac" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Adoption Application</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={styles.orangeDivider} />
-      </View>
-
-      {/* Pet Info */}
-      <View style={styles.petInfoContainer}>
-        <Image
-          source={
-            pet.imageUrls && pet.imageUrls.length > 0 && pet.imageUrls[0]
-              ? { uri: pet.imageUrls[0] }
-              : DEFAULT_PET_IMAGE
-          }
-          style={styles.petImage}
-          resizeMode="cover"
-        />
-        <Text style={styles.petName}>
-          {pet.name || "Unnamed"} - {pet.breed || "Mixed Breed"}
-        </Text>
-      </View>
-
-      {/* 1. Personal Information */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="document-text" size={20} color="#FD7E14" />
-          <Text style={styles.sectionTitle}>1. Personal Information</Text>
-        </View>
-        <Text style={styles.sectionDescription}>
-          Basic identity and contact details
-        </Text>
-
-        <FormInput
-          label="Full Name *"
-          value={formData.fullName}
-          onChangeText={(text) => handleChange("fullName", text)}
-        />
-
-        <FormInput
-          label="Age *"
-          value={formData.age}
-          onChangeText={(text) => handleChange("age", text)}
-          keyboardType="numeric"
-        />
-
-        <FormInput
-          label="Contact Number *"
-          value={formData.phone}
-          onChangeText={(text) => handleChange("phone", text)}
-          keyboardType="phone-pad"
-        />
-
-        <FormInput
-          label="Email Address *"
-          value={formData.email}
-          onChangeText={(text) => handleChange("email", text)}
-          keyboardType="email-address"
-        />
-
-        <FormInput
-          label="Home Address *"
-          value={formData.address}
-          onChangeText={(text) => handleChange("address", text)}
-          multiline
-        />
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Upload Valid ID *</Text>
-          <View style={styles.uploadButtonsContainer}>
-            <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-              <Ionicons name="image" size={20} color="#FD7E14" />
-              <Text style={styles.uploadButtonText}>Choose Photo</Text>
+    <>
+      <ScrollView style={styles.container}>
+        {/* Header */}
+        <View style={styles.headerContainer}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <Ionicons name="chevron-back-outline" size={24} color="blac" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.uploadButton} onPress={takePhoto}>
-              <Ionicons name="camera" size={20} color="#FD7E14" />
-              <Text style={styles.uploadButtonText}>Take Photo</Text>
-            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Adoption Application</Text>
+            <View style={{ width: 24 }} />
           </View>
-          {idImage && (
-            <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: idImage }} style={styles.idImagePreview} />
-              <Text style={styles.uploadSuccessText}>
-                ID uploaded successfully
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* 2. Living Situation */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="home" size={20} color="#FD7E14" />
-          <Text style={styles.sectionTitle}>2. Living Situation</Text>
-        </View>
-        <Text style={styles.sectionDescription}>
-          Environment where the pet will live
-        </Text>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Type of Residence *</Text>
-          <TouchableOpacity
-            style={styles.dropdownSelector}
-            onPress={() => setShowResidenceDropdown(!showResidenceDropdown)}
-          >
-            <Text
-              style={
-                formData.residenceType
-                  ? styles.dropdownSelectedText
-                  : styles.dropdownPlaceholder
-              }
-            >
-              {formData.residenceType || "Select residence type"}
-            </Text>
-            <Ionicons
-              name={showResidenceDropdown ? "chevron-up" : "chevron-down"}
-              size={20}
-              color="#666"
-            />
-          </TouchableOpacity>
-          {showResidenceDropdown && (
-            <View style={styles.dropdownOptions}>
-              {residenceOptions.map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={styles.dropdownOption}
-                  onPress={() => selectResidenceType(option)}
-                >
-                  <Text style={styles.dropdownOptionText}>{option}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+          <View style={styles.orangeDivider} />
         </View>
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Ownership Status *</Text>
-          <View style={styles.radioGroup}>
-            <RadioOption
-              label="Owned"
-              selected={formData.ownershipStatus === "owned"}
-              onPress={() => handleChange("ownershipStatus", "owned")}
-            />
-            <RadioOption
-              label="Rented"
-              selected={formData.ownershipStatus === "rented"}
-              onPress={() => handleChange("ownershipStatus", "rented")}
-            />
-          </View>
-        </View>
-
-        {formData.ownershipStatus === "rented" && (
-          <CheckboxOption
-            label="I have landlord permission to have pets"
-            value={formData.landlordPermission}
-            onPress={() => toggleCheckbox("landlordPermission")}
+        {/* Pet Info */}
+        <View style={styles.petInfoContainer}>
+          <Image
+            source={
+              pet.imageUrls && pet.imageUrls.length > 0 && pet.imageUrls[0]
+                ? { uri: pet.imageUrls[0] }
+                : DEFAULT_PET_IMAGE
+            }
+            style={styles.petImage}
+            resizeMode="cover"
           />
-        )}
+          <Text style={styles.petName}>
+            {pet.name || "Unnamed"} - {pet.breed || "Mixed Breed"}
+          </Text>
+        </View>
 
-        <CheckboxOption
-          label="I have a fenced yard"
-          value={formData.fencedYard}
-          onPress={() => toggleCheckbox("fencedYard")}
-        />
+        {/* 1. Personal Information */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="document-text" size={20} color="#FD7E14" />
+            <Text style={styles.sectionTitle}>1. Personal Information</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Basic identity and contact details
+          </Text>
 
-        <FormInput
-          label="Number of People in Household"
-          value={formData.householdMembers}
-          onChangeText={(text) => handleChange("householdMembers", text)}
-          keyboardType="numeric"
-        />
+          <TouchableOpacity
+            style={styles.autofillButton}
+            onPress={autofillFromAccount}
+          >
+            <Ionicons name="person-circle-outline" size={20} color="#FD7E14" />
+            <Text style={styles.autofillButtonText}>
+              Autofill from my account
+            </Text>
+          </TouchableOpacity>
 
-        <CheckboxOption
-          label="There are children at home"
-          value={formData.hasChildren}
-          onPress={() => toggleCheckbox("hasChildren")}
-        />
-
-        {formData.hasChildren && (
           <FormInput
-            label="Children's Ages"
-            value={formData.childrenAges}
-            onChangeText={(text) => handleChange("childrenAges", text)}
-            placeholder="e.g. 5, 8, 12"
+            label="Full Name *"
+            value={formData.fullName}
+            onChangeText={(text) => handleChange("fullName", text)}
           />
-        )}
-      </View>
 
-      {/* 3. Pet Experience */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="paw" size={20} color="#FD7E14" />
-          <Text style={styles.sectionTitle}>3. Pet Experience</Text>
-        </View>
-        <Text style={styles.sectionDescription}>
-          Your familiarity with pets
-        </Text>
+          <FormInput
+            label="Age *"
+            value={formData.age}
+            onChangeText={(text) => handleChange("age", text)}
+            keyboardType="numeric"
+          />
 
-        <CheckboxOption
-          label="I have owned a pet before"
-          value={formData.previousPets}
-          onPress={() => toggleCheckbox("previousPets")}
-        />
+          <FormInput
+            label="Contact Number *"
+            value={formData.phone}
+            onChangeText={(text) => handleChange("phone", text)}
+            keyboardType="phone-pad"
+          />
 
-        <CheckboxOption
-          label="I currently own pets"
-          value={formData.currentPets}
-          onPress={() => toggleCheckbox("currentPets")}
-        />
+          <FormInput
+            label="Email Address *"
+            value={formData.email}
+            onChangeText={(text) => handleChange("email", text)}
+            keyboardType="email-address"
+          />
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Familiarity with pet care</Text>
-          <TouchableOpacity
-            style={styles.dropdownSelector}
-            onPress={() => setShowFamiliarityDropdown(!showFamiliarityDropdown)}
-          >
-            <Text
-              style={
-                formData.petCareFamiliarity
-                  ? styles.dropdownSelectedText
-                  : styles.dropdownPlaceholder
-              }
-            >
-              {formData.petCareFamiliarity || "Select your experience level"}
-            </Text>
-            <Ionicons
-              name={showFamiliarityDropdown ? "chevron-up" : "chevron-down"}
-              size={20}
-              color="#666"
-            />
-          </TouchableOpacity>
-          {showFamiliarityDropdown && (
-            <View style={styles.dropdownOptions}>
-              {familiarityOptions.map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={styles.dropdownOption}
-                  onPress={() => selectFamiliarity(option)}
-                >
-                  <Text style={styles.dropdownOptionText}>{option}</Text>
-                </TouchableOpacity>
-              ))}
+          <FormInput
+            label="Home Address *"
+            value={formData.address}
+            onChangeText={(text) => handleChange("address", text)}
+            multiline
+          />
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Upload Valid ID *</Text>
+            <View style={styles.uploadButtonsContainer}>
+              <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
+                <Ionicons name="image" size={20} color="#FD7E14" />
+                <Text style={styles.uploadButtonText}>Choose Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.uploadButton} onPress={takePhoto}>
+                <Ionicons name="camera" size={20} color="#FD7E14" />
+                <Text style={styles.uploadButtonText}>Take Photo</Text>
+              </TouchableOpacity>
             </View>
+            {idImage && (
+              <View style={styles.imagePreviewContainer}>
+                <Image
+                  source={{ uri: idImage }}
+                  style={styles.idImagePreview}
+                />
+                <Text style={styles.uploadSuccessText}>
+                  ID uploaded successfully
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* 2. Living Situation */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="home" size={20} color="#FD7E14" />
+            <Text style={styles.sectionTitle}>2. Living Situation</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Environment where the pet will live
+          </Text>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Type of Residence *</Text>
+            <TouchableOpacity
+              style={styles.dropdownSelector}
+              onPress={() => setShowResidenceDropdown(!showResidenceDropdown)}
+            >
+              <Text
+                style={
+                  formData.residenceType
+                    ? styles.dropdownSelectedText
+                    : styles.dropdownPlaceholder
+                }
+              >
+                {formData.residenceType || "Select residence type"}
+              </Text>
+              <Ionicons
+                name={showResidenceDropdown ? "chevron-up" : "chevron-down"}
+                size={20}
+                color="#666"
+              />
+            </TouchableOpacity>
+            {showResidenceDropdown && (
+              <View style={styles.dropdownOptions}>
+                {residenceOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={styles.dropdownOption}
+                    onPress={() => selectResidenceType(option)}
+                  >
+                    <Text style={styles.dropdownOptionText}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Ownership Status *</Text>
+            <View style={styles.radioGroup}>
+              <RadioOption
+                label="Owned"
+                selected={formData.ownershipStatus === "owned"}
+                onPress={() => handleChange("ownershipStatus", "owned")}
+              />
+              <RadioOption
+                label="Rented"
+                selected={formData.ownershipStatus === "rented"}
+                onPress={() => handleChange("ownershipStatus", "rented")}
+              />
+            </View>
+          </View>
+
+          {formData.ownershipStatus === "rented" && (
+            <CheckboxOption
+              label="I have landlord permission to have pets"
+              value={formData.landlordPermission}
+              onPress={() => toggleCheckbox("landlordPermission")}
+            />
+          )}
+
+          <CheckboxOption
+            label="I have a fenced yard"
+            value={formData.fencedYard}
+            onPress={() => toggleCheckbox("fencedYard")}
+          />
+
+          <FormInput
+            label="Number of People in Household"
+            value={formData.householdMembers}
+            onChangeText={(text) => handleChange("householdMembers", text)}
+            keyboardType="numeric"
+          />
+
+          <CheckboxOption
+            label="There are children at home"
+            value={formData.hasChildren}
+            onPress={() => toggleCheckbox("hasChildren")}
+          />
+
+          {formData.hasChildren && (
+            <FormInput
+              label="Children's Ages"
+              value={formData.childrenAges}
+              onChangeText={(text) => handleChange("childrenAges", text)}
+              placeholder="e.g. 5, 8, 12"
+            />
           )}
         </View>
-      </View>
 
-      {/* 4. Commitment & Compatibility */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="heart" size={20} color="#FD7E14" />
-          <Text style={styles.sectionTitle}>4. Commitment & Compatibility</Text>
-        </View>
-        <Text style={styles.sectionDescription}>
-          Long-term responsibility and proper match
-        </Text>
+        {/* 3. Pet Experience */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="paw" size={20} color="#FD7E14" />
+            <Text style={styles.sectionTitle}>3. Pet Experience</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Your familiarity with pets
+          </Text>
 
-        <FormInput
-          label="Why are you adopting this pet?"
-          value={formData.adoptionReason}
-          onChangeText={(text) => handleChange("adoptionReason", text)}
-          multiline
-        />
+          <CheckboxOption
+            label="I have owned a pet before"
+            value={formData.previousPets}
+            onPress={() => toggleCheckbox("previousPets")}
+          />
 
-        <FormInput
-          label="Hours pet will be alone daily"
-          value={formData.aloneHours}
-          onChangeText={(text) => handleChange("aloneHours", text)}
-          keyboardType="numeric"
-        />
+          <CheckboxOption
+            label="I currently own pets"
+            value={formData.currentPets}
+            onPress={() => toggleCheckbox("currentPets")}
+          />
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Will the pet be indoors or outdoors?</Text>
-          <TouchableOpacity
-            style={styles.dropdownSelector}
-            onPress={() => setShowPetLocationDropdown(!showPetLocationDropdown)}
-          >
-            <Text
-              style={
-                formData.petLocation
-                  ? styles.dropdownSelectedText
-                  : styles.dropdownPlaceholder
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Familiarity with pet care</Text>
+            <TouchableOpacity
+              style={styles.dropdownSelector}
+              onPress={() =>
+                setShowFamiliarityDropdown(!showFamiliarityDropdown)
               }
             >
-              {formData.petLocation || "Select pet location"}
+              <Text
+                style={
+                  formData.petCareFamiliarity
+                    ? styles.dropdownSelectedText
+                    : styles.dropdownPlaceholder
+                }
+              >
+                {formData.petCareFamiliarity || "Select your experience level"}
+              </Text>
+              <Ionicons
+                name={showFamiliarityDropdown ? "chevron-up" : "chevron-down"}
+                size={20}
+                color="#666"
+              />
+            </TouchableOpacity>
+            {showFamiliarityDropdown && (
+              <View style={styles.dropdownOptions}>
+                {familiarityOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={styles.dropdownOption}
+                    onPress={() => selectFamiliarity(option)}
+                  >
+                    <Text style={styles.dropdownOptionText}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* 4. Commitment & Compatibility */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="heart" size={20} color="#FD7E14" />
+            <Text style={styles.sectionTitle}>
+              4. Commitment & Compatibility
             </Text>
-            <Ionicons
-              name={showPetLocationDropdown ? "chevron-up" : "chevron-down"}
-              size={20}
-              color="#666"
-            />
-          </TouchableOpacity>
-          {showPetLocationDropdown && (
-            <View style={styles.dropdownOptions}>
-              {petLocationOptions.map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={styles.dropdownOption}
-                  onPress={() => selectPetLocation(option)}
-                >
-                  <Text style={styles.dropdownOptionText}>{option}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+          </View>
+          <Text style={styles.sectionDescription}>
+            Long-term responsibility and proper match
+          </Text>
+
+          <FormInput
+            label="Why are you adopting this pet?"
+            value={formData.adoptionReason}
+            onChangeText={(text) => handleChange("adoptionReason", text)}
+            multiline
+          />
+
+          <FormInput
+            label="Hours pet will be alone daily"
+            value={formData.aloneHours}
+            onChangeText={(text) => handleChange("aloneHours", text)}
+            keyboardType="numeric"
+          />
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>
+              Will the pet be indoors or outdoors?
+            </Text>
+            <TouchableOpacity
+              style={styles.dropdownSelector}
+              onPress={() =>
+                setShowPetLocationDropdown(!showPetLocationDropdown)
+              }
+            >
+              <Text
+                style={
+                  formData.petLocation
+                    ? styles.dropdownSelectedText
+                    : styles.dropdownPlaceholder
+                }
+              >
+                {formData.petLocation || "Select pet location"}
+              </Text>
+              <Ionicons
+                name={showPetLocationDropdown ? "chevron-up" : "chevron-down"}
+                size={20}
+                color="#666"
+              />
+            </TouchableOpacity>
+            {showPetLocationDropdown && (
+              <View style={styles.dropdownOptions}>
+                {petLocationOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={styles.dropdownOption}
+                    onPress={() => selectPetLocation(option)}
+                  >
+                    <Text style={styles.dropdownOptionText}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          <CheckboxOption
+            label="I can commit to regular vet visits and vaccinations"
+            value={formData.canCommitVetVisits}
+            onPress={() => toggleCheckbox("canCommitVetVisits")}
+          />
+
+          <CheckboxOption
+            label="I am willing to return the pet if unable to care for it"
+            value={formData.willingToReturn}
+            onPress={() => toggleCheckbox("willingToReturn")}
+          />
         </View>
 
-        <CheckboxOption
-          label="I can commit to regular vet visits and vaccinations"
-          value={formData.canCommitVetVisits}
-          onPress={() => toggleCheckbox("canCommitVetVisits")}
-        />
+        {/* 5. Declarations */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="checkbox" size={20} color="#FD7E14" />
+            <Text style={styles.sectionTitle}>
+              5. Declarations & Agreements
+            </Text>
+          </View>
 
-        <CheckboxOption
-          label="I am willing to return the pet if unable to care for it"
-          value={formData.willingToReturn}
-          onPress={() => toggleCheckbox("willingToReturn")}
-        />
-      </View>
+          <CheckboxOption
+            label="I agree to spay/neuter the pet (if not yet done)"
+            value={formData.agreeSpayNeuter}
+            onPress={() => toggleCheckbox("agreeSpayNeuter")}
+          />
 
-      {/* 5. Declarations */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="checkbox" size={20} color="#FD7E14" />
-          <Text style={styles.sectionTitle}>5. Declarations & Agreements</Text>
+          <CheckboxOption
+            label="I agree not to resell, abandon, or harm the pet"
+            value={formData.agreeNoAbandonment}
+            onPress={() => toggleCheckbox("agreeNoAbandonment")}
+          />
+
+          <CheckboxOption
+            label="I confirm all information provided is true *"
+            value={formData.confirmInfoTruthful}
+            onPress={() => toggleCheckbox("confirmInfoTruthful")}
+          />
+
+          <Text style={styles.signatureNote}>
+            Signature will be collected during the interview process
+          </Text>
         </View>
 
-        <CheckboxOption
-          label="I agree to spay/neuter the pet (if not yet done)"
-          value={formData.agreeSpayNeuter}
-          onPress={() => toggleCheckbox("agreeSpayNeuter")}
-        />
+        {/* Submit Button */}
+        <TouchableOpacity
+          style={styles.submitButton}
+          onPress={() => setConfirmVisible(true)}
+        >
+          <Text style={styles.submitButtonText}>Submit Application</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
-        <CheckboxOption
-          label="I agree not to resell, abandon, or harm the pet"
-          value={formData.agreeNoAbandonment}
-          onPress={() => toggleCheckbox("agreeNoAbandonment")}
-        />
-
-        <CheckboxOption
-          label="I confirm all information provided is true *"
-          value={formData.confirmInfoTruthful}
-          onPress={() => toggleCheckbox("confirmInfoTruthful")}
-        />
-
-        <Text style={styles.signatureNote}>
-          Signature will be collected during the interview process
-        </Text>
-      </View>
-
-      {/* Submit Button */}
-      <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-        <Text style={styles.submitButtonText}>Submit Application</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      <ConfirmDialog
+        visible={confirmVisible}
+        onClose={() => setConfirmVisible(false)}
+        onConfirm={async () => {
+          setConfirmVisible(false);
+          await handleSubmit();
+        }}
+        title="Submit Adoption Application"
+        message="Please confirm you want to submit this adoption application."
+        confirmText="Submit"
+        cancelText="Cancel"
+        type="warning"
+        isLoading={isSubmitting}
+      />
+    </>
   );
 };
 
@@ -708,6 +820,21 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 15,
     fontStyle: "italic",
+  },
+  autofillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FD7E14",
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  autofillButtonText: {
+    marginLeft: 6,
+    color: "#FD7E14",
+    fontWeight: "600",
   },
   formGroup: {
     marginBottom: 15,

@@ -1,12 +1,19 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { resolveImageUri } from "../../utils/resolveImageUri";
 
 const DEFAULT_PET_IMAGE = require("../../assets/icons/logo.png");
 
 const AdoptionCard = ({ pet, onPress, liked, onLike }) => {
   const navigation = useNavigation();
+
+  const [imageFailed, setImageFailed] = useState(false);
+  const mainImageUri = useMemo(
+    () => resolveImageUri(pet?.imageUrls?.[0]),
+    [pet?.imageUrls]
+  );
 
   const handleAdoptPress = () => {
     navigation.navigate("AdoptionForm", { pet });
@@ -30,12 +37,13 @@ const AdoptionCard = ({ pet, onPress, liked, onLike }) => {
       {/* Pet Image */}
       <Image
         source={
-          pet.imageUrls && pet.imageUrls.length > 0 && pet.imageUrls[0]
-            ? { uri: pet.imageUrls[0] }
+          !imageFailed && mainImageUri
+            ? { uri: mainImageUri }
             : DEFAULT_PET_IMAGE
         }
         style={styles.petImage}
         resizeMode="cover"
+        onError={() => setImageFailed(true)}
       />
 
       {/* Pet Info */}

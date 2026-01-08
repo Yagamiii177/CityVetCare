@@ -3,6 +3,8 @@ import Logger from "../utils/logger.js";
 
 const logger = new Logger("STRAY_ANIMAL_MODEL");
 
+let strayAnimalsColumnsCache = null;
+
 const formatDate = (value) => {
   if (!value) return null;
   try {
@@ -29,13 +31,40 @@ const mapRow = (row) => ({
   dateCaptured: formatDate(row.date_captured),
   registrationDate: formatDate(row.registration_date),
   locationCaptured: row.location_captured,
-  images: row.images ? JSON.parse(row.images) : {},
+  latitude: row.latitude ?? null,
+  longitude: row.longitude ?? null,
+  images: (() => {
+    if (!row.images) return {};
+    if (typeof row.images === "object") return row.images;
+    if (typeof row.images === "string") {
+      try {
+        return JSON.parse(row.images);
+      } catch (error) {
+        return {};
+      }
+    }
+    return {};
+  })(),
   status: row.status || "captured",
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
 
 class StrayAnimal {
+  static async getTableColumns() {
+    if (strayAnimalsColumnsCache) return strayAnimalsColumnsCache;
+    try {
+      const [rows] = await pool.query("SHOW COLUMNS FROM stray_animals");
+      strayAnimalsColumnsCache = new Set(rows.map((r) => r.Field));
+      return strayAnimalsColumnsCache;
+    } catch (error) {
+      logger.error("Error reading stray_animals columns", error);
+      // Fail open: return empty set so optional columns are skipped.
+      strayAnimalsColumnsCache = new Set();
+      return strayAnimalsColumnsCache;
+    }
+  }
+
   static async list(filters = {}) {
     const conditions = [];
     const params = [];
@@ -112,6 +141,7 @@ class StrayAnimal {
   }
 
   static async create(data) {
+    const columns = await this.getTableColumns();
     const payload = {
       rfid: data.rfid || null,
       name: data.name || null,
@@ -125,36 +155,59 @@ class StrayAnimal {
       dateCaptured: data.dateCaptured,
       registrationDate: data.registrationDate || formatDate(new Date()),
       locationCaptured: data.locationCaptured,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
       images: data.images ? JSON.stringify(data.images) : null,
       status: data.status || "captured",
     };
 
     try {
+      const insertColumns = [
+        "rfid",
+        "name",
+        "species",
+        "breed",
+        "sex",
+        "color",
+        "markings",
+        "sprayed_neutered",
+        "captured_by",
+        "date_captured",
+        "registration_date",
+        "location_captured",
+      ];
+      const insertValues = [
+        payload.rfid,
+        payload.name,
+        payload.species,
+        payload.breed,
+        payload.sex,
+        payload.color,
+        payload.markings,
+        payload.sprayedNeutered,
+        payload.capturedBy,
+        payload.dateCaptured,
+        payload.registrationDate,
+        payload.locationCaptured,
+      ];
+
+      if (columns.has("latitude")) {
+        insertColumns.push("latitude");
+        insertValues.push(payload.latitude);
+      }
+      if (columns.has("longitude")) {
+        insertColumns.push("longitude");
+        insertValues.push(payload.longitude);
+      }
+      insertColumns.push("images");
+      insertValues.push(payload.images);
+      insertColumns.push("status");
+      insertValues.push(payload.status);
+
+      const placeholders = insertColumns.map(() => "?").join(", ");
       const [result] = await pool.query(
-        `INSERT INTO stray_animals (
-          rfid, name, species, breed, sex, color, markings, sprayed_neutered, 
-          captured_by, date_captured, registration_date, location_captured, images,
-          status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`.replace(
-          /\n\s+/g,
-          " "
-        ),
-        [
-          payload.rfid,
-          payload.name,
-          payload.species,
-          payload.breed,
-          payload.sex,
-          payload.color,
-          payload.markings,
-          payload.sprayedNeutered,
-          payload.capturedBy,
-          payload.dateCaptured,
-          payload.registrationDate,
-          payload.locationCaptured,
-          payload.images,
-          payload.status,
-        ]
+        `INSERT INTO stray_animals (${insertColumns.join(", ")}) VALUES (${placeholders})`,
+        insertValues
       );
 
       return this.findById(result.insertId);
@@ -165,6 +218,7 @@ class StrayAnimal {
   }
 
   static async update(id, data) {
+    const columns = await this.getTableColumns();
     const updates = [];
     const params = [];
 
@@ -186,11 +240,16 @@ class StrayAnimal {
       date_captured: data.dateCaptured,
       registration_date: data.registrationDate,
       location_captured: data.locationCaptured,
+      latitude: data.latitude,
+      longitude: data.longitude,
       images: data.images ? JSON.stringify(data.images) : undefined,
       status: data.status,
     };
 
     Object.entries(fieldMap).forEach(([column, value]) => {
+      if ((column === "latitude" || column === "longitude") && !columns.has(column)) {
+        return;
+      }
       if (value !== undefined) {
         updates.push(`${column} = ?`);
         params.push(value);

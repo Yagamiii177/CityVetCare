@@ -23,17 +23,21 @@ import * as FileSystem from "expo-file-system/legacy";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuth } from "../../../contexts/AuthContext";
 import api from "../../../services/api";
+import LocationPickerModal from "../../../components/LocationPickerModal";
+import CustomDropdown from "../../../components/CustomDropdown";
+import ConfirmDialog from "../../../components/common/ConfirmDialog";
 
 const RegisterStrayAnimalScreen = () => {
   const navigation = useNavigation();
-  const { logout, isVeterinarian } = useAuth();
-  const [vetActionPromptVisible, setVetActionPromptVisible] = useState(false);
+  const { logout, user } = useAuth();
   const [rfidStep, setRfidStep] = useState("prompt"); // prompt | rfidInput | form
   const [rfidStatus, setRfidStatus] = useState(null);
   const [rfidValue, setRfidValue] = useState("");
   const [isLoadingPetData, setIsLoadingPetData] = useState(false);
   const [petOwnerData, setPetOwnerData] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState(null);
   const [images, setImages] = useState({
     front: null,
     back: null,
@@ -53,10 +57,14 @@ const RegisterStrayAnimalScreen = () => {
     rfidCode: "",
     dateCaptured: new Date(),
     locationCaptured: "",
+    latitude: null,
+    longitude: null,
+    registeredBy: user?.fullName || user?.full_name || "Admin",
   });
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [registrationDate] = useState(new Date());
+  const [isLocationPickerVisible, setIsLocationPickerVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -75,15 +83,10 @@ const RegisterStrayAnimalScreen = () => {
     setRfidStep("prompt");
   }, []);
 
-  useEffect(() => {
-    if (isVeterinarian) {
-      setVetActionPromptVisible(true);
-    }
-  }, [isVeterinarian]);
-
   const handleSubmit = async () => {
     if (isSubmitting) return;
 
+    // Improved validation to handle whitespace-only inputs
     const requiredFields = [
       "name",
       "breed",
@@ -93,7 +96,10 @@ const RegisterStrayAnimalScreen = () => {
       "dateCaptured",
       "locationCaptured",
     ];
-    const missingFields = requiredFields.filter((field) => !formData[field]);
+    const missingFields = requiredFields.filter((field) => {
+      const value = formData[field];
+      return !value || value.toString().trim() === "";
+    });
 
     if (missingFields.length > 0) {
       Alert.alert(
@@ -103,7 +109,11 @@ const RegisterStrayAnimalScreen = () => {
       return;
     }
 
-    const uploadedImages = Object.entries(images).filter(([, img]) => img);
+    // Improved image validation
+    const uploadedImages = Object.entries(images).filter(([, img]) => {
+      return img && typeof img === "string" && img.trim() !== "";
+    });
+
     if (uploadedImages.length === 0) {
       Alert.alert(
         "Images Required",
@@ -113,7 +123,7 @@ const RegisterStrayAnimalScreen = () => {
     }
 
     const convertUriToDataUrl = async (uri) => {
-      if (!uri) return null;
+      if (!uri || typeof uri !== "string" || uri.trim() === "") return null;
       try {
         const info = await FileSystem.getInfoAsync(uri, { size: true });
         const sizeMb = info?.size ? info.size / (1024 * 1024) : 0;
@@ -178,13 +188,24 @@ const RegisterStrayAnimalScreen = () => {
       dateCaptured: formattedDateCaptured,
       registrationDate: registrationDate.toISOString().split("T")[0],
       locationCaptured: formData.locationCaptured,
+      latitude: formData.latitude,
+      longitude: formData.longitude,
+      registeredBy: formData.registeredBy,
       images: imagesPayload,
     };
 
+    setPendingPayload(payload);
+    setConfirmSubmit(true);
+  };
+
+  const confirmRegistration = async () => {
+    if (!pendingPayload) return;
+
+    setConfirmSubmit(false);
     setIsSubmitting(true);
 
     try {
-      await api.strayAnimals.create(payload);
+      await api.strayAnimals.create(pendingPayload);
 
       Alert.alert(
         "Registration Submitted",
@@ -204,6 +225,15 @@ const RegisterStrayAnimalScreen = () => {
 
   const handleChange = (name, value) => {
     setFormData({ ...formData, [name]: value });
+  };
+
+  const handleLocationSelect = (locationData) => {
+    setFormData({
+      ...formData,
+      locationCaptured: locationData.address,
+      latitude: locationData.latitude ?? null,
+      longitude: locationData.longitude ?? null,
+    });
   };
 
   const pickImage = async (angle) => {
@@ -274,9 +304,9 @@ const RegisterStrayAnimalScreen = () => {
 
       if (response && response.pet) {
         const pet = response.pet;
-        const owner = response.owner;
+        const owner = response.owner || null;
 
-        // Pre-populate form with pet data
+        // Pre-populate form with pet data using functional update
         setFormData((prev) => ({
           ...prev,
           name: pet.name || "",
@@ -313,553 +343,666 @@ const RegisterStrayAnimalScreen = () => {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
-      >
-        <Modal
-          visible={vetActionPromptVisible}
-          animationType="fade"
-          presentationStyle="fullScreen"
-          statusBarTranslucent={false}
-        >
-          <View style={styles.modalFullScreen}>
-            <View style={styles.modalCardWide}>
-              <View style={styles.modalIconBadge}>
-                <Ionicons name="medical-outline" size={28} color="#FD7E14" />
-              </View>
-              <Text style={styles.modalTitle}>What would you like to do?</Text>
-              <Text style={styles.modalSubtitle}>
-                Choose an action to continue
-              </Text>
-              <View style={styles.modalButtonsStack}>
-                <TouchableOpacity
-                  style={[styles.modalButtonBig, styles.modalButtonPrimary]}
-                  onPress={() => {
-                    setVetActionPromptVisible(false);
-                    navigation.replace("PetVaccination");
-                  }}
-                >
-                  <Ionicons
-                    name="document-text-outline"
-                    size={24}
-                    color="#fff"
-                  />
-                  <Text style={styles.modalButtonBigText}>
-                    Add Vaccination Record
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButtonBig, styles.modalButtonSecondary]}
-                  onPress={() => {
-                    setVetActionPromptVisible(false);
-                  }}
-                >
-                  <Ionicons name="paw-outline" size={24} color="#FD7E14" />
-                  <Text style={styles.modalButtonBigTextSecondary}>
-                    Register a Stray Animal
-                  </Text>
-                </TouchableOpacity>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={{ flex: 1 }}>
+          <Modal
+            visible={rfidStep === "prompt"}
+            animationType="fade"
+            presentationStyle="fullScreen"
+            statusBarTranslucent={false}
+            onRequestClose={() => {
+              setRfidStep("prompt");
+              navigation.replace("VetHome");
+            }}
+          >
+            <View style={styles.modalFullScreen}>
+              <View style={styles.modalCardWide}>
+                <View style={styles.modalIconBadge}>
+                  <Ionicons name="radio-outline" size={28} color="#FD7E14" />
+                </View>
+                <Text style={styles.modalTitle}>Does the pet have RFID?</Text>
+                <Text style={styles.modalSubtitle}>
+                  Choose how you want to log this animal
+                </Text>
+                <View style={styles.modalButtonsStack}>
+                  <TouchableOpacity
+                    style={[styles.modalButtonBig, styles.modalButtonPrimary]}
+                    onPress={() => {
+                      setRfidStatus("hasRFID");
+                      setRfidStep("rfidInput");
+                    }}
+                  >
+                    <View style={styles.buttonRow}>
+                      <Ionicons
+                        name="checkbox-outline"
+                        size={24}
+                        color="#fff"
+                      />
+                      <Text style={styles.modalButtonBigText}>
+                        Pet Has RFID
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButtonBig, styles.modalButtonSecondary]}
+                    onPress={() => {
+                      setRfidStatus("noRFID");
+                      setRfidStep("form");
+                    }}
+                  >
+                    <View style={styles.buttonRow}>
+                      <Ionicons
+                        name="close-circle-outline"
+                        size={24}
+                        color="#FD7E14"
+                      />
+                      <Text style={styles.modalButtonBigTextSecondary}>
+                        Pet Has No RFID
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButtonBig, styles.modalButtonSecondary]}
+                    onPress={() => {
+                      setRfidStep("prompt");
+                      navigation.replace("VetHome");
+                    }}
+                  >
+                    <View style={styles.buttonRow}>
+                      <Ionicons
+                        name="arrow-back-outline"
+                        size={22}
+                        color="#FD7E14"
+                      />
+                      <Text style={styles.modalButtonBigTextSecondary}>
+                        Back
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        </Modal>
+          </Modal>
 
-        <Modal
-          visible={rfidStep === "prompt" && !vetActionPromptVisible}
-          animationType="fade"
-          presentationStyle="fullScreen"
-          statusBarTranslucent={false}
-        >
-          <View style={styles.modalFullScreen}>
-            <View style={styles.modalCardWide}>
-              <View style={styles.modalIconBadge}>
-                <Ionicons name="radio-outline" size={28} color="#FD7E14" />
+          <Modal
+            visible={rfidStep === "rfidInput"}
+            animationType="fade"
+            presentationStyle="fullScreen"
+            statusBarTranslucent={false}
+            onRequestClose={() => setRfidStep("prompt")}
+          >
+            <View style={styles.modalFullScreen}>
+              <View style={styles.modalCardWide}>
+                <View style={styles.modalIconBadge}>
+                  <Ionicons name="key-outline" size={28} color="#FD7E14" />
+                </View>
+                <Text style={styles.modalTitle}>Enter RFID Code</Text>
+                <Text style={styles.modalSubtitle}>
+                  Scan or type the RFID before proceeding
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="RFID code"
+                  value={rfidValue}
+                  onChangeText={setRfidValue}
+                  autoFocus
+                />
+                <View style={styles.modalButtonsStack}>
+                  <TouchableOpacity
+                    style={[styles.modalButtonBig, styles.modalButtonPrimary]}
+                    onPress={() => {
+                      if (!rfidValue.trim()) {
+                        Alert.alert(
+                          "RFID Required",
+                          "Please enter an RFID code to continue."
+                        );
+                        return;
+                      }
+                      fetchPetByRfid(rfidValue);
+                    }}
+                    disabled={isLoadingPetData}
+                  >
+                    {isLoadingPetData ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <View style={styles.buttonRow}>
+                        <Ionicons
+                          name="checkmark-circle-outline"
+                          size={24}
+                          color="#fff"
+                        />
+                        <Text style={styles.modalButtonBigText}>Continue</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButtonBig, styles.modalButtonSecondary]}
+                    onPress={() => {
+                      setRfidStep("prompt");
+                    }}
+                  >
+                    <View style={styles.buttonRow}>
+                      <Ionicons
+                        name="arrow-back-outline"
+                        size={22}
+                        color="#FD7E14"
+                      />
+                      <Text style={styles.modalButtonBigTextSecondary}>
+                        Back
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <Text style={styles.modalTitle}>Does the pet have RFID?</Text>
-              <Text style={styles.modalSubtitle}>
-                Choose how you want to log this animal
-              </Text>
-              <View style={styles.modalButtonsStack}>
+            </View>
+          </Modal>
+
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.scrollContainer}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={
+              Platform.OS === "ios" ? "interactive" : "on-drag"
+            }
+            contentInsetAdjustmentBehavior="always"
+          >
+            {/* Header */}
+            <View style={styles.headerContainer}>
+              <View style={styles.headerContent}>
                 <TouchableOpacity
-                  style={[styles.modalButtonBig, styles.modalButtonPrimary]}
-                  onPress={() => {
-                    setRfidStatus("hasRFID");
-                    setRfidStep("rfidInput");
-                  }}
-                >
-                  <Ionicons name="checkbox-outline" size={24} color="#fff" />
-                  <Text style={styles.modalButtonBigText}>Pet Has RFID</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButtonBig, styles.modalButtonSecondary]}
-                  onPress={() => {
-                    setRfidStatus("noRFID");
-                    setRfidStep("form");
-                  }}
-                >
-                  <Ionicons
-                    name="close-circle-outline"
-                    size={24}
-                    color="#FD7E14"
-                  />
-                  <Text style={styles.modalButtonBigTextSecondary}>
-                    Pet Has No RFID
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButtonBig, styles.modalButtonSecondary]}
                   onPress={() => {
                     setRfidStep("prompt");
+                    setPetOwnerData(null);
                     navigation.replace("VetHome");
                   }}
                 >
                   <Ionicons
                     name="arrow-back-outline"
-                    size={22}
+                    size={24}
                     color="#FD7E14"
                   />
-                  <Text style={styles.modalButtonBigTextSecondary}>Back</Text>
                 </TouchableOpacity>
+                <Text style={styles.headerTitle}>Register Stray Animal</Text>
+                <View style={{ width: 24 }} />
               </View>
+              <View style={styles.orangeDivider} />
             </View>
-          </View>
-        </Modal>
 
-        <Modal
-          visible={rfidStep === "rfidInput"}
-          animationType="fade"
-          presentationStyle="fullScreen"
-          statusBarTranslucent={false}
-        >
-          <View style={styles.modalFullScreen}>
-            <View style={styles.modalCardWide}>
-              <View style={styles.modalIconBadge}>
-                <Ionicons name="key-outline" size={28} color="#FD7E14" />
+            {/* Pet Owner Information */}
+            {petOwnerData && (
+              <View style={styles.petOwnerCard}>
+                <View style={styles.petOwnerHeader}>
+                  <Ionicons
+                    name="person-circle-outline"
+                    size={24}
+                    color="#FD7E14"
+                  />
+                  <Text style={styles.petOwnerTitle}>
+                    Pet Owner Information
+                  </Text>
+                </View>
+                <View style={styles.petOwnerDetails}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Owner Name:</Text>
+                    <Text style={styles.detailValue}>
+                      {petOwnerData.full_name}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Email:</Text>
+                    <Text style={styles.detailValue}>{petOwnerData.email}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Contact:</Text>
+                    <Text style={styles.detailValue}>
+                      {petOwnerData.contact_number}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Address:</Text>
+                    <Text style={styles.detailValue}>
+                      {petOwnerData.address}
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <Text style={styles.modalTitle}>Enter RFID Code</Text>
-              <Text style={styles.modalSubtitle}>
-                Scan or type the RFID before proceeding
+            )}
+
+            {/* Animal Information Section */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="paw-outline" size={20} color="#FD7E14" />
+                <Text style={styles.sectionTitle}>Animal Information</Text>
+              </View>
+              <Text style={styles.sectionDescription}>
+                Basic details about the stray animal
               </Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="RFID code"
-                value={rfidValue}
-                onChangeText={setRfidValue}
-                autoFocus
+
+              {/* Name Field (Required) */}
+              <FormInput
+                label="Name *"
+                value={formData.name}
+                onChangeText={(text) => handleChange("name", text)}
+                placeholder="If the animal has a known name"
               />
-              <View style={styles.modalButtonsStack}>
-                <TouchableOpacity
-                  style={[styles.modalButtonBig, styles.modalButtonPrimary]}
-                  onPress={() => {
-                    if (!rfidValue.trim()) {
-                      Alert.alert(
-                        "RFID Required",
-                        "Please enter an RFID code to continue."
-                      );
-                      return;
-                    }
-                    fetchPetByRfid(rfidValue);
-                  }}
-                  disabled={isLoadingPetData}
-                >
-                  {isLoadingPetData ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons
-                        name="checkmark-circle-outline"
-                        size={24}
-                        color="#fff"
-                      />
-                      <Text style={styles.modalButtonBigText}>Continue</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButtonBig, styles.modalButtonSecondary]}
-                  onPress={() => {
-                    setRfidStep("prompt");
-                  }}
-                >
-                  <Ionicons
-                    name="arrow-back-outline"
-                    size={22}
-                    color="#FD7E14"
-                  />
-                  <Text style={styles.modalButtonBigTextSecondary}>Back</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
 
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.scrollContainer}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Header */}
-          <View style={styles.headerContainer}>
-            <View style={styles.headerContent}>
-              <TouchableOpacity
-                onPress={() => {
-                  setRfidStep("prompt");
-                  setVetActionPromptVisible(false);
-                  setPetOwnerData(null);
-                  navigation.replace("VetHome");
-                }}
-              >
-                <Ionicons name="arrow-back-outline" size={24} color="#FD7E14" />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>Register Stray Animal</Text>
-              <View style={{ width: 24 }} />
-            </View>
-            <View style={styles.orangeDivider} />
-          </View>
-
-          {/* Pet Owner Information */}
-          {petOwnerData && (
-            <View style={styles.petOwnerCard}>
-              <View style={styles.petOwnerHeader}>
-                <Ionicons
-                  name="person-circle-outline"
-                  size={24}
-                  color="#FD7E14"
+              {/* Breed Dropdown (matches web options) */}
+              <View style={styles.formGroup}>
+                <CustomDropdown
+                  label="Breed *"
+                  value={formData.breed}
+                  options={[
+                    { label: "Select breed", value: "" },
+                    ...(formData.type === "cat"
+                      ? [
+                          "Abyssinian",
+                          "Bengal",
+                          "British Shorthair",
+                          "Domestic Longhair",
+                          "Domestic Shorthair",
+                          "Maine Coon",
+                          "Mixed Breed",
+                          "Other",
+                          "Persian",
+                          "Ragdoll",
+                          "Russian Blue",
+                          "Scottish Fold",
+                          "Siamese",
+                          "Sphynx",
+                        ]
+                      : [
+                          "Beagle",
+                          "Boxer",
+                          "Bulldog",
+                          "Chihuahua",
+                          "Dachshund",
+                          "German Shepherd",
+                          "Golden Retriever",
+                          "Great Dane",
+                          "Labrador Retriever",
+                          "Mixed Breed",
+                          "Other",
+                          "Poodle",
+                          "Rottweiler",
+                          "Shih Tzu",
+                          "Siberian Husky",
+                          "Yorkshire Terrier",
+                        ]
+                    ).map((b) => ({ label: b, value: b })),
+                  ]}
+                  onSelect={(val) => handleChange("breed", val)}
+                  placeholder="Select breed"
                 />
-                <Text style={styles.petOwnerTitle}>Pet Owner Information</Text>
               </View>
-              <View style={styles.petOwnerDetails}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Owner Name:</Text>
-                  <Text style={styles.detailValue}>
-                    {petOwnerData.full_name}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Email:</Text>
-                  <Text style={styles.detailValue}>{petOwnerData.email}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Contact:</Text>
-                  <Text style={styles.detailValue}>
-                    {petOwnerData.contact_number}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Address:</Text>
-                  <Text style={styles.detailValue}>{petOwnerData.address}</Text>
-                </View>
-              </View>
-            </View>
-          )}
 
-          {/* Animal Information Section */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="paw-outline" size={20} color="#FD7E14" />
-              <Text style={styles.sectionTitle}>Animal Information</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Basic details about the stray animal
-            </Text>
-
-            {/* Name Field (Required) */}
-            <FormInput
-              label="Name *"
-              value={formData.name}
-              onChangeText={(text) => handleChange("name", text)}
-              placeholder="If the animal has a known name"
-            />
-
-            <FormInput
-              label="Breed *"
-              value={formData.breed}
-              onChangeText={(text) => handleChange("breed", text)}
-            />
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Type *</Text>
-              <View style={styles.typeButtonsContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.typeButton,
-                    formData.type === "dog" && styles.typeButtonActive,
-                  ]}
-                  onPress={() => handleChange("type", "dog")}
-                >
-                  <Ionicons
-                    name="paw-outline"
-                    size={24}
-                    color={formData.type === "dog" ? "#fff" : "#FD7E14"}
-                  />
-                  <Text
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Type *</Text>
+                <View style={styles.typeButtonsContainer}>
+                  <TouchableOpacity
                     style={[
-                      styles.typeButtonText,
-                      formData.type === "dog" && styles.typeButtonTextActive,
+                      styles.typeButton,
+                      formData.type === "dog" && styles.typeButtonActive,
                     ]}
+                    onPress={() => handleChange("type", "dog")}
                   >
-                    Dog
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.typeButton,
-                    formData.type === "cat" && styles.typeButtonActive,
-                  ]}
-                  onPress={() => handleChange("type", "cat")}
-                >
-                  <Ionicons
-                    name="paw-outline"
-                    size={24}
-                    color={formData.type === "cat" ? "#fff" : "#FD7E14"}
-                  />
-                  <Text
-                    style={[
-                      styles.typeButtonText,
-                      formData.type === "cat" && styles.typeButtonTextActive,
-                    ]}
-                  >
-                    Cat
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Sex *</Text>
-              <View style={styles.sexButtonsContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.sexButton,
-                    formData.sex === "male" && styles.sexButtonActive,
-                  ]}
-                  onPress={() => handleChange("sex", "male")}
-                >
-                  <Ionicons
-                    name="male-outline"
-                    size={24}
-                    color={formData.sex === "male" ? "#fff" : "#FD7E14"}
-                  />
-                  <Text
-                    style={[
-                      styles.sexButtonText,
-                      formData.sex === "male" && styles.sexButtonTextActive,
-                    ]}
-                  >
-                    Male
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.sexButton,
-                    formData.sex === "female" && styles.sexButtonActive,
-                  ]}
-                  onPress={() => handleChange("sex", "female")}
-                >
-                  <Ionicons
-                    name="female-outline"
-                    size={24}
-                    color={formData.sex === "female" ? "#fff" : "#FD7E14"}
-                  />
-                  <Text
-                    style={[
-                      styles.sexButtonText,
-                      formData.sex === "female" && styles.sexButtonTextActive,
-                    ]}
-                  >
-                    Female
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {formData.sex && (
-                <View style={styles.castratedContainer}>
-                  <Switch
-                    value={formData.isCastrated}
-                    onValueChange={(value) =>
-                      handleChange("isCastrated", value)
-                    }
-                    thumbColor={formData.isCastrated ? "#FD7E14" : "#f4f3f4"}
-                    trackColor={{ false: "#767577", true: "#FD7E1477" }}
-                  />
-                  <Text style={styles.castratedText}>Castrated/Spayed</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Color *</Text>
-              <View style={styles.colorPickerContainer}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.colorScrollView}
-                >
-                  {[
-                    { name: "Black", hex: "#1a1a1a" },
-                    { name: "White", hex: "#f5f5f5" },
-                    { name: "Brown", hex: "#8B4513" },
-                    { name: "Tan/Fawn", hex: "#D2B48C" },
-                    { name: "Cream", hex: "#FFFDD0" },
-                    { name: "Gray/Silver", hex: "#A9A9A9" },
-                    { name: "Orange/Ginger", hex: "#D2691E" },
-                    { name: "Black & White", hex: "#4B4B4B" },
-                    { name: "Brown & White", hex: "#C4A484" },
-                    { name: "Brindle", hex: "#6B4423" },
-                    { name: "Merle", hex: "#708090" },
-                    { name: "Tabby/Striped", hex: "#B8860B" },
-                    { name: "Tortoiseshell/Calico", hex: "#C25A3A" },
-                    { name: "Tri-color", hex: "#8B7355" },
-                  ].map((colorOption) => (
-                    <TouchableOpacity
-                      key={colorOption.name}
-                      style={[
-                        styles.colorOptionWrapper,
-                        formData.color === colorOption.name &&
-                          styles.colorOptionWrapperActive,
-                      ]}
-                      onPress={() => handleChange("color", colorOption.name)}
-                    >
-                      <View
-                        style={[
-                          styles.colorDot,
-                          { backgroundColor: colorOption.hex },
-                          colorOption.name === "White" && styles.colorDotWhite,
-                        ]}
+                    <View style={styles.buttonRow}>
+                      <Ionicons
+                        name="paw-outline"
+                        size={24}
+                        color={formData.type === "dog" ? "#fff" : "#FD7E14"}
                       />
                       <Text
                         style={[
-                          styles.colorLabel,
-                          formData.color === colorOption.name &&
-                            styles.colorLabelActive,
+                          styles.typeButtonText,
+                          formData.type === "dog" &&
+                            styles.typeButtonTextActive,
                         ]}
                       >
-                        {colorOption.name}
+                        Dog
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </View>
-
-            <FormInput
-              label="Markings"
-              value={formData.markings}
-              onChangeText={(text) => handleChange("markings", text)}
-              placeholder="Distinctive markings or features"
-            />
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Date Captured *</Text>
-              <TouchableOpacity
-                style={styles.dateInput}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text>{formData.dateCaptured.toLocaleDateString()}</Text>
-                <Ionicons name="calendar" size={20} color="#FD7E14" />
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={formData.dateCaptured}
-                  mode="date"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  onChange={onDateChange}
-                  minimumDate={new Date(2000, 0, 1)}
-                  maximumDate={new Date()}
-                />
-              )}
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Registration Date</Text>
-              <View style={styles.dateInput}>
-                <Text>{registrationDate.toLocaleDateString()}</Text>
-              </View>
-            </View>
-
-            <FormInput
-              label="Location Captured *"
-              value={formData.locationCaptured}
-              onChangeText={(text) => handleChange("locationCaptured", text)}
-              placeholder="Where the animal was found"
-            />
-          </View>
-
-          {/* Animal Images Section */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="camera-outline" size={20} color="#FD7E14" />
-              <Text style={styles.sectionTitle}>Animal Images</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Please provide clear photos from multiple angles
-            </Text>
-
-            {Object.entries(images).map(([angle, uri]) => (
-              <View key={angle} style={styles.imageUploadGroup}>
-                <Text style={styles.label}>
-                  {angle.charAt(0).toUpperCase() + angle.slice(1)} View
-                </Text>
-                {uri ? (
-                  <View style={styles.imagePreviewWrapper}>
-                    <Image source={{ uri }} style={styles.imagePreview} />
-                    <View style={styles.imageButtons}>
-                      <TouchableOpacity
-                        style={styles.imageActionButton}
-                        onPress={() => pickImage(angle)}
-                      >
-                        <Text style={styles.imageButtonText}>Change</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.imageActionButton}
-                        onPress={() => removeImage(angle)}
-                      >
-                        <Text style={styles.imageButtonText}>Remove</Text>
-                      </TouchableOpacity>
                     </View>
-                  </View>
-                ) : (
-                  <View style={styles.uploadOptions}>
-                    <TouchableOpacity
-                      style={styles.uploadOptionButton}
-                      onPress={() => pickImage(angle)}
-                    >
-                      <Ionicons name="image" size={20} color="#FD7E14" />
-                      <Text style={styles.uploadOptionText}>Choose Photo</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.uploadOptionButton}
-                      onPress={() => takePhoto(angle)}
-                    >
-                      <Ionicons name="camera" size={20} color="#FD7E14" />
-                      <Text style={styles.uploadOptionText}>Take Photo</Text>
-                    </TouchableOpacity>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeButton,
+                      formData.type === "cat" && styles.typeButtonActive,
+                    ]}
+                    onPress={() => handleChange("type", "cat")}
+                  >
+                    <View style={styles.buttonRow}>
+                      <Ionicons
+                        name="paw-outline"
+                        size={24}
+                        color={formData.type === "cat" ? "#fff" : "#FD7E14"}
+                      />
+                      <Text
+                        style={[
+                          styles.typeButtonText,
+                          formData.type === "cat" &&
+                            styles.typeButtonTextActive,
+                        ]}
+                      >
+                        Cat
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Sex *</Text>
+                <View style={styles.sexButtonsContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.sexButton,
+                      formData.sex === "male" && styles.sexButtonActive,
+                    ]}
+                    onPress={() => handleChange("sex", "male")}
+                  >
+                    <View style={styles.buttonRow}>
+                      <Ionicons
+                        name="male-outline"
+                        size={24}
+                        color={formData.sex === "male" ? "#fff" : "#FD7E14"}
+                      />
+                      <Text
+                        style={[
+                          styles.sexButtonText,
+                          formData.sex === "male" && styles.sexButtonTextActive,
+                        ]}
+                      >
+                        Male
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.sexButton,
+                      formData.sex === "female" && styles.sexButtonActive,
+                    ]}
+                    onPress={() => handleChange("sex", "female")}
+                  >
+                    <View style={styles.buttonRow}>
+                      <Ionicons
+                        name="female-outline"
+                        size={24}
+                        color={formData.sex === "female" ? "#fff" : "#FD7E14"}
+                      />
+                      <Text
+                        style={[
+                          styles.sexButtonText,
+                          formData.sex === "female" &&
+                            styles.sexButtonTextActive,
+                        ]}
+                      >
+                        Female
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+                {formData.sex && (
+                  <View style={styles.castratedContainer}>
+                    <Switch
+                      value={formData.isCastrated}
+                      onValueChange={(value) =>
+                        handleChange("isCastrated", value)
+                      }
+                      thumbColor={formData.isCastrated ? "#FD7E14" : "#f4f3f4"}
+                      trackColor={{ false: "#767577", true: "#FD7E1477" }}
+                    />
+                    <Text style={styles.castratedText}>Castrated/Spayed</Text>
                   </View>
                 )}
               </View>
-            ))}
-          </View>
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[
-              styles.submitButton,
-              isSubmitting && styles.submitButtonDisabled,
-            ]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Register Animal</Text>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </TouchableWithoutFeedback>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Color *</Text>
+                <View style={styles.colorPickerContainer}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.colorScrollView}
+                  >
+                    {[
+                      { name: "Black", hex: "#1a1a1a" },
+                      { name: "White", hex: "#f5f5f5" },
+                      { name: "Brown", hex: "#8B4513" },
+                      { name: "Tan/Fawn", hex: "#D2B48C" },
+                      { name: "Cream", hex: "#FFFDD0" },
+                      { name: "Gray/Silver", hex: "#A9A9A9" },
+                      { name: "Orange/Ginger", hex: "#D2691E" },
+                      { name: "Black & White", hex: "#4B4B4B" },
+                      { name: "Brown & White", hex: "#C4A484" },
+                      { name: "Brindle", hex: "#6B4423" },
+                      { name: "Merle", hex: "#708090" },
+                      { name: "Tabby/Striped", hex: "#B8860B" },
+                      { name: "Tortoiseshell/Calico", hex: "#C25A3A" },
+                      { name: "Tri-color", hex: "#8B7355" },
+                    ].map((colorOption) => (
+                      <TouchableOpacity
+                        key={colorOption.name}
+                        style={[
+                          styles.colorOptionWrapper,
+                          formData.color === colorOption.name &&
+                            styles.colorOptionWrapperActive,
+                        ]}
+                        onPress={() => handleChange("color", colorOption.name)}
+                      >
+                        <View style={styles.buttonRow}>
+                          <View
+                            style={[
+                              styles.colorDot,
+                              { backgroundColor: colorOption.hex },
+                              colorOption.name === "White" &&
+                                styles.colorDotWhite,
+                            ]}
+                          />
+                          <Text
+                            style={[
+                              styles.colorLabel,
+                              formData.color === colorOption.name &&
+                                styles.colorLabelActive,
+                            ]}
+                          >
+                            {colorOption.name}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+
+              <FormInput
+                label="Markings"
+                value={formData.markings}
+                onChangeText={(text) => handleChange("markings", text)}
+                placeholder="Distinctive markings or features"
+              />
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Date Captured *</Text>
+                <TouchableOpacity
+                  style={styles.dateInput}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <View style={styles.buttonRow}>
+                    <Text>{formData.dateCaptured.toLocaleDateString()}</Text>
+                    <Ionicons name="calendar" size={20} color="#FD7E14" />
+                  </View>
+                </TouchableOpacity>
+                {Platform.OS === "ios" ? (
+                  showDatePicker && (
+                    <DateTimePicker
+                      value={formData.dateCaptured}
+                      mode="date"
+                      display="spinner"
+                      onChange={onDateChange}
+                      minimumDate={new Date(2000, 0, 1)}
+                      maximumDate={new Date()}
+                    />
+                  )
+                ) : showDatePicker ? (
+                  <DateTimePicker
+                    value={formData.dateCaptured}
+                    mode="date"
+                    display="default"
+                    onChange={onDateChange}
+                    minimumDate={new Date(2000, 0, 1)}
+                    maximumDate={new Date()}
+                  />
+                ) : null}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Registration Date</Text>
+                <View style={styles.dateInput}>
+                  <Text>{registrationDate.toLocaleDateString()}</Text>
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Location Captured *</Text>
+                <View style={styles.locationInputContainer}>
+                  <TextInput
+                    style={[styles.input, styles.locationInput]}
+                    value={formData.locationCaptured}
+                    onChangeText={(text) =>
+                      handleChange("locationCaptured", text)
+                    }
+                    placeholder="Where the animal was found"
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={styles.mapButton}
+                    onPress={() => setIsLocationPickerVisible(true)}
+                  >
+                    <View style={styles.buttonRow}>
+                      <Ionicons name="location" size={20} color="#FFF" />
+                      <Text style={styles.mapButtonText}>Open Map</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <FormInput
+                label="Registered By"
+                value={formData.registeredBy}
+                editable={false}
+                style={{ backgroundColor: "#f5f5f5" }}
+                placeholder="Administrator name"
+              />
+            </View>
+
+            {/* Animal Images Section */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="camera-outline" size={20} color="#FD7E14" />
+                <Text style={styles.sectionTitle}>Animal Images</Text>
+              </View>
+              <Text style={styles.sectionDescription}>
+                Please provide clear photos from multiple angles
+              </Text>
+
+              {Object.entries(images).map(([angle, uri]) => (
+                <View key={angle} style={styles.imageUploadGroup}>
+                  <Text style={styles.label}>
+                    {angle.charAt(0).toUpperCase() + angle.slice(1)} View
+                  </Text>
+                  {uri ? (
+                    <View style={styles.imagePreviewWrapper}>
+                      <Image source={{ uri }} style={styles.imagePreview} />
+                      <View style={styles.imageButtons}>
+                        <TouchableOpacity
+                          style={styles.imageActionButton}
+                          onPress={() => pickImage(angle)}
+                        >
+                          <Text style={styles.imageButtonText}>Change</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.imageActionButton}
+                          onPress={() => removeImage(angle)}
+                        >
+                          <Text style={styles.imageButtonText}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.uploadOptions}>
+                      <TouchableOpacity
+                        style={styles.uploadOptionButton}
+                        onPress={() => pickImage(angle)}
+                      >
+                        <View style={styles.buttonRow}>
+                          <Ionicons name="image" size={20} color="#FD7E14" />
+                          <Text style={styles.uploadOptionText}>
+                            Choose Photo
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.uploadOptionButton}
+                        onPress={() => takePhoto(angle)}
+                      >
+                        <View style={styles.buttonRow}>
+                          <Ionicons name="camera" size={20} color="#FD7E14" />
+                          <Text style={styles.uploadOptionText}>
+                            Take Photo
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                isSubmitting && styles.submitButtonDisabled,
+              ]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Register Animal</Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </TouchableWithoutFeedback>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        visible={isLocationPickerVisible}
+        onClose={() => setIsLocationPickerVisible(false)}
+        onSelectLocation={handleLocationSelect}
+      />
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog
+        visible={confirmSubmit}
+        onClose={() => setConfirmSubmit(false)}
+        onConfirm={confirmRegistration}
+        title="Confirm Registration"
+        message={`Are you sure you want to register ${
+          formData.name || "this stray animal"
+        }? Please verify all information is correct before proceeding.`}
+        confirmText="Register"
+        cancelText="Cancel"
+        type="info"
+        isLoading={isSubmitting}
+      />
+    </KeyboardAvoidingView>
   );
 };
 
@@ -1266,6 +1409,44 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 17,
     color: "#FD7E14",
+  },
+  locationInputContainer: {
+    flexDirection: "column",
+    gap: 10,
+  },
+  locationInput: {
+    minHeight: 60,
+    textAlignVertical: "top",
+  },
+  mapButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FA8630",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    gap: 8,
+  },
+  mapButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  buttonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: "#FFF",
+  },
+  picker: {
+    height: 48,
   },
 });
 

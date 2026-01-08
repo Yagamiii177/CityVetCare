@@ -16,6 +16,7 @@ import euthanizedAnimalsRouter from "./routes/euthanizedAnimals.js";
 import adoptionRequestsRouter from "./routes/adoptionRequests.js";
 import notificationsRouter from "./routes/notifications.js";
 import redemptionRequestsRouter from "./routes/redemptionRequests.js";
+import dashboardRouter from "./routes/dashboard.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -95,6 +96,7 @@ app.use("/api/euthanized-animals", euthanizedAnimalsRouter);
 app.use("/api/adoption-requests", adoptionRequestsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/redemption-requests", redemptionRequestsRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 // Debug: Log registered routes
 if (process.env.NODE_ENV === "development") {
@@ -107,6 +109,7 @@ if (process.env.NODE_ENV === "development") {
   console.log("  - /api/adoption-requests");
   console.log("  - /api/notifications");
   console.log("  - /api/redemption-requests");
+  console.log("  - /api/dashboard");
 }
 
 // 404 handler

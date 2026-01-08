@@ -9,9 +9,10 @@ import {
 } from "@heroicons/react/24/outline";
 import RegisterAnimalModal from "../../components/StrayAnimalManagement/CaptureAnimalPage/RegisterAnimalModal";
 import ObservationProfile from "../../components/StrayAnimalManagement/CaptureAnimalPage/ObservationProfile";
-import { apiService } from "../../utils/api";
+import { apiService, getImageUrl } from "../../utils/api";
+import logo from "../../assets/logo.png";
 
-const PLACEHOLDER_IMAGE = "https://via.placeholder.com/80x80.png?text=No+Image";
+const PLACEHOLDER_IMAGE = logo;
 
 const CaptureAnimalPage = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -89,8 +90,23 @@ const CaptureAnimalPage = () => {
     return (
       trimmed.startsWith("http") ||
       trimmed.startsWith("data:") ||
-      trimmed.startsWith("blob:")
+      trimmed.startsWith("blob:") ||
+      trimmed.startsWith("/uploads") ||
+      trimmed.startsWith("uploads/")
     );
+  };
+
+  const toDisplayUrl = (url) => {
+    if (!url || typeof url !== "string") return "";
+    const trimmed = url.trim();
+    if (
+      trimmed.startsWith("http") ||
+      trimmed.startsWith("data:") ||
+      trimmed.startsWith("blob:")
+    ) {
+      return trimmed;
+    }
+    return getImageUrl(trimmed);
   };
 
   const extractImageUrls = (images) => {
@@ -104,7 +120,7 @@ const CaptureAnimalPage = () => {
           if (typeof parsed === "string") return [parsed];
           if (parsed && typeof parsed === "object")
             return Object.values(parsed);
-        } catch (e) {
+        } catch {
           return [images];
         }
       }
@@ -115,7 +131,9 @@ const CaptureAnimalPage = () => {
     return toArray()
       .filter(Boolean)
       .map((u) => (typeof u === "string" ? u.trim() : u))
-      .filter(isValidRemoteImage);
+      .filter(isValidRemoteImage)
+      .map(toDisplayUrl)
+      .filter(Boolean);
   };
 
   const normalizeAnimal = (animal) => {
@@ -267,6 +285,24 @@ const CaptureAnimalPage = () => {
     setError(null);
     try {
       setIsLoading(true);
+      // Only include web-accessible image URLs; drop base64 previews
+      const filterAllowedImages = (imagesObj) => {
+        const entries = Object.entries(imagesObj || {});
+        const allowed = entries
+          .map(([key, val]) => [key, val?.preview || null])
+          .filter(
+            ([, url]) =>
+              typeof url === "string" &&
+              (url.startsWith("http://") ||
+                url.startsWith("https://") ||
+                url.startsWith("/uploads") ||
+                url.startsWith("uploads/") ||
+                // Allow base64 data URLs; backend persists these to /uploads/stray
+                url.startsWith("data:image/"))
+          );
+        return allowed.length ? Object.fromEntries(allowed) : undefined;
+      };
+
       const payload = {
         rfid: formData.rfid || null,
         name: formData.name || null,
@@ -276,17 +312,13 @@ const CaptureAnimalPage = () => {
         color: formData.color || null,
         markings: formData.markings || null,
         sprayedNeutered: Boolean(formData.sprayedNeutered),
-        capturedBy: formData.capturedBy || null,
+        capturedBy: formData.registeredBy || null,
+        registeredBy: formData.registeredBy || null,
         dateCaptured: formData.dateCaptured,
         registrationDate:
           formData.registrationDate || new Date().toISOString().split("T")[0],
         locationCaptured: formData.locationCaptured,
-        images: Object.fromEntries(
-          Object.entries(formData.images || {}).map(([key, val]) => [
-            key,
-            val?.preview || null,
-          ])
-        ),
+        images: filterAllowedImages(formData.images),
       };
 
       const response = await apiService.strayAnimals.create(payload);
@@ -315,6 +347,7 @@ const CaptureAnimalPage = () => {
         markings: updatedAnimal.markings,
         sprayedNeutered: Boolean(updatedAnimal.sprayedNeutered),
         capturedBy: updatedAnimal.capturedBy,
+        registeredBy: updatedAnimal.capturedBy,
         dateCaptured: updatedAnimal.dateCaptured,
         registrationDate: updatedAnimal.registrationDate,
         locationCaptured:
@@ -373,6 +406,71 @@ const CaptureAnimalPage = () => {
         reason: euthReason.trim(),
         performedBy: adminId,
       });
+
+      // Notify any owners who have redemption requests (pending or approved) for this animal
+      try {
+        const redemptionResponse = await apiService.redemptionRequests.list();
+        const allRequests =
+          redemptionResponse?.data?.data || redemptionResponse?.data || [];
+        const normalizeStatus = (status) => {
+          const s = String(status || "").toLowerCase();
+          if (["approved", "accept", "accepted", "approve"].includes(s))
+            return "approved";
+          if (["rejected", "declined", "decline"].includes(s))
+            return "rejected";
+          if (["archived", "archive"].includes(s)) return "archived";
+          return "pending";
+        };
+        const relatedRequests = allRequests.filter(
+          (req) =>
+            req.stray_id === euthTarget.id &&
+            req.owner_id &&
+            ["pending", "approved"].includes(normalizeStatus(req.status))
+        );
+
+        for (const request of relatedRequests) {
+          try {
+            await apiService.notifications.createForUser({
+              userId: request.owner_id,
+              userType: "owner",
+              title: "Animal Euthanized",
+              message: `We regret to inform you that ${
+                euthTarget.name || "the stray animal"
+              } you requested for redemption has been euthanized.\n\nReason: ${euthReason.trim()}`,
+              type: "euthanization",
+            });
+          } catch (notifError) {
+            console.error("Failed to notify owner:", notifError);
+          }
+        }
+      } catch (redemptionError) {
+        console.error("Failed to check redemption requests:", redemptionError);
+      }
+
+      // Additionally, notify the registered owner (if any) via RFID lookup
+      try {
+        const rfidVal = String(euthTarget?.rfid || "").trim();
+        if (rfidVal) {
+          const petRes = await apiService.pets.getByRfid(rfidVal);
+          const ownerData = petRes?.data?.owner || petRes?.owner || null;
+          const ownerId =
+            ownerData?.user_id || ownerData?.id || ownerData?.owner_id || null;
+          if (ownerId) {
+            await apiService.notifications.createForUser({
+              userId: ownerId,
+              userType: "owner",
+              title: "Registered Pet Euthanized",
+              message: `We regret to inform you that your registered pet ${
+                euthTarget.name || "(unnamed)"
+              } has been euthanized.\n\nReason: ${euthReason.trim()}`,
+              type: "euthanization",
+            });
+          }
+        }
+      } catch (ownerNotifError) {
+        console.error("Failed to notify registered owner:", ownerNotifError);
+      }
+
       setEuthModalOpen(false);
       setEuthTarget(null);
       setEuthReason("");
@@ -487,46 +585,33 @@ const CaptureAnimalPage = () => {
               <h1 className="text-2xl font-bold">Stray Animals</h1>
               <button
                 onClick={() => setIsRegisterModalOpen(true)}
-                className="bg-[#FA8630] text-white px-4 py-2 rounded-lg flex items-center hover:bg-[#E87928] transition-colors"
+                className="bg-gradient-to-r from-[#FA8630] to-[#E87928] text-white px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-md hover:shadow-lg transition-all hover:brightness-105"
               >
-                <PlusCircleIcon className="h-5 w-5 mr-2" />
-                Register A Stray
+                <PlusCircleIcon className="h-5 w-5" />
+                Register a Stray
               </button>
             </div>
 
             {/* Tabs */}
-            <div className="mb-4">
-              <div className="inline-flex rounded-lg border border-[#E8E8E8] bg-white overflow-hidden">
-                <button
-                  className={`px-4 py-2 text-sm ${
-                    activeTab === "stray"
-                      ? "bg-[#FA8630] text-white"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
-                  onClick={() => setActiveTab("stray")}
-                >
-                  Stray Animals (No RFID)
-                </button>
-                <button
-                  className={`px-4 py-2 text-sm border-l border-[#E8E8E8] ${
-                    activeTab === "owned"
-                      ? "bg-[#FA8630] text-white"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
-                  onClick={() => setActiveTab("owned")}
-                >
-                  Owned/Registered Strays (RFID)
-                </button>
-                <button
-                  className={`px-4 py-2 text-sm border-l border-[#E8E8E8] ${
-                    activeTab === "adoption"
-                      ? "bg-[#FA8630] text-white"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
-                  onClick={() => setActiveTab("adoption")}
-                >
-                  Adoption List
-                </button>
+            <div className="mb-6">
+              <div className="flex items-center gap-3 flex-wrap">
+                {[
+                  { key: "stray", label: "Stray Animals (No RFID)" },
+                  { key: "owned", label: "Owned/Registered Strays (RFID)" },
+                  { key: "adoption", label: "Adoption List" },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`px-5 py-2.5 text-sm font-semibold rounded-full shadow-sm transition-all ${
+                      activeTab === tab.key
+                        ? "bg-gradient-to-r from-[#FA8630] to-[#E87928] text-white hover:shadow-md"
+                        : "bg-white text-gray-700 border border-[#E8E8E8] hover:bg-gray-50"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -838,10 +923,10 @@ const CaptureAnimalPage = () => {
                                       aria-orientation="vertical"
                                     >
                                       {/* Show different actions based on RFID presence and current tab */}
-                                      {activeTab !== "adoption" && (
+                                      {activeTab !== "adoption" ? (
                                         <>
                                           {animal.rfid ? (
-                                            // Owned animal actions
+                                            /* Owned animal actions */
                                             <>
                                               <button
                                                 onClick={(e) => {
@@ -865,7 +950,7 @@ const CaptureAnimalPage = () => {
                                               </button>
                                             </>
                                           ) : (
-                                            // Stray animal actions
+                                            /* Stray animal actions */
                                             <button
                                               onClick={(e) => {
                                                 e.stopPropagation();
@@ -878,13 +963,27 @@ const CaptureAnimalPage = () => {
                                             </button>
                                           )}
 
-                                          {/* Euthanize option for all captured animals */}
+                                          {/* Euthanize option */}
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               handleEuthanize(animal);
                                             }}
                                             className="block px-4 py-2 text-sm text-red-700 hover:bg-red-50 hover:text-red-900 w-full text-left border-t border-gray-100"
+                                            role="menuitem"
+                                          >
+                                            ⚠️ Euthanize
+                                          </button>
+                                        </>
+                                      ) : (
+                                        /* Adoption list actions */
+                                        <>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleEuthanize(animal);
+                                            }}
+                                            className="block px-4 py-2 text-sm text-red-700 hover:bg-red-50 hover:text-red-900 w-full text-left"
                                             role="menuitem"
                                           >
                                             ⚠️ Euthanize

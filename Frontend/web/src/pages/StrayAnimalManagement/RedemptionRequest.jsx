@@ -1,111 +1,42 @@
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Header } from "../../components/Header";
 import { Drawer } from "../../components/StrayAnimalManagement/Drawer";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import RedemptionRequestProfile from "../../components/StrayAnimalManagement/RedemptionRequest/RedemptionRequestProfile";
+import { apiService } from "../../utils/api";
 
 const RedemptionRequest = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({
-    status: "",
-  });
+  const [activeTab, setActiveTab] = useState("pending"); // pending | approved | rejected | archived
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [redemptionRequests, setRedemptionRequests] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const [redemptionRequests, _setRedemptionRequests] = useState([
-    {
-      id: 1,
-      name: "John Doe",
-      age: "35",
-      contactNumber: "09123456789",
-      email: "john.doe@example.com",
-      address: "123 Main St, Cityville",
-      proofOfOwnership: [
-        "https://example.com/proof1.jpg",
-        "https://example.com/proof2.jpg",
-      ],
-      petToRedeem: {
-        petId: "PET-001",
-        name: "Buddy",
-        species: "Dog",
-        breed: "Golden Retriever",
-        age: "3 years",
-        color: "Golden",
-        distinguishingMarks: "White patch on chest",
-        microchipNumber: "123456789",
-        lastSeen: "2023-05-20",
-        captureLocation: "City Park",
-      },
-      requestDate: "2023-05-25",
-      status: "Pending Review",
-      notes: "Lost dog during evening walk",
-    },
-    {
-      id: 2,
-      name: "Maria Santos",
-      age: "28",
-      contactNumber: "09987654321",
-      email: "maria.s@example.com",
-      address: "456 Oak Ave, Townsville",
-      proofOfOwnership: ["https://example.com/proof3.jpg"],
-      petToRedeem: {
-        petId: "PET-002",
-        name: "Whiskers",
-        species: "Cat",
-        breed: "Persian",
-        age: "2 years",
-        color: "White",
-        distinguishingMarks: "Blue eyes",
-        microchipNumber: "987654321",
-        lastSeen: "2023-06-05",
-        captureLocation: "Near the market",
-      },
-      requestDate: "2023-06-10",
-      status: "Approved",
-      notes: "Cat escaped through window",
-    },
-    {
-      id: 3,
-      name: "Carlos Reyes",
-      age: "42",
-      contactNumber: "09223344556",
-      email: "carlos.r@example.com",
-      address: "789 Pine Rd, Villagetown",
-      proofOfOwnership: [
-        "https://example.com/proof4.jpg",
-        "https://example.com/proof5.jpg",
-        "https://example.com/proof6.jpg",
-      ],
-      petToRedeem: {
-        petId: "PET-003",
-        name: "Rocky",
-        species: "Dog",
-        breed: "German Shepherd",
-        age: "5 years",
-        color: "Black and Tan",
-        distinguishingMarks: "Cropped ears",
-        microchipNumber: "456123789",
-        lastSeen: "2023-06-12",
-        captureLocation: "Near school",
-      },
-      requestDate: "2023-06-15",
-      status: "Completed",
-      notes: "Dog was found by animal control",
-    },
-  ]);
+  const loadRedemptionRequests = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await apiService.redemptionRequests.list();
+      const requests = response?.data?.data || response?.data || [];
+      setRedemptionRequests(requests);
+    } catch (err) {
+      console.error("Failed to load redemption requests:", err);
+      setError("Unable to load redemption requests");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRedemptionRequests();
+  }, [loadRedemptionRequests]);
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters({ ...filters, [name]: value });
-  };
-
-  const clearAllFilters = () => {
-    setFilters({
-      status: "",
-    });
+  const clearSearch = () => {
     setSearchTerm("");
   };
 
@@ -119,26 +50,76 @@ const RedemptionRequest = () => {
     setSelectedRequest(null);
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const normalizeStatus = (status) => {
+    const s = (status || "").toLowerCase();
+    if (["approved", "accept", "accepted", "approve"].includes(s))
+      return "approved";
+    if (["rejected", "declined", "decline"].includes(s)) return "rejected";
+    if (["pending", "captured", "new", "submitted"].includes(s))
+      return "pending";
+    if (["archived", "archive"].includes(s)) return "archived";
+    return s || "pending";
+  };
+
+  const getStatusBadgeClass = (status) => {
+    const statusLower = normalizeStatus(status);
+    switch (statusLower) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "approved":
+        return "bg-green-100 text-green-800";
+      case "rejected":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getDisplayStatus = (status) => {
+    const s = normalizeStatus(status);
+    if (s === "approved") return "APPROVED";
+    return s.toUpperCase();
+  };
+
+  const getStrayName = (request) =>
+    request?.animal_name || request?.name || request?.stray_name || "-";
+
   const filteredRequests = redemptionRequests.filter((request) => {
     if (!request) return false;
 
+    // If the related stray animal is in adoption/adopted, it should not appear here.
+    const strayStatus = String(request.stray_status || "").toLowerCase();
+    if (strayStatus === "adoption" || strayStatus === "adopted") return false;
+
+    const tabMatches = normalizeStatus(request.status) === activeTab;
+    if (!tabMatches) return false;
+
     const matchesSearch =
       searchTerm === "" ||
-      request.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.petToRedeem?.name
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      request.petToRedeem?.petId
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase());
+      request.owner_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getStrayName(request)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(request.stray_id || "").includes(searchTerm) ||
+      String(request.redemption_id || "").includes(searchTerm);
 
-    const matchesStatus =
-      filters.status === "" || request.status === filters.status;
-
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
-  const hasFilters = filters.status !== "" || searchTerm !== "";
+  const tabButtonClass = (tab) =>
+    `px-6 py-2 rounded-full text-sm font-semibold transition-all border ${
+      activeTab === tab
+        ? "bg-[#FA8630] text-white border-[#FA8630] shadow-sm"
+        : "bg-white text-gray-700 border-[#E8E8E8] hover:bg-gray-50"
+    }`;
 
   return (
     <div className="min-h-screen bg-[#E8E8E8]">
@@ -164,7 +145,39 @@ const RedemptionRequest = () => {
             <h1 className="text-2xl font-bold">Pet Redemption Requests</h1>
           </div>
 
-          {/* Search and Filters */}
+          {/* Tabs */}
+          <div className="mb-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className={tabButtonClass("pending")}
+              onClick={() => setActiveTab("pending")}
+            >
+              Pending
+            </button>
+            <button
+              type="button"
+              className={tabButtonClass("approved")}
+              onClick={() => setActiveTab("approved")}
+            >
+              Approved
+            </button>
+            <button
+              type="button"
+              className={tabButtonClass("rejected")}
+              onClick={() => setActiveTab("rejected")}
+            >
+              Rejected
+            </button>
+            <button
+              type="button"
+              className={tabButtonClass("archived")}
+              onClick={() => setActiveTab("archived")}
+            >
+              Archive
+            </button>
+          </div>
+
+          {/* Search */}
           <div className="mb-6">
             <div className="flex items-center gap-4 flex-wrap">
               <div className="relative flex-1 min-w-[250px] max-w-md">
@@ -180,130 +193,121 @@ const RedemptionRequest = () => {
                 />
                 {searchTerm && (
                   <button
-                    onClick={() => setSearchTerm("")}
+                    onClick={clearSearch}
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   >
                     <XMarkIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
                   </button>
                 )}
               </div>
-
-              <div className="flex gap-2 flex-1 min-w-[300px] max-w-lg">
-                <div className="relative flex-1 min-w-[120px]">
-                  <select
-                    name="status"
-                    value={filters.status}
-                    onChange={handleFilterChange}
-                    className="appearance-none border border-[#E8E8E8] rounded-lg px-3 py-2 focus:ring-2 focus:ring-gray-300 focus:border-gray-300 bg-white w-full pr-8"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="Pending Review">Pending Review</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Rejected">Rejected</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                    <svg
-                      className="fill-current h-4 w-4"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {hasFilters && (
-                <button
-                  onClick={clearAllFilters}
-                  className="text-sm text-gray-500 hover:text-gray-700 flex items-center whitespace-nowrap ml-auto mr-100"
-                >
-                  <XMarkIcon className="h-6 w-6 mr-1" />
-                  Clear all filters
-                </button>
-              )}
             </div>
           </div>
 
-          {/* Redemption Requests Table */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-[#E8E8E8]">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-[#E8E8E8]">
-                <thead className="bg-[#FA8630]/10">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Owner Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Pet ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Pet Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Request Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-[#E8E8E8]">
-                  {filteredRequests.length > 0 ? (
-                    filteredRequests.map((request) => (
-                      <tr
-                        key={request.id}
-                        className="hover:bg-[#FA8630]/5 cursor-pointer"
-                        onClick={() => openRequestProfile(request)}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          {request.id}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {request.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          {request.petToRedeem.petId}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          {request.petToRedeem.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          {request.requestDate}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs ${
-                              request.status === "Pending Review"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : request.status === "Approved"
-                                ? "bg-blue-100 text-blue-800"
-                                : request.status === "Completed"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {request.status}
-                          </span>
+          {error && (
+            <div className="-mt-2 pb-4">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            </div>
+          )}
+
+          {/* Table Container */}
+          <div className="flex-1 pb-8 overflow-hidden">
+            <div className="bg-white rounded-lg shadow-sm border border-[#E8E8E8] h-full flex flex-col">
+              <div className="flex-1 overflow-auto">
+                <table className="min-w-full divide-y divide-[#E8E8E8] table-fixed">
+                  <thead className="bg-[#FA8630]/10 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider w-[100px]">
+                        Request ID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider w-[100px]">
+                        Stray ID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider w-[180px]">
+                        Redeemer Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider w-[160px]">
+                        Stray Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider w-[120px]">
+                        Species
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider w-[140px]">
+                        Breed
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider w-[150px]">
+                        Request Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#FA8630] uppercase tracking-wider w-[130px]">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-[#E8E8E8]">
+                    {isLoading ? (
+                      <tr>
+                        <td
+                          colSpan="8"
+                          className="px-6 py-4 text-center text-sm text-gray-500"
+                        >
+                          Loading redemption requests...
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="px-6 py-4 text-center text-sm text-gray-500"
-                      >
-                        No redemption requests matching your criteria
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    ) : filteredRequests.length > 0 ? (
+                      filteredRequests.map((request) => (
+                        <tr
+                          key={request.redemption_id}
+                          className="hover:bg-[#FA8630]/5 cursor-pointer"
+                          onClick={() => openRequestProfile(request)}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-mono font-medium text-gray-900">
+                            #{request.redemption_id}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">
+                            #{request.stray_id}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {request.owner_name || "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {getStrayName(request)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {request.species || "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                            {request.breed || "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                            {formatDate(request.request_date)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(
+                                request.status
+                              )}`}
+                            >
+                              {getDisplayStatus(request.status)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan="8"
+                          className="px-6 py-4 text-center text-sm text-gray-500"
+                        >
+                          {searchTerm
+                            ? "No redemption requests matching your search"
+                            : "No redemption requests found"}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -314,6 +318,8 @@ const RedemptionRequest = () => {
         <RedemptionRequestProfile
           request={selectedRequest}
           onClose={closeRequestProfile}
+          onUpdate={loadRedemptionRequests}
+          isArchiveView={activeTab === "archived"}
         />
       )}
     </div>
