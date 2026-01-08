@@ -3,6 +3,10 @@ import { useState } from "react";
 import "../pages/styles/Login.css";
 import logo from "../assets/logo.png";
 
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3000/api"
+).replace(/\/$/, "");
+
 const Login = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
@@ -24,7 +28,7 @@ const Login = () => {
   // Login function
   const login = async (username, password) => {
     try {
-      const response = await fetch("http://localhost:3000/api/auth/login", {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -124,21 +128,18 @@ const Login = () => {
     setIsCreating(true);
 
     try {
-      const response = await fetch(
-        "http://localhost:3000/api/auth/create-admin",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            fullName: createForm.fullName,
-            username: createForm.username,
-            password: createForm.password,
-            role: createForm.role,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/auth/create-admin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: createForm.fullName,
+          username: createForm.username,
+          password: createForm.password,
+          role: createForm.role,
+        }),
+      });
 
       const data = await response.json();
 

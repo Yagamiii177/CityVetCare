@@ -50,6 +50,8 @@ export const Header = ({ isDrawerOpen, toggleDrawer }) => {
       setActiveManagement("reports");
     } else if (path.includes("/campaign")) {
       setActiveManagement("campaigns");
+    } else if (path.includes("/clinic")) {
+      setActiveManagement("clinic");
     } else {
       setActiveManagement("");
     }
@@ -63,7 +65,7 @@ export const Header = ({ isDrawerOpen, toggleDrawer }) => {
   // Helper function to determine button styles
   const getButtonStyles = (managementType) => {
     const baseStyles =
-      "px-3 py-1.5 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap";
+      "px-3 py-1.5 text-sm font-medium rounded-md transition-colors duration-200 whitespace-nowrap flex items-center";
 
     if (activeManagement === managementType) {
       return `${baseStyles} bg-[#FA8630] text-white hover:bg-[#FA8630]/90`;
@@ -126,7 +128,13 @@ export const Header = ({ isDrawerOpen, toggleDrawer }) => {
             onClick={() => navigate("/campaign-dashboard")}
             className={getButtonStyles("campaigns")}
           >
-            Campaign Management
+            Announcements
+          </button>
+          <button
+            onClick={() => navigate("/clinic-dashboard")}
+            className={getButtonStyles("clinics")}
+          >
+            Clinic Management
           </button>
         </div>
 

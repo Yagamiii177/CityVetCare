@@ -95,14 +95,14 @@ const HomePageScreen = () => {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => navigation.navigate("ScreenOption")}
+          onPress={() => navigation.navigate("ReadingMaterials")}
         >
           <Image
             source={iconImages.readingMaterials}
             style={styles.largeIconImage}
             resizeMode="contain"
           />
-          <Text style={styles.buttonText}>Events and Reading Materials</Text>
+          <Text style={styles.buttonText}>Reading Materials</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

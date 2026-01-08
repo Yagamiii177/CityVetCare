@@ -339,14 +339,73 @@ CREATE TABLE IF NOT EXISTS private_clinic (
     clinic_id INT AUTO_INCREMENT PRIMARY KEY,
     clinic_name VARCHAR(150) NOT NULL,
     address VARCHAR(255),
+    barangay VARCHAR(100),
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8),
     contact_number VARCHAR(20),
+    email VARCHAR(150),
+    head_veterinarian VARCHAR(150),
+    license_number VARCHAR(100),
+    services JSON,
+    operating_hours JSON,
     schedule TEXT,
     documents TEXT,
-    status VARCHAR(50) DEFAULT 'pending',
+    status ENUM('Active', 'Pending', 'Inactive', 'Suspended', 'Temporarily Closed') DEFAULT 'Pending',
+    permit_expiry_date DATE,
+    accreditation_expiry_date DATE,
+    last_inspection_date DATE,
+    inspection_status ENUM('Passed', 'Pending', 'Needs Follow-up') DEFAULT 'Pending',
+    inspection_notes TEXT,
+    last_activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_clinic_name (clinic_name),
-    INDEX idx_clinic_status (status)
+    INDEX idx_clinic_status (status),
+    INDEX idx_clinic_license (license_number),
+    INDEX idx_clinic_email (email),
+    INDEX idx_clinic_barangay (barangay),
+    INDEX idx_permit_expiry (permit_expiry_date),
+    INDEX idx_inspection_status (inspection_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Upgrade existing private_clinic table to support ClinicList and mapping fields
+ALTER TABLE private_clinic
+    ADD COLUMN IF NOT EXISTS email VARCHAR(150) AFTER contact_number,
+    ADD COLUMN IF NOT EXISTS head_veterinarian VARCHAR(150) AFTER email,
+    ADD COLUMN IF NOT EXISTS license_number VARCHAR(100) AFTER head_veterinarian,
+    ADD COLUMN IF NOT EXISTS services JSON AFTER license_number,
+    ADD COLUMN IF NOT EXISTS barangay VARCHAR(100) AFTER address,
+    ADD COLUMN IF NOT EXISTS latitude DECIMAL(10, 8) AFTER barangay,
+    ADD COLUMN IF NOT EXISTS longitude DECIMAL(11, 8) AFTER latitude,
+    ADD COLUMN IF NOT EXISTS operating_hours JSON AFTER services,
+    ADD COLUMN IF NOT EXISTS permit_expiry_date DATE AFTER status,
+    ADD COLUMN IF NOT EXISTS accreditation_expiry_date DATE AFTER permit_expiry_date,
+    ADD COLUMN IF NOT EXISTS last_inspection_date DATE AFTER accreditation_expiry_date,
+    ADD COLUMN IF NOT EXISTS inspection_status ENUM('Passed', 'Pending', 'Needs Follow-up') DEFAULT 'Pending' AFTER last_inspection_date,
+    ADD COLUMN IF NOT EXISTS inspection_notes TEXT AFTER inspection_status,
+    ADD COLUMN IF NOT EXISTS last_activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER inspection_notes,
+    MODIFY COLUMN status ENUM('Active', 'Pending', 'Inactive', 'Suspended', 'Temporarily Closed') DEFAULT 'Pending';
+ALTER TABLE private_clinic
+    ADD INDEX IF NOT EXISTS idx_clinic_license (license_number),
+    ADD INDEX IF NOT EXISTS idx_clinic_email (email),
+    ADD INDEX IF NOT EXISTS idx_clinic_barangay (barangay),
+    ADD INDEX IF NOT EXISTS idx_permit_expiry (permit_expiry_date),
+    ADD INDEX IF NOT EXISTS idx_inspection_status (inspection_status);
+
+-- Clinic Listing Table - tracks registered clinics for ClinicList UI
+CREATE TABLE IF NOT EXISTS clinic_listing (
+    listing_id INT AUTO_INCREMENT PRIMARY KEY,
+    clinic_id INT NOT NULL,
+    listed_by INT NULL,
+    listing_status ENUM('Active', 'Pending', 'Inactive', 'Suspended') DEFAULT 'Pending',
+    notes TEXT,
+    listed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_listing_clinic FOREIGN KEY (clinic_id) REFERENCES private_clinic(clinic_id) ON DELETE CASCADE,
+    CONSTRAINT fk_listing_admin FOREIGN KEY (listed_by) REFERENCES administrator(admin_id) ON DELETE SET NULL,
+    UNIQUE INDEX uq_listing_clinic (clinic_id),
+    INDEX idx_listing_status (listing_status),
+    INDEX idx_listing_dates (listed_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Vaccination Record Table
@@ -364,33 +423,28 @@ CREATE TABLE IF NOT EXISTS vaccination_record (
     INDEX idx_vaccination_type (vaccine_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Clinic Vaccination Submission Table
-CREATE TABLE IF NOT EXISTS clinic_vaccination_submission (
-    submission_id INT AUTO_INCREMENT PRIMARY KEY,
-    clinic_id INT NOT NULL,
-    owner_name VARCHAR(150),
-    pet_name VARCHAR(150),
-    species VARCHAR(50),
-    vaccine_type VARCHAR(100),
-    date_administered DATE,
-    proof_photo TEXT,
-    status VARCHAR(50) DEFAULT 'pending',
-    verified_by INT NULL,
-    CONSTRAINT fk_submission_clinic FOREIGN KEY (clinic_id) REFERENCES private_clinic(clinic_id) ON DELETE CASCADE,
-    CONSTRAINT fk_submission_admin FOREIGN KEY (verified_by) REFERENCES administrator(admin_id) ON DELETE SET NULL,
-    INDEX idx_submission_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Announcement Table
 CREATE TABLE IF NOT EXISTS announcement (
     announcement_id INT AUTO_INCREMENT PRIMARY KEY,
     admin_id INT NOT NULL,
     title VARCHAR(200) NOT NULL,
-    content TEXT NOT NULL,
+    content LONGTEXT NOT NULL,
+    description TEXT,
     language VARCHAR(50) DEFAULT 'en',
+    category ENUM('health', 'policy', 'events', 'general') DEFAULT 'general',
+    priority ENUM('Low', 'Medium', 'High') DEFAULT 'Medium',
+    audience ENUM('public', 'clinic', 'staff', 'partner') DEFAULT 'public',
+    status ENUM('Draft', 'Scheduled', 'Published', 'Archived') DEFAULT 'Draft',
+    publish_date DATETIME NULL,
+    published_at DATETIME NULL,
+    scheduled_for DATETIME NULL,
+    is_archived TINYINT(1) DEFAULT 0,
+    views INT DEFAULT 0,
     date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(50) DEFAULT 'draft',
+    date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_announcement_admin FOREIGN KEY (admin_id) REFERENCES administrator(admin_id) ON DELETE CASCADE,
+<<<<<<< HEAD
     INDEX idx_announcement_status (status)
 <<<<<<< HEAD
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -413,3 +467,78 @@ CREATE TABLE IF NOT EXISTS notifications (
 =======
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 >>>>>>> db2a2b89099177d7e3d92306a365d4776423a5a7
+=======
+    INDEX idx_announcement_status (status),
+    INDEX idx_announcement_category (category),
+    INDEX idx_announcement_priority (priority),
+    INDEX idx_announcement_publish_date (publish_date),
+    INDEX idx_announcement_archived (is_archived)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Upgrade existing announcement table with new attributes if it already exists
+ALTER TABLE announcement
+    MODIFY COLUMN status ENUM('Draft', 'Scheduled', 'Published', 'Archived') DEFAULT 'Draft',
+    MODIFY COLUMN content LONGTEXT NOT NULL,
+    ADD COLUMN IF NOT EXISTS description TEXT AFTER content,
+    ADD COLUMN IF NOT EXISTS category ENUM('health', 'policy', 'events', 'general') DEFAULT 'general' AFTER language,
+    ADD COLUMN IF NOT EXISTS priority ENUM('Low', 'Medium', 'High') DEFAULT 'Medium' AFTER category,
+    ADD COLUMN IF NOT EXISTS audience ENUM('public', 'clinic', 'staff', 'partner') DEFAULT 'public' AFTER priority,
+    ADD COLUMN IF NOT EXISTS publish_date DATETIME NULL AFTER status,
+    ADD COLUMN IF NOT EXISTS published_at DATETIME NULL AFTER publish_date,
+    ADD COLUMN IF NOT EXISTS scheduled_for DATETIME NULL AFTER published_at,
+    ADD COLUMN IF NOT EXISTS is_archived TINYINT(1) DEFAULT 0 AFTER status,
+    ADD COLUMN IF NOT EXISTS views INT DEFAULT 0 AFTER is_archived,
+    ADD COLUMN IF NOT EXISTS date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER date_posted;
+
+-- Announcement attachments
+CREATE TABLE IF NOT EXISTS announcement_attachment (
+    attachment_id INT AUTO_INCREMENT PRIMARY KEY,
+    announcement_id INT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_type VARCHAR(50),
+    file_size INT DEFAULT 0,
+    file_url VARCHAR(500),
+    storage_path VARCHAR(500),
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_attachment_announcement FOREIGN KEY (announcement_id) REFERENCES announcement(announcement_id) ON DELETE CASCADE,
+    INDEX idx_attachment_announcement (announcement_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Reading Materials Table
+CREATE TABLE IF NOT EXISTS reading_materials (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    type ENUM('book', 'website', 'digital') NOT NULL,
+    category VARCHAR(100),
+    author VARCHAR(150),
+    description TEXT,
+    content LONGTEXT,
+    url VARCHAR(500),
+    status ENUM('published', 'draft', 'archived') DEFAULT 'draft',
+    tags JSON,
+    images JSON,
+    views INT DEFAULT 0,
+    date_added DATE NOT NULL,
+    date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_material_type (type),
+    INDEX idx_material_category (category),
+    INDEX idx_material_status (status),
+    INDEX idx_material_date_added (date_added)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Archive History Table
+CREATE TABLE IF NOT EXISTS archive_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    material_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    archived_by VARCHAR(150) NOT NULL,
+    archived_date DATE NOT NULL,
+    reason TEXT,
+    previous_status ENUM('published', 'draft') NOT NULL,
+    date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_archive_material FOREIGN KEY (material_id) REFERENCES reading_materials(id) ON DELETE CASCADE,
+    INDEX idx_archive_material (material_id),
+    INDEX idx_archive_date (archived_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+>>>>>>> 733077ab88905bd840cdb76d1034ae691aa16a7f

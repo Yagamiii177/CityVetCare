@@ -15,8 +15,19 @@ import catchersRouter from "./routes/catchers.js";
 import dashboardRouter from "./routes/dashboard.js";
 import schedulesRouter from "./routes/schedules.js";
 import strayAnimalsRouter from "./routes/strayAnimals.js";
+<<<<<<< HEAD
 import patrolStaffRouter from "./routes/patrol-staff.js";
 import patrolSchedulesRouter from "./routes/patrol-schedules.js";
+=======
+import readingMaterialsRouter from "./routes/readingMaterials.js";
+import announcementsRouter from "./routes/announcements.js";
+import userAnnouncementsRouter from "./routes/user-announcements.js";
+import patrolStaffRouter from "./routes/patrol-staff.js";
+import patrolSchedulesRouter from "./routes/patrol-schedules.js";
+import clinicsRouter from "./routes/clinics.js";
+import clinicMapRouter from "./routes/clinic-map.js";
+import adminDashboardRouter from "./routes/admin-dashboard.js";
+>>>>>>> 733077ab88905bd840cdb76d1034ae691aa16a7f
 import petsRouter from "./routes/pets.js";
 import euthanizedAnimalsRouter from "./routes/euthanizedAnimals.js";
 import adoptionRequestsRouter from "./routes/adoptionRequests.js";
@@ -68,8 +79,13 @@ app.use(
   })
 );
 // Increase payload size limits for image uploads (10MB for mobile base64 images)
+<<<<<<< HEAD
 app.use(express.json({ limit: '15mb' })); // Accommodate base64 encoding overhead
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+=======
+app.use(express.json({ limit: "15mb" })); // Accommodate base64 encoding overhead
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+>>>>>>> 733077ab88905bd840cdb76d1034ae691aa16a7f
 
 // Serve uploaded files as static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -97,6 +113,10 @@ app.get("/", (req, res) => {
       "/api/patrol-staff": "Patrol staff management (dedicated)",
       "/api/patrol-schedules": "Patrol schedules management (dedicated)",
       "/api/stray-animals": "Stray animals management",
+      "/api/reading-materials": "Reading materials management",
+      "/api/announcements": "Announcements management",
+      "/api/clinics": "Clinic registration management",
+      "/api/admin-dashboard": "Admin dashboard statistics and management",
     },
   });
 });
@@ -110,6 +130,12 @@ app.use("/api/schedules", schedulesRouter);
 app.use("/api/patrol-staff", patrolStaffRouter);
 app.use("/api/patrol-schedules", patrolSchedulesRouter);
 app.use("/api/stray-animals", strayAnimalsRouter);
+app.use("/api/reading-materials", readingMaterialsRouter);
+app.use("/api/announcements", announcementsRouter);
+app.use("/api/user-announcements", userAnnouncementsRouter);
+app.use("/api/clinics", clinicsRouter);
+app.use("/api/admin-dashboard", adminDashboardRouter);
+app.use("/api/clinic-map", clinicMapRouter);
 app.use("/api/pets", petsRouter);
 app.use("/api/euthanized-animals", euthanizedAnimalsRouter);
 app.use("/api/adoption-requests", adoptionRequestsRouter);
@@ -121,7 +147,16 @@ if (process.env.NODE_ENV === "development") {
   console.log("📡 Registered API routes:");
   console.log("  - /api/health");
   console.log("  - /api/auth");
+  console.log("  - /api/incidents");
+  console.log("  - /api/catchers");
+  console.log("  - /api/dashboard");
+  console.log("  - /api/schedules");
   console.log("  - /api/stray-animals");
+  console.log("  - /api/reading-materials");
+  console.log("  - /api/announcements");
+  console.log("  - /api/clinics");
+  console.log("  - /api/admin-dashboard");
+  console.log("  - /api/clinic-map");
   console.log("  - /api/pets");
   console.log("  - /api/euthanized-animals");
   console.log("  - /api/adoption-requests");

@@ -86,8 +86,12 @@ export const authorize = (...roles) => {
   };
 };
 
+// Alias for compatibility with routes that use 'authorizeRoles'
+export const authorizeRoles = authorize;
+
 export default {
   authenticateToken,
   optionalAuth,
-  authorize
+  authorize,
+  authorizeRoles
 };

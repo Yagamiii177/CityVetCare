@@ -3,7 +3,12 @@ import Login from "./pages/Login";
 import Landing from "./pages/Landing";
 import VaccinationDashboard from "./pages/VaccinationManagement/Dashboard";
 import ReportDashboard from "./pages/ReportManagement/Dashboard";
-import CampaignDashboard from "./pages/CampaignManagement/Dashboard";
+import CampaignDashboard from "./pages/announcement_resources/CampaignDashboard";
+import AnnouncementList from "./pages/announcement_resources/AnnouncementList";
+import ReadingMaterial from "./pages/announcement_resources/ReadingMaterial";
+import ClinicDashboard from "./pages/clinic_registration/clinicDashboard";
+import ClinicList from "./pages/clinic_registration/clinicList";
+import ClinicMap from "./pages/clinic_registration/clinicMap";
 import StrayDashboard from "./pages/StrayAnimalManagement/Dashboard";
 import AddStray from "./pages/StrayAnimalManagement/AddStray";
 import AdoptionList from "./pages/StrayAnimalManagement/AdoptionList";
@@ -50,6 +55,13 @@ function App() {
 
         {/*CAMPAIGN MANAGEMENT ROUTES */}
         <Route path="/campaign-dashboard" element={<CampaignDashboard />} />
+        <Route path="/announcement" element={<AnnouncementList />} />
+        <Route path="/reading-material" element={<ReadingMaterial />} />
+
+        {/* CLINIC MANAGEMENT ROUTES */}
+        <Route path="/clinic-dashboard" element={<ClinicDashboard />} />
+        <Route path="/clinic-list" element={<ClinicList />} />
+        <Route path="/clinic-map" element={<ClinicMap />} />
       </Routes>
     </Router>
   );

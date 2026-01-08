@@ -46,12 +46,12 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
-console.log("🌐 CityVetCare API Base URL:", API_BASE_URL);
-console.log("📱 Platform:", Platform.OS);
+console.log(" CityVetCare API Base URL:", API_BASE_URL);
+console.log(" Platform:", Platform.OS);
 
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
-  TIMEOUT: 30000, // 30 seconds
+  TIMEOUT: 15000, // 15 seconds for normal requests
   UPLOAD_TIMEOUT: 120000, // 2 minutes for image uploads
 };
 
@@ -123,6 +123,29 @@ export const API_ENDPOINTS = {
   DASHBOARD: {
     STATS: `${API_BASE_URL}/dashboard`,
     MAP_DATA: `${API_BASE_URL}/dashboard/map-data`,
+  },
+
+  // Announcements
+  ANNOUNCEMENTS: {
+    LIST: `${API_BASE_URL}/announcements`,
+    DETAIL: (id) => `${API_BASE_URL}/announcements/${id}`,
+    CREATE: `${API_BASE_URL}/announcements`,
+    UPDATE: (id) => `${API_BASE_URL}/announcements/${id}`,
+    DELETE: (id) => `${API_BASE_URL}/announcements/${id}`,
+  },
+
+  // User Announcements (read/unread tracking)
+  USER_ANNOUNCEMENTS: {
+    LIST: (userId) => `${API_BASE_URL}/user-announcements/${userId}`,
+    STATS: (userId) => `${API_BASE_URL}/user-announcements/${userId}/stats`,
+    MARK_READ: (userId) =>
+      `${API_BASE_URL}/user-announcements/${userId}/mark-read`,
+    MARK_UNREAD: (userId) =>
+      `${API_BASE_URL}/user-announcements/${userId}/mark-unread`,
+    HIDE: (userId) => `${API_BASE_URL}/user-announcements/${userId}/hide`,
+    UNHIDE: (userId) => `${API_BASE_URL}/user-announcements/${userId}/unhide`,
+    MARK_ALL_READ: (userId) =>
+      `${API_BASE_URL}/user-announcements/${userId}/mark-all-read`,
   },
 
   // Health Check
