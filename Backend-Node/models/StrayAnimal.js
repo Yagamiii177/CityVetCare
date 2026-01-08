@@ -206,7 +206,9 @@ class StrayAnimal {
 
       const placeholders = insertColumns.map(() => "?").join(", ");
       const [result] = await pool.query(
-        `INSERT INTO stray_animals (${insertColumns.join(", ")}) VALUES (${placeholders})`,
+        `INSERT INTO stray_animals (${insertColumns.join(
+          ", "
+        )}) VALUES (${placeholders})`,
         insertValues
       );
 
@@ -247,7 +249,10 @@ class StrayAnimal {
     };
 
     Object.entries(fieldMap).forEach(([column, value]) => {
-      if ((column === "latitude" || column === "longitude") && !columns.has(column)) {
+      if (
+        (column === "latitude" || column === "longitude") &&
+        !columns.has(column)
+      ) {
         return;
       }
       if (value !== undefined) {
