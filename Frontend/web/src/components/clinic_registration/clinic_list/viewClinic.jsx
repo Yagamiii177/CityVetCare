@@ -9,12 +9,15 @@ import {
   CalendarDaysIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  MinusCircleIcon,
+  StopIcon,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { apiService } from "../../../utils/api";
 
-const ViewClinic = ({ clinic, onClose, onEdit, onApprove }) => {
+const ViewClinic = ({ clinic, onClose, onEdit, onApprove, onStatusChange }) => {
   const [isApproving, setIsApproving] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [notification, setNotification] = useState({
     show: false,
     message: "",
@@ -66,6 +69,74 @@ const ViewClinic = ({ clinic, onClose, onEdit, onApprove }) => {
       });
     } finally {
       setIsApproving(false);
+    }
+  };
+
+  const handleInactiveToggle = async () => {
+    setIsUpdatingStatus(true);
+    try {
+      const newStatus = clinic.status === "Inactive" ? "Active" : "Inactive";
+      const response = await apiService.clinics.updateStatus(
+        clinic.id,
+        newStatus
+      );
+      setNotification({
+        show: true,
+        message: `Clinic ${
+          newStatus === "Inactive" ? "marked as inactive" : "activated"
+        } successfully!`,
+        type: "success",
+      });
+      if (onStatusChange) {
+        onStatusChange(response.data);
+      }
+      setTimeout(() => {
+        onClose();
+      }, 800);
+    } catch (error) {
+      console.error("Error updating clinic status:", error);
+      setNotification({
+        show: true,
+        message:
+          error?.response?.data?.message || "Failed to update clinic status",
+        type: "error",
+      });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleSuspend = async () => {
+    setIsUpdatingStatus(true);
+    try {
+      const newStatus = clinic.status === "Suspended" ? "Active" : "Suspended";
+      const response = await apiService.clinics.updateStatus(
+        clinic.id,
+        newStatus
+      );
+      setNotification({
+        show: true,
+        message: `Clinic ${
+          newStatus === "Suspended" ? "suspended" : "reactivated"
+        } successfully!`,
+        type: "success",
+      });
+      if (onStatusChange) {
+        onStatusChange(response.data);
+      }
+      setTimeout(() => {
+        onClose();
+      }, 800);
+    } catch (error) {
+      console.error("Error updating clinic status:", error);
+      setNotification({
+        show: true,
+        message:
+          error?.response?.data?.message || "Failed to update clinic status",
+        type: "error",
+      });
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -277,32 +348,76 @@ const ViewClinic = ({ clinic, onClose, onEdit, onApprove }) => {
               </div>
 
               {/* Action Buttons */}
-              <div className="border-t border-gray-200 pt-4 flex justify-end gap-2">
-                <button
-                  onClick={onClose}
-                  className="px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  Close
-                </button>
-                {clinic.status === "Pending" && (
+              <div className="border-t border-gray-200 pt-4 flex justify-between items-center">
+                <div className="flex gap-2">
+                  {/* Inactive Button */}
                   <button
-                    onClick={handleApprove}
-                    disabled={isApproving}
-                    className="px-3 py-2 text-sm text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleInactiveToggle}
+                    disabled={isUpdatingStatus}
+                    className={`px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      clinic.status === "Inactive"
+                        ? "text-white bg-green-600 hover:bg-green-700"
+                        : "text-white bg-gray-600 hover:bg-gray-700"
+                    }`}
+                    title={
+                      clinic.status === "Inactive"
+                        ? "Activate Clinic"
+                        : "Mark as Inactive"
+                    }
                   >
-                    {isApproving ? (
-                      <>
-                        <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Approving...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircleIcon className="h-4 w-4" />
-                        Approve
-                      </>
-                    )}
+                    <MinusCircleIcon className="h-4 w-4" />
+                    {clinic.status === "Inactive"
+                      ? "Activate"
+                      : "Mark Inactive"}
                   </button>
-                )}
+
+                  {/* Suspend Button */}
+                  <button
+                    onClick={handleSuspend}
+                    disabled={isUpdatingStatus}
+                    className={`px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      clinic.status === "Suspended"
+                        ? "text-white bg-green-600 hover:bg-green-700"
+                        : "text-white bg-red-600 hover:bg-red-700"
+                    }`}
+                    title={
+                      clinic.status === "Suspended"
+                        ? "Reactivate Clinic"
+                        : "Suspend Clinic"
+                    }
+                  >
+                    <StopIcon className="h-4 w-4" />
+                    {clinic.status === "Suspended" ? "Reactivate" : "Suspend"}
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={onClose}
+                    className="px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    Close
+                  </button>
+                  {clinic.status === "Pending" && (
+                    <button
+                      onClick={handleApprove}
+                      disabled={isApproving}
+                      className="px-3 py-2 text-sm text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isApproving ? (
+                        <>
+                          <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Approving...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircleIcon className="h-4 w-4" />
+                          Approve
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -342,4 +457,3 @@ const ViewClinic = ({ clinic, onClose, onEdit, onApprove }) => {
 };
 
 export default ViewClinic;
-

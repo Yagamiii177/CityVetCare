@@ -195,11 +195,6 @@ const ReadingMaterialDetailScreen = () => {
           </TouchableOpacity>
         )}
 
-        {/* Share Button */}
-        <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-          <Text style={styles.shareButtonText}>📤 Share this material</Text>
-        </TouchableOpacity>
-
         {/* Views Count */}
         {material.views !== undefined && (
           <View style={styles.viewsContainer}>
@@ -344,7 +339,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   linkButton: {
-    backgroundColor: "#3498db",
+    backgroundColor: "#FD7E14",
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
@@ -356,23 +351,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   linkButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  shareButton: {
-    backgroundColor: "#2ecc71",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 12,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  shareButtonText: {
     color: "white",
     fontSize: 16,
     fontWeight: "bold",

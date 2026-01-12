@@ -132,7 +132,7 @@ export const Header = ({ isDrawerOpen, toggleDrawer }) => {
           </button>
           <button
             onClick={() => navigate("/clinic-dashboard")}
-            className={getButtonStyles("clinics")}
+            className={getButtonStyles("clinic")}
           >
             Clinic Management
           </button>

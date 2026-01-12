@@ -633,37 +633,6 @@ const ClinicManagement = () => {
                                 >
                                   <EyeIcon className="h-5 w-5" />
                                 </button>
-                                <button
-                                  onClick={() => handleInactiveClinic(clinic)}
-                                  className={`p-1 rounded transition-colors ${
-                                    clinic.status === "Inactive" ||
-                                    clinic.status === "Suspended"
-                                      ? "text-green-600 hover:text-green-700 hover:bg-green-50"
-                                      : "text-gray-600 hover:text-gray-700 hover:bg-gray-50"
-                                  }`}
-                                  title={
-                                    clinic.status === "Inactive" ||
-                                    clinic.status === "Suspended"
-                                      ? "Activate Clinic"
-                                      : "Mark as Inactive"
-                                  }
-                                  aria-label={`Toggle inactive status for clinic ${clinic.id}`}
-                                >
-                                  <MinusCircleIcon className="h-5 w-5" />
-                                </button>
-                                {clinic.status !== "Suspended" &&
-                                  clinic.status !== "Inactive" && (
-                                    <button
-                                      onClick={() =>
-                                        handleSuspendClinic(clinic)
-                                      }
-                                      className="text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
-                                      title="Suspend Clinic"
-                                      aria-label={`Suspend clinic ${clinic.id}`}
-                                    >
-                                      <StopIcon className="h-5 w-5" />
-                                    </button>
-                                  )}
                               </div>
                             </td>
                           </tr>
@@ -712,6 +681,7 @@ const ClinicManagement = () => {
                   clinic={selectedClinic}
                   onClose={handleCloseClinicDetails}
                   onApprove={handleClinicApproved}
+                  onStatusChange={handleStatusChange}
                 />
               )}
             </>

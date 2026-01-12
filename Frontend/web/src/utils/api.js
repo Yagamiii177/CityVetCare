@@ -235,7 +235,8 @@ export const apiService = {
     getById: (id) => api.get(`/clinics/${id}`),
     create: (data) => api.post("/clinics", data),
     update: (id, data) => api.put(`/clinics/${id}`, data),
-    updateStatus: (id, data) => api.patch(`/clinics/${id}/status`, data),
+    updateStatus: (id, status) =>
+      api.patch(`/clinics/${id}/status`, { status }),
     approve: (id) => api.patch(`/clinics/${id}/approve`),
   },
 

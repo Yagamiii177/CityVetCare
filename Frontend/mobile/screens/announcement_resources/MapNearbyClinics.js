@@ -49,7 +49,7 @@ export default function MapNearbyClinics() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [showVetClinics, setShowVetClinics] = useState(true);
+  const [showVetClinics, setShowVetClinics] = useState(true); // Changed to true by default
   const [userAddress, setUserAddress] = useState("");
   const [showLocationInfo, setShowLocationInfo] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -205,9 +205,25 @@ export default function MapNearbyClinics() {
     if (!workingHours) return "Not available";
     if (typeof workingHours === "string") return workingHours;
     if (typeof workingHours === "object") {
-      return JSON.stringify(workingHours)
-        .replace(/[{}"]/g, "")
-        .replace(/,/g, ", ");
+      // Format as readable list with proper spacing and capitalization
+      return Object.entries(workingHours)
+        .map(([day, hours]) => {
+          // Capitalize first letter of day
+          const capitalizedDay =
+            day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
+          // Convert 24-hour time to 12-hour format
+          const formattedHours = hours.replace(
+            /(\d{1,2}):(\d{2})/g,
+            (match, h, m) => {
+              const hour = parseInt(h);
+              const period = hour >= 12 ? "PM" : "AM";
+              const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+              return `${hour12}:${m} ${period}`;
+            }
+          );
+          return `${capitalizedDay}: ${formattedHours}`;
+        })
+        .join("\n");
     }
     return "Not available";
   };
@@ -420,7 +436,7 @@ export default function MapNearbyClinics() {
           </Text>
         </View>
 
-        {/* Top Right Buttons */}
+        {/* Action Buttons */}
         <View style={styles.topRightButtons}>
           <TouchableOpacity
             style={[
@@ -430,7 +446,11 @@ export default function MapNearbyClinics() {
             onPress={handleFindClinics}
             activeOpacity={0.8}
           >
-            <MaterialIcons name="pets" size={24} color="white" />
+            <MaterialIcons
+              name="local-hospital"
+              size={20}
+              color={showVetClinics ? "white" : "#FD7E14"}
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -438,25 +458,25 @@ export default function MapNearbyClinics() {
             onPress={handleRefresh}
             activeOpacity={0.8}
           >
-            <Ionicons name="refresh" size={24} color="white" />
+            <Ionicons name="refresh" size={20} color="#FD7E14" />
+          </TouchableOpacity>
+
+          {/* Location Button */}
+          <TouchableOpacity
+            style={[
+              styles.locationButton,
+              location && styles.locationButtonActive,
+            ]}
+            onPress={toggleLocationInfo}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="location"
+              size={20}
+              color={location ? "white" : "#FD7E14"}
+            />
           </TouchableOpacity>
         </View>
-
-        {/* Location Button */}
-        <TouchableOpacity
-          style={[
-            styles.locationButton,
-            location && styles.locationButtonActive,
-          ]}
-          onPress={toggleLocationInfo}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="location"
-            size={24}
-            color={location ? "white" : "#FD7E14"}
-          />
-        </TouchableOpacity>
 
         {showLocationInfo && (
           <View style={styles.locationInfoBox}>
@@ -522,7 +542,7 @@ const styles = StyleSheet.create({
   },
   clinicCountBadge: {
     position: "absolute",
-    top: 20,
+    top: 75,
     right: 20,
     backgroundColor: "white",
     paddingHorizontal: 12,
@@ -545,13 +565,13 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     position: "absolute",
-    top: 50,
+    top: 20,
     left: 20,
     right: 20,
     backgroundColor: "white",
     borderRadius: 25,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
     elevation: 5,
@@ -563,12 +583,13 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: "#333",
-    paddingVertical: 5,
+    paddingVertical: 0,
+    paddingRight: 10,
   },
   searchIcon: {
-    marginLeft: 10,
+    marginLeft: 8,
   },
   map: {
     width: "100%",
@@ -576,13 +597,14 @@ const styles = StyleSheet.create({
   },
   topRightButtons: {
     position: "absolute",
-    top: 110,
+    bottom: 90,
     right: 20,
     flexDirection: "column",
-    gap: 12,
+    gap: 10,
+    alignItems: "center",
   },
   actionButton: {
-    backgroundColor: "#FD7E14",
+    backgroundColor: "white",
     width: 50,
     height: 50,
     borderRadius: 25,
@@ -593,21 +615,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    borderWidth: 2,
+    borderColor: "#FD7E14",
   },
   actionButtonActive: {
     backgroundColor: "#388E3C",
+    borderColor: "white",
+  },
+  actionButtonText: {
+    color: "#FD7E14",
+    fontSize: 12,
+    fontWeight: "bold",
+    marginLeft: 6,
   },
   incidentButtonActive: {
     backgroundColor: "#D32F2F",
   },
   locationButton: {
-    position: "absolute",
-    bottom: 90,
-    right: 20,
     backgroundColor: "white",
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: "center",
     alignItems: "center",
     elevation: 5,
@@ -621,6 +649,12 @@ const styles = StyleSheet.create({
   locationButtonActive: {
     backgroundColor: "#FD7E14",
     borderColor: "white",
+  },
+  locationButtonText: {
+    color: "#FD7E14",
+    fontSize: 12,
+    fontWeight: "bold",
+    marginLeft: 6,
   },
   locationInfoBox: {
     position: "absolute",

@@ -3,7 +3,7 @@
  * Automatically detects the correct API URL based on the platform
  */
 
-import { Platform } from "react-native";
+import { NativeModules, Platform } from "react-native";
 import Constants from "expo-constants";
 
 const normalizeApiUrl = (url) => {
@@ -71,20 +71,32 @@ export const getApiBaseUrl = () => {
     return "http://10.0.2.2:3000/api";
   }
 
-  // For iOS Simulator
-  if (Platform.OS === "ios" && !Constants.isDevice) {
-    return localhost;
-  }
+  // For iOS Simulator, localhost is usually correct, but we still try to
+  // derive a LAN host first (useful when Constants.isDevice is misreported).
 
   // For physical devices (or Expo Go on LAN), derive host from Expo runtime.
-  // SDK 54: Constants.manifest can be null; prefer expoConfig/hostUri.
+  // Expo SDKs vary: pull from multiple places.
   const debuggerHost =
     Constants?.expoGoConfig?.debuggerHost ||
+    Constants?.manifest2?.extra?.expoGo?.debuggerHost ||
     Constants?.manifest?.debuggerHost ||
+    Constants?.debuggerHost ||
     null;
+
+  const hostUri =
+    Constants?.expoConfig?.hostUri ||
+    Constants?.manifest2?.extra?.expoClient?.hostUri ||
+    Constants?.hostUri ||
+    null;
+
+  // React Native can expose the Metro bundle URL. This is often the most
+  // reliable way to find the dev server host on physical devices.
+  const scriptURL = NativeModules?.SourceCode?.scriptURL || null;
 
   const hostCandidates = [
     parseHostFromHostPort(debuggerHost),
+    parseHostFromHostPort(hostUri),
+    parseHostFromUri(scriptURL),
     parseHostFromUri(Constants?.linkingUri),
     parseHostFromUri(Constants?.experienceUrl),
   ].filter(Boolean);
@@ -96,6 +108,11 @@ export const getApiBaseUrl = () => {
 
   if (host) {
     return `http://${host}:3000/api`;
+  }
+
+  // If we're on iOS simulator, localhost is typically reachable.
+  if (Platform.OS === "ios" && !Constants.isDevice) {
+    return localhost;
   }
 
   if (Constants?.isDevice) {

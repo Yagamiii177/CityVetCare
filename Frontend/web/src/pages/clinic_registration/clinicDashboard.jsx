@@ -90,8 +90,12 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header onMenuClick={toggleDrawer} />
-      <Drawer isOpen={isDrawerOpen} onClose={toggleDrawer} />
+      <Header isDrawerOpen={isDrawerOpen} toggleDrawer={toggleDrawer} />
+      <Drawer
+        isOpen={isDrawerOpen}
+        onClose={toggleDrawer}
+        setIsDrawerOpen={setIsDrawerOpen}
+      />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
